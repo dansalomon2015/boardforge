@@ -1,0 +1,96 @@
+.page { min-height: 100vh; overflow: hidden; color: #f7f2e8; background: #0b0b0b; }
+.nav { width: min(1240px, calc(100% - 48px)); height: 86px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,.12); }
+.brand { display: inline-flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; font: 700 19px 'Space Grotesk', sans-serif; }
+.brandMark { width: 37px; height: 37px; display: grid; place-items: center; color: #0b0b0b; background: #ffd54a; border-radius: 50%; font-size: 10px; letter-spacing: -.3px; }
+.join { display: flex; gap: 7px; }
+.join input { width: 105px; padding: 10px 12px; color: white; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.17); border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 2px; text-align: center; }
+.join button { padding: 10px 15px; color: #0b0b0b; background: #f7f2e8; border: 0; border-radius: 999px; font-size: 11px; font-weight: 900; }
+.join button:disabled { opacity: .35; }
+.hero { position: relative; width: min(1240px, calc(100% - 48px)); min-height: 730px; margin: 0 auto; display: grid; grid-template-columns: 1fr .86fr; gap: 70px; align-items: center; }
+.hero::after { content: ''; position: absolute; width: 620px; height: 620px; right: -180px; top: 45px; background: radial-gradient(circle, rgba(255,213,74,.12), transparent 68%); pointer-events: none; }
+.heroCopy { position: relative; z-index: 2; padding-bottom: 20px; }
+.eyebrow { display: flex; align-items: center; gap: 10px; margin: 0 0 23px; color: #b9b2a5; font-size: 10px; font-weight: 900; letter-spacing: 1.7px; text-transform: uppercase; }
+.eyebrow span { width: 28px; height: 1px; background: #ffd54a; }
+.hero h1 { margin: 0; font: 700 clamp(60px, 7.4vw, 104px)/.86 'Space Grotesk', sans-serif; letter-spacing: -6.5px; }
+.hero h1 em { color: #ffd54a; font-style: normal; }
+.lead { max-width: 620px; margin: 33px 0; color: #aaa398; font-size: 18px; line-height: 1.65; }
+.heroActions { display: flex; align-items: center; gap: 14px; }
+.primaryAction, .secondaryAction { min-height: 53px; display: inline-flex; align-items: center; justify-content: center; padding: 0 19px; border-radius: 999px; font-size: 12px; font-weight: 900; text-decoration: none; }
+.primaryAction { gap: 34px; color: #0b0b0b; background: #ffd54a; }
+.primaryAction b { font-size: 18px; }
+.secondaryAction { color: #f7f2e8; border: 1px solid rgba(255,255,255,.18); }
+.proof { display: flex; gap: 10px; margin-top: 42px; }
+.proof span { min-width: 120px; display: grid; gap: 3px; padding: 11px 13px; color: #777168; border-left: 1px solid rgba(255,255,255,.15); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; }
+.proof b { color: #f7f2e8; font: 700 17px 'Space Grotesk', sans-serif; letter-spacing: -.5px; }
+.heroVisual { position: relative; z-index: 1; width: 470px; height: 570px; justify-self: end; perspective: 1200px; }
+.posterBack, .poster { position: absolute; inset: 32px 19px 0 38px; border-radius: 8px; }
+.posterBack { transform: rotate(8deg); background: #e64e34; }
+.poster { overflow: hidden; padding: 28px; color: #111; background: #f3ead5; border: 1px solid rgba(255,255,255,.2); box-shadow: 0 38px 100px rgba(0,0,0,.55); transform: rotate(-4deg); }
+.poster::after { content: ''; position: absolute; inset: 0; opacity: .12; background-image: repeating-radial-gradient(circle at 0 0, transparent 0, #000 1px, transparent 1.8px); background-size: 5px 5px; pointer-events: none; }
+.posterTop { display: flex; justify-content: space-between; font-size: 8px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; }
+.posterTop b { font-size: 12px; }
+.reel { position: relative; width: 195px; height: 195px; margin: 34px auto 18px; border: 31px solid #111; border-radius: 50%; }
+.reel i { position: absolute; width: 39px; height: 39px; background: #f3ead5; border-radius: 50%; }
+.reel i:nth-child(1) { left: 47px; top: 5px; }.reel i:nth-child(2) { right: 5px; top: 53px; }.reel i:nth-child(3) { right: 26px; bottom: 10px; }.reel i:nth-child(4) { left: 21px; bottom: 16px; }.reel i:nth-child(5) { left: 5px; top: 51px; }
+.reel strong { position: absolute; inset: 0; display: grid; place-items: center; font-size: 34px; }
+.posterTitle small { font-size: 8px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; }
+.posterTitle h2 { margin: 4px 0 8px; font: 700 75px/.73 'Space Grotesk', sans-serif; letter-spacing: -7px; text-transform: uppercase; }
+.posterTitle p { width: 240px; margin: 17px 0 0; color: #594f43; font-size: 11px; font-weight: 700; line-height: 1.5; }
+.posterFooter { position: absolute; left: 28px; right: 28px; bottom: 23px; display: flex; justify-content: space-between; padding-top: 12px; border-top: 1px solid #b2a78f; font-size: 7px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+.floatingCard { position: absolute; z-index: 3; width: 155px; right: -22px; top: 52px; padding: 17px; color: #f7f2e8; background: #191919; border: 1px solid rgba(255,255,255,.14); border-radius: 15px; box-shadow: 0 18px 50px rgba(0,0,0,.45); transform: rotate(7deg); }
+.floatingCard span, .floatingCard small { display: block; color: #938d82; font-size: 7px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+.floatingCard strong { height: 75px; display: grid; place-items: center; color: #ffd54a; font: 700 45px 'Space Grotesk'; }
+.timerChip { position: absolute; z-index: 4; left: -11px; bottom: 47px; padding: 12px 16px; color: #111; background: #ffd54a; border-radius: 999px; box-shadow: 0 12px 35px rgba(0,0,0,.35); font: 800 13px 'Space Grotesk'; letter-spacing: 1px; transform: rotate(-5deg); }
+.timerChip i { display: inline-block; width: 7px; height: 7px; margin-right: 7px; background: #e44c36; border-radius: 50%; }
+.catalog { padding: 110px max(24px, calc((100vw - 1240px)/2)) 130px; color: #15120e; background: #eee7d9; }
+.catalogHeading { display: grid; grid-template-columns: 1fr 430px; gap: 90px; align-items: end; margin-bottom: 55px; }
+.catalog .eyebrow { color: #756d61; }
+.catalogHeading h2 { margin: 0; font: 700 clamp(46px, 5vw, 72px)/.92 'Space Grotesk'; letter-spacing: -4.5px; }
+.catalogHeading > p { margin: 0; color: #6d665d; line-height: 1.7; }
+.gameCard { min-height: 440px; display: grid; grid-template-columns: 1.08fr .92fr; overflow: hidden; color: inherit; background: #0e0e0e; border-radius: 5px 34px 5px 5px; box-shadow: 0 30px 75px rgba(54,42,25,.18); text-decoration: none; }
+.gameArtwork { position: relative; overflow: hidden; min-height: 440px; background: radial-gradient(circle at 50% 44%, #803453, transparent 31%), linear-gradient(145deg,#251334,#09090b 73%); }
+.gameArtwork::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 32px, rgba(255,255,255,.025) 33px); }
+.gameNumber { position: absolute; z-index: 2; top: 27px; left: 29px; color: rgba(255,255,255,.45); font-size: 9px; font-weight: 900; letter-spacing: 1.5px; }
+.clapper { position: absolute; z-index: 3; width: 235px; height: 175px; left: 50%; top: 52%; transform: translate(-50%,-50%) rotate(-7deg); background: #f7f1e4; box-shadow: 0 28px 70px rgba(0,0,0,.45); }
+.clapper::before { content: ''; position: absolute; left: -7px; right: -7px; top: -37px; height: 38px; background: repeating-linear-gradient(135deg,#f7f1e4 0 25px,#111 26px 50px); transform: rotate(-4deg); transform-origin: left bottom; }
+.clapper i { position: absolute; inset: 18px; border: 2px solid #111; }
+.clapper strong { position: absolute; inset: 0; display: grid; place-items: center; color: #111; font: 800 27px 'Space Grotesk'; letter-spacing: -1px; }
+.lightCone { position: absolute; width: 400px; height: 500px; left: 50%; top: -70px; transform: translateX(-50%); background: linear-gradient(to bottom, rgba(255,234,169,.18), transparent 80%); clip-path: polygon(44% 0,56% 0,100% 100%,0 100%); }
+.gameInfo { padding: 56px; display: flex; flex-direction: column; color: #f7f2e8; }
+.gameInfo > p { margin: 0; color: #e4b64d; font-size: 9px; font-weight: 900; letter-spacing: 1.3px; text-transform: uppercase; }
+.gameInfo h3 { margin: 18px 0; font: 700 clamp(48px, 5vw, 72px)/.9 'Space Grotesk'; letter-spacing: -4px; }
+.gameInfo > span { max-width: 430px; color: #9c968e; line-height: 1.7; }
+.gameInfo > div { margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 23px; border-top: 1px solid rgba(255,255,255,.13); font-size: 12px; }
+.gameInfo > div strong { color: #ffd54a; font-size: 24px; }
+.footer { min-height: 100px; display: flex; justify-content: space-between; align-items: center; padding: 0 max(24px, calc((100vw - 1240px)/2)); color: #716b63; background: #eee7d9; border-top: 1px solid rgba(21,18,14,.12); font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+.footer p { margin: 0; }
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; padding: 75px 0 110px; }
+  .heroVisual { justify-self: center; }
+  .catalogHeading { grid-template-columns: 1fr; gap: 25px; }
+  .gameCard { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .nav { width: calc(100% - 30px); height: 72px; }
+  .brand > span:last-child { display: none; }
+  .join input { width: 82px; }
+  .join button { padding: 9px 11px; }
+  .hero { width: calc(100% - 34px); min-height: auto; padding-top: 62px; gap: 48px; }
+  .hero h1 { font-size: 58px; letter-spacing: -4px; }
+  .lead { font-size: 15px; }
+  .heroActions { align-items: stretch; flex-direction: column; }
+  .proof { display: grid; grid-template-columns: repeat(3,1fr); }
+  .proof span { min-width: 0; padding-left: 8px; }
+  .heroVisual { width: 310px; height: 430px; transform: scale(.9); transform-origin: top center; }
+  .posterBack, .poster { inset: 20px 4px 0 16px; }
+  .poster { padding: 20px; }
+  .reel { width: 145px; height: 145px; border-width: 24px; margin-top: 27px; }
+  .reel i { width: 29px; height: 29px; }.reel i:nth-child(1) { left: 34px; }.reel i:nth-child(2) { top: 38px; }.reel i:nth-child(4) { left: 15px; }.reel i:nth-child(5) { top: 37px; }
+  .posterTitle h2 { font-size: 58px; }
+  .floatingCard { right: -19px; top: 37px; width: 130px; }
+  .catalog { padding-top: 80px; padding-bottom: 80px; }
+  .catalogHeading h2 { font-size: 48px; letter-spacing: -3px; }
+  .gameArtwork { min-height: 340px; }
+  .gameInfo { min-height: 360px; padding: 34px 25px; }
+  .footer { padding: 26px 18px; align-items: flex-start; flex-direction: column; gap: 10px; }
+}
