@@ -1,0 +1,31 @@
+name: BoardForge CI
+
+on:
+  push:
+    branches: ["main", "codex/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Reject committed API keys
+        run: |
+          if rg -n 'sk-(proj|svcacct)-' . --hidden --glob '!.git/**' --glob '!.env'; then
+            exit 1
+          fi
+      - run: pnpm check
+      - run: docker compose config --quiet
