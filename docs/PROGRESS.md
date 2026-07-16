@@ -1,5 +1,19 @@
 # Implementation progress
 
+## 16 July 2026 — Structured critique and constrained balance review
+
+Completed and verified:
+
+- strict `ComposedGameCritique` contract with source GameSpec identity, release verdict, strengths, known issue categories, severity, evidence and bounded recommendations;
+- live OpenAI and deterministic local providers implement the same typed critique boundary;
+- every generated or balanced blueprint is critiqued after deterministic playtest and persists one immutable critique in PostgreSQL;
+- release requires both a passing simulation report and a favorable structured critique;
+- balance proposals receive the persisted critique as mandatory evidence instead of operating directly on raw telemetry alone;
+- derived balance revisions are replayed and critiqued again, remain blocked before explicit acceptance, and cannot be accepted without both gates;
+- creator UI exposes the AI verdict, strengths, evidence, recommendations and the new post-patch critique;
+- bounded balance patches, before/after reports and explicit acceptance are persisted in PostgreSQL;
+- full lint, typecheck, unit-test, production-build and Docker acceptance gates pass.
+
 ## 16 July 2026 — Revisioned actions and deterministic room recovery
 
 Completed and verified:
@@ -115,12 +129,10 @@ Verification evidence:
 
 ## Next implementation slice
 
-1. Restore usable OpenAI project quota and complete live generation acceptance tests.
-2. Persist bounded balance patches and before/after reports in PostgreSQL.
-3. Add bounded balance-patch validation and before/after UI.
-4. Add server-issued expiry actions and deterministic timers.
-5. Add multi-client browser regression tests for the generic room controls.
-6. Validate the full Docker Compose runtime, then prepare GitHub and hosted deployment.
+1. Add creator-facing revision history, rejection and rollback controls.
+2. Add server-issued expiry actions and deterministic timers.
+3. Add multi-client browser regression tests for the generic room controls.
+4. Prepare GitHub release evidence and hosted deployment.
 
 ## Current deliberate limitations
 

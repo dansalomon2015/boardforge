@@ -50,12 +50,42 @@ export type ComposedBalanceEvidence = {
   failures: Array<{ code: string; evidence: string }>;
 };
 
+export const composedGameCritiqueSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    sourceSpecId: z.string().regex(/^[a-z][a-z0-9_]*$/).max(48),
+    verdict: z.enum(["release_ready", "revise"]),
+    summary: z.string().trim().min(8).max(400),
+    strengths: z.array(z.string().trim().min(8).max(220)).max(5),
+    issues: z
+      .array(
+        z
+          .object({
+            code: z.string().regex(/^[A-Z][A-Z0-9_]*$/).max(48),
+            severity: z.enum(["low", "medium", "high"]),
+            category: z.enum(["flow", "balance", "clarity", "privacy", "pace", "team_fairness", "replayability"]),
+            evidence: z.string().trim().min(8).max(300),
+            recommendation: z.string().trim().min(8).max(300),
+          })
+          .strict(),
+      )
+      .max(8),
+  })
+  .strict();
+
+export type ComposedGameCritique = z.infer<typeof composedGameCritiqueSchema>;
+
 export interface LlmProvider {
   readonly name: string;
   generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec>;
+  critiqueComposedGameSpec(
+    spec: ComposedGameSpec,
+    evidence: ComposedBalanceEvidence,
+  ): Promise<ComposedGameCritique>;
   proposeComposedBalancePatch(
     spec: ComposedGameSpec,
     evidence: ComposedBalanceEvidence,
+    critique: ComposedGameCritique,
   ): Promise<ComposedBalancePatch>;
   generateGameSpec(brief: GameBrief): Promise<GameSpec>;
   designPlaytest(spec: GameSpec): Promise<PlaytestPlan>;
@@ -457,6 +487,7 @@ export class FakeLlmProvider implements LlmProvider {
   async proposeComposedBalancePatch(
     spec: ComposedGameSpec,
     evidence: ComposedBalanceEvidence,
+    critique: ComposedGameCritique,
   ): Promise<ComposedBalancePatch> {
     const timer = spec.components.find((component) => component.kind === "timer");
     if (timer?.kind === "timer") {
@@ -464,9 +495,9 @@ export class FakeLlmProvider implements LlmProvider {
       return {
         schemaVersion: 1,
         sourceSpecId: spec.id,
-        summary: evidence.completionRate < 1
+        summary: critique.issues[0]?.recommendation ?? (evidence.completionRate < 1
           ? "Donne davantage de temps aux joueurs pour réduire les parties bloquées."
-          : "Resserre légèrement le rythme après un playtest entièrement terminé.",
+          : "Resserre légèrement le rythme après un playtest entièrement terminé."),
         changes: [
           {
             kind: "set_timer_seconds",
@@ -486,6 +517,42 @@ export class FakeLlmProvider implements LlmProvider {
           minutes: Math.max(2, Math.min(180, (spec.suggestedDurationMinutes ?? 15) + 5)),
         },
       ],
+    };
+  }
+
+  async critiqueComposedGameSpec(
+    spec: ComposedGameSpec,
+    evidence: ComposedBalanceEvidence,
+  ): Promise<ComposedGameCritique> {
+    const passed = evidence.completionRate === 1 && evidence.failures.length === 0;
+    return {
+      schemaVersion: 1,
+      sourceSpecId: spec.id,
+      verdict: passed ? "release_ready" : "revise",
+      summary: passed
+        ? `${spec.title} termine toutes les simulations et respecte les vues privées contrôlées par le serveur.`
+        : `${spec.title} présente encore des blocages observés pendant les simulations déterministes.`,
+      strengths: [
+        `${evidence.simulations} simulations couvrent plusieurs configurations de joueurs avec le même moteur que les rooms réelles.`,
+        "Les transitions, scores et informations privées restent contrôlés par le serveur autoritaire.",
+      ],
+      issues: passed
+        ? [
+            {
+              code: "PACE_TUNING_OPPORTUNITY",
+              severity: "low",
+              category: "pace",
+              evidence: `Les parties terminées utilisent en moyenne ${evidence.averageActions} actions.`,
+              recommendation: "Resserre légèrement le rythme pour comparer une variante sans modifier les mécaniques.",
+            },
+          ]
+        : evidence.failures.slice(0, 8).map((failure) => ({
+            code: failure.code,
+            severity: "high" as const,
+            category: "flow" as const,
+            evidence: failure.evidence,
+            recommendation: "Corrige le paramètre responsable puis rejoue la même matrice de simulations.",
+          })),
     };
   }
 
@@ -676,6 +743,7 @@ export class OpenAiLlmProvider implements LlmProvider {
   async proposeComposedBalancePatch(
     spec: ComposedGameSpec,
     evidence: ComposedBalanceEvidence,
+    critique: ComposedGameCritique,
   ): Promise<ComposedBalancePatch> {
     const response = await this.client.responses.parse({
       model: this.model,
@@ -691,12 +759,43 @@ export class OpenAiLlmProvider implements LlmProvider {
             "sourceSpecId must exactly equal the source GameSpec ID.",
           ].join("\n"),
         },
-        { role: "user", content: JSON.stringify({ spec, playtestEvidence: evidence }) },
+        { role: "user", content: JSON.stringify({ spec, playtestEvidence: evidence, critique }) },
       ],
       text: { format: zodTextFormat(composedBalancePatchSchema, "composed_balance_patch") },
       max_output_tokens: 1_500,
     });
     return requireParsedOutput(response.output_parsed, "composed balance patch");
+  }
+
+  async critiqueComposedGameSpec(
+    spec: ComposedGameSpec,
+    evidence: ComposedBalanceEvidence,
+  ): Promise<ComposedGameCritique> {
+    const response = await this.client.responses.parse({
+      model: this.model,
+      input: [
+        {
+          role: "system",
+          content: [
+            "You are BoardForge's constrained playtest critic.",
+            "Review only the supplied validated ComposedGameSpec and deterministic playtest evidence.",
+            "Return the critique in the same language as the game.",
+            "Every claim must cite evidence supplied in the telemetry or the visible GameSpec structure.",
+            "Do not propose code, scripts, new mechanics or arbitrary schema changes.",
+            "Use verdict revise for any blocked simulation, private-information failure or unreachable ending.",
+            "sourceSpecId must exactly equal the source GameSpec ID.",
+          ].join("\n"),
+        },
+        { role: "user", content: JSON.stringify({ spec, playtestEvidence: evidence }) },
+      ],
+      text: { format: zodTextFormat(composedGameCritiqueSchema, "composed_game_critique") },
+      max_output_tokens: 2_500,
+    });
+    const critique = requireParsedOutput(response.output_parsed, "composed game critique");
+    if (critique.sourceSpecId !== spec.id) {
+      throw new Error(`OpenAI critique targeted ${critique.sourceSpecId}, not ${spec.id}.`);
+    }
+    return critique;
   }
 
   async generateGameSpec(brief: GameBrief): Promise<GameSpec> {

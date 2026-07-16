@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { cinemaCharadesSpec, composedBalancePatchSchema, validateGameSpec } from "@boardforge/game-spec";
-import { FakeLlmProvider, createLlmProvider, type GameBrief } from "./index.js";
+import {
+  FakeLlmProvider,
+  composedGameCritiqueSchema,
+  createLlmProvider,
+  type GameBrief,
+} from "./index.js";
 
 const provider = new FakeLlmProvider();
 
@@ -62,13 +67,17 @@ describe("procedural local GameSpec compiler", () => {
   });
 
   it("proposes a deterministic allowlisted patch for a composed game", async () => {
-    const patch = await provider.proposeComposedBalancePatch(cinemaCharadesSpec, {
+    const evidence = {
       simulations: 24,
       completionRate: 1,
       averageActions: 14,
       failures: [],
-    });
+    };
+    const critique = await provider.critiqueComposedGameSpec(cinemaCharadesSpec, evidence);
+    const patch = await provider.proposeComposedBalancePatch(cinemaCharadesSpec, evidence, critique);
 
+    expect(composedGameCritiqueSchema.safeParse(critique).success).toBe(true);
+    expect(critique.verdict).toBe("release_ready");
     expect(composedBalancePatchSchema.safeParse(patch).success).toBe(true);
     expect(patch.sourceSpecId).toBe(cinemaCharadesSpec.id);
     expect(patch.changes).toEqual([

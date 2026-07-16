@@ -77,22 +77,24 @@ The Compose stack waits for PostgreSQL and the API health check before starting 
 - AI-authored team slots and explicit policies supporting one or several people per team; real players choose their own team in the lobby;
 - per-player hidden-state projection;
 - Fastify API and Socket.IO room service;
-- PostgreSQL-backed immutable blueprint revisions and playtest reports, with an idempotent startup migration;
+- PostgreSQL-backed immutable blueprint revisions, playtest reports, structured AI critiques and balance patches, with idempotent startup migrations;
 - rotating reconnect credentials: the browser stores the token, while the server keeps only its SHA-256 hash and rejects stale or cross-player sessions;
 - revision-aware action envelopes with one idempotency key across every engine;
 - append-only PostgreSQL room events, deterministic replay checksums and server-start room restoration;
 - live GPT-5.6 provider plus deterministic offline provider behind `LlmProvider`;
 - deterministic virtual-agent release gate: 24 simulations across valid player and team configurations before room creation;
-- visible GameSpec, phase, component and playtest evidence before room creation;
+- strict GPT critique with a verdict, evidence-backed issue categories and bounded recommendations for every generated revision;
+- allowlisted `BalancePatch` revisions that are revalidated, replayed, critiqued and explicitly accepted before release;
+- visible GameSpec, phase, component, critique and before/after playtest evidence before room creation;
 - mobile-first creator, lobby and game-room UI, verified without horizontal overflow at 390 × 844;
 - unit tests and an automated multi-client WebSocket smoke test;
 - production builds for web and server.
 
-Blueprints, playtest reports, room snapshots and accepted actions survive server restarts in PostgreSQL. The server reconstructs each started room from its seed and append-only event stream, then verifies the stored checkpoint checksum before exposing it. Docker exposes BoardForge PostgreSQL on local port `5433` to avoid conflicts with an existing PostgreSQL on the conventional port.
+Blueprints, playtest reports, critiques, balance decisions, room snapshots and accepted actions survive server restarts in PostgreSQL. The server reconstructs each started room from its seed and append-only event stream, then verifies the stored checkpoint checksum before exposing it. Docker exposes BoardForge PostgreSQL on local port `5433` to avoid conflicts with an existing PostgreSQL on the conventional port.
 
 ## Status
 
-Local P0 prototype with deterministic recovery and CI. Hosted deployment, bounded balance patches, server timers and submission evidence remain.
+Local P0 prototype with deterministic recovery, structured critique, constrained balance revisions and CI. Hosted deployment, server timers, browser regression coverage and submission evidence remain.
 
 ## License
 

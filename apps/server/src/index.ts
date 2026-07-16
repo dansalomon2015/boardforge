@@ -28,7 +28,10 @@ import {
   type ComposedGameState,
   type GameState,
 } from "@boardforge/game-engine";
-import { createLlmProvider } from "@boardforge/llm";
+import {
+  createLlmProvider,
+  type ComposedBalanceEvidence,
+} from "@boardforge/llm";
 import type {
   GameActionEnvelope,
   GameSummary,
@@ -140,6 +143,18 @@ function preview(spec: BoardGameSpec) {
     kind: spec.template,
     answerSeconds: spec.answerSeconds,
     questions: spec.questions.map((question) => ({ type: question.type, prompt: question.prompt })),
+  };
+}
+
+function balanceEvidence(report: ReturnType<typeof runComposedPlaytest>): ComposedBalanceEvidence {
+  return {
+    simulations: report.simulations,
+    completionRate: report.completionRate,
+    averageActions: report.averageActions,
+    failures: report.failures.map((failure) => ({
+      code: failure.code,
+      evidence: failure.evidence,
+    })),
   };
 }
 
@@ -275,8 +290,12 @@ app.post("/api/compile", async (request, reply) => {
       prompt: parsed.data.prompt,
     });
     const playtest = runComposedPlaytest(spec, { simulations: 24, seed: `release:${blueprintId}` });
-    const releaseStatus = playtest.status === "passed" ? "release_ready" : "needs_review";
+    const critique = await llm.critiqueComposedGameSpec(spec, balanceEvidence(playtest));
+    const releaseStatus = playtest.status === "passed" && critique.verdict === "release_ready"
+      ? "release_ready"
+      : "needs_review";
     await blueprintStore.savePlaytest(blueprintId, releaseStatus, playtest);
+    await blueprintStore.saveCritique(blueprintId, llm.name, critique);
 
     return {
       blueprintId,
@@ -286,12 +305,7 @@ app.post("/api/compile", async (request, reply) => {
       provider: llm.name,
       validation: { ok: true },
       playtest,
-      critique: {
-        summary: playtest.status === "passed"
-          ? `${playtest.completedSimulations}/${playtest.simulations} simulations terminées sans blocage ni fuite privée.`
-          : `Le jeu nécessite une révision : ${playtest.failures[0]?.evidence ?? "échec du playtest virtuel"}`,
-        issues: playtest.failures.slice(0, 8).map((failure) => ({ code: failure.code, severity: "high", evidence: failure.evidence })),
-      },
+      critique,
     };
   } catch (error) {
     app.log.warn({ message: error instanceof Error ? error.message : "Unknown provider error" }, "Game compilation failed");
@@ -316,17 +330,16 @@ app.post<{ Params: { id: string } }>("/api/blueprints/:id/balance", async (reque
   if (!source.playtest) {
     return reply.code(409).send({ error: "The source blueprint must complete its initial playtest first." });
   }
+  if (!source.critique) {
+    return reply.code(409).send({ error: "The source blueprint must complete its structured AI critique first." });
+  }
 
   try {
-    const patch = await llm.proposeComposedBalancePatch(source.spec, {
-      simulations: source.playtest.simulations,
-      completionRate: source.playtest.completionRate,
-      averageActions: source.playtest.averageActions,
-      failures: source.playtest.failures.map((failure) => ({
-        code: failure.code,
-        evidence: failure.evidence,
-      })),
-    });
+    const patch = await llm.proposeComposedBalancePatch(
+      source.spec,
+      balanceEvidence(source.playtest),
+      source.critique,
+    );
     const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 6);
     const derivedSpecId = `${source.spec.id.slice(0, 32).replace(/_+$/, "")}_balanced_${suffix}`;
     const applied = applyComposedBalancePatch(source.spec, patch, derivedSpecId);
@@ -351,11 +364,16 @@ app.post<{ Params: { id: string } }>("/api/blueprints/:id/balance", async (reque
       simulations: source.playtest.simulations,
       seed: `balance:${balancePatchId}`,
     });
+    const afterCritique = await llm.critiqueComposedGameSpec(applied.spec, balanceEvidence(afterReport));
+    const derivedStatus = afterReport.status === "passed" && afterCritique.verdict === "release_ready"
+      ? "validating"
+      : "needs_review";
     await blueprintStore.savePlaytest(
       derivedBlueprintId,
-      afterReport.status === "passed" ? "validating" : "needs_review",
+      derivedStatus,
       afterReport,
     );
+    await blueprintStore.saveCritique(derivedBlueprintId, llm.name, afterCritique);
     await blueprintStore.saveBalancePatch({
       id: balancePatchId,
       sourceBlueprintId: source.id,
@@ -374,11 +392,13 @@ app.post<{ Params: { id: string } }>("/api/blueprints/:id/balance", async (reque
       derivedBlueprintId,
       patch: applied.patch,
       before: source.playtest,
+      beforeCritique: source.critique,
       after: afterReport,
+      afterCritique,
       derived: {
         game: summary(applied.spec),
         preview: preview(applied.spec),
-        releaseStatus: afterReport.status === "passed" ? "awaiting_acceptance" : "needs_review",
+        releaseStatus: derivedStatus === "validating" ? "awaiting_acceptance" : "needs_review",
       },
     };
   } catch (error) {
@@ -407,6 +427,7 @@ app.post<{ Params: { id: string } }>("/api/balance-patches/:id/accept", async (r
       game: summary(blueprint.spec),
       preview: preview(blueprint.spec),
       playtest: patch.afterReport,
+      critique: blueprint.critique,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Balance patch acceptance failed.";

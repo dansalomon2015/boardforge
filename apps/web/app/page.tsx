@@ -27,6 +27,21 @@ type PlaytestReport = {
   failures: Array<{ code: string; evidence: string }>;
 };
 
+type StructuredCritique = {
+  schemaVersion: 1;
+  sourceSpecId: string;
+  verdict: "release_ready" | "revise";
+  summary: string;
+  strengths: string[];
+  issues: Array<{
+    code: string;
+    severity: "low" | "medium" | "high";
+    category: "flow" | "balance" | "clarity" | "privacy" | "pace" | "team_fairness" | "replayability";
+    evidence: string;
+    recommendation: string;
+  }>;
+};
+
 type CompiledGame = {
   blueprintId: string;
   releaseStatus: "release_ready" | "needs_review";
@@ -34,7 +49,7 @@ type CompiledGame = {
   provider: string;
   preview: ComposedPreview;
   playtest: PlaytestReport;
-  critique: { summary: string; issues: Array<{ code: string; severity: string; evidence: string }> };
+  critique: StructuredCritique;
 };
 
 type BalanceChange =
@@ -56,7 +71,9 @@ type BalanceReview = {
     changes: BalanceChange[];
   };
   before: PlaytestReport;
+  beforeCritique: StructuredCritique;
   after: PlaytestReport;
+  afterCritique: StructuredCritique;
   derived: {
     game: GameSummary;
     preview: ComposedPreview;
@@ -76,6 +93,16 @@ const componentLabels: Record<string, string> = {
   players: "Joueurs", scores: "Scores", clues: "Indices", challenge: "Défis", reveal: "Révélations",
   outcome: "Résultat", board: "Plateau", card_zone: "Main de cartes", resources: "Ressources",
   randomizer: "Hasard", buzzer: "Buzzer", ordering: "Classement", matching: "Associations", media: "Média",
+};
+
+const critiqueCategoryLabels: Record<StructuredCritique["issues"][number]["category"], string> = {
+  flow: "Déroulement",
+  balance: "Équilibre",
+  clarity: "Clarté",
+  privacy: "Informations privées",
+  pace: "Rythme",
+  team_fairness: "Équité des équipes",
+  replayability: "Rejouabilité",
 };
 
 function balanceChangeLabel(change: BalanceChange): string {
@@ -181,6 +208,7 @@ export default function HomePage() {
         game: GameSummary;
         preview: ComposedPreview;
         playtest: PlaytestReport;
+        critique: StructuredCritique;
       };
       setCompiled({
         ...compiled,
@@ -189,10 +217,7 @@ export default function HomePage() {
         game: result.game,
         preview: result.preview,
         playtest: result.playtest,
-        critique: {
-          summary: balance.patch.summary,
-          issues: result.playtest.failures.map((failure) => ({ ...failure, severity: "high" })),
-        },
+        critique: result.critique,
       });
       setBalance({ ...balance, status: "accepted" });
       setStage("Révision équilibrée release ready");
@@ -317,6 +342,34 @@ export default function HomePage() {
             </div>
           </div>
 
+          <div className={`structured-critique ${compiled.critique.verdict}`}>
+            <div className="structured-critique-heading">
+              <div>
+                <p className="preview-label">Critique IA structurée</p>
+                <h3>{compiled.critique.summary}</h3>
+              </div>
+              <span>{compiled.critique.verdict === "release_ready" ? "Avis favorable" : "Révision demandée"}</span>
+            </div>
+            <div className="critique-columns">
+              <div>
+                <strong>Points solides</strong>
+                <ul>{compiled.critique.strengths.map((strength) => <li key={strength}>{strength}</li>)}</ul>
+              </div>
+              <div>
+                <strong>Points de vigilance</strong>
+                <ul className="critique-issues">
+                  {compiled.critique.issues.length > 0 ? compiled.critique.issues.map((issue) => (
+                    <li key={issue.code} className={`severity-${issue.severity}`}>
+                      <span>{critiqueCategoryLabels[issue.category]}</span>
+                      <b>{issue.recommendation}</b>
+                      <small>{issue.evidence}</small>
+                    </li>
+                  )) : <li className="critique-empty">Aucun problème structurel identifié.</li>}
+                </ul>
+              </div>
+            </div>
+          </div>
+
           {balance ? (
             <div className={`balance-review ${balance.after.status === "passed" ? "balance-passed" : "balance-failed"}`}>
               <div className="balance-review-heading">
@@ -332,6 +385,7 @@ export default function HomePage() {
                 <div><small>Après</small><strong>{Math.round(balance.after.completionRate * 100)}%</strong><span>{balance.after.averageActions} actions moy.</span></div>
                 <ul>{balance.patch.changes.map((change, index) => <li key={`${change.kind}-${index}`}>{balanceChangeLabel(change)}</li>)}</ul>
               </div>
+              <p className="balance-critique-result"><b>Nouvel avis IA :</b> {balance.afterCritique.summary}</p>
               {balance.status === "proposed" && balance.after.status === "passed" ? (
                 <button className="balance-accept-button" onClick={() => void acceptBalance()} disabled={busy}>
                   Accepter cette révision vérifiée <b>→</b>

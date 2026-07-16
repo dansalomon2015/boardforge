@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyComposedBalancePatch, cinemaCharadesSpec } from "@boardforge/game-spec";
 import { runComposedPlaytest } from "@boardforge/game-engine";
+import { FakeLlmProvider } from "@boardforge/llm";
 import { MemoryBlueprintStore } from "./persistence";
 
 describe("MemoryBlueprintStore", () => {
@@ -9,11 +10,19 @@ describe("MemoryBlueprintStore", () => {
     await store.saveBlueprint({ id: "cinema-test", spec: cinemaCharadesSpec, status: "playtesting", provider: "test", prompt: "test prompt" });
     const report = runComposedPlaytest(cinemaCharadesSpec, { simulations: 2, seed: "persistence-test" });
     await store.savePlaytest("cinema-test", "release_ready", report);
+    const critique = await new FakeLlmProvider().critiqueComposedGameSpec(cinemaCharadesSpec, {
+      simulations: report.simulations,
+      completionRate: report.completionRate,
+      averageActions: report.averageActions,
+      failures: report.failures,
+    });
+    await store.saveCritique("cinema-test", "test", critique);
 
     const stored = await store.get("cinema-test");
     expect(stored?.status).toBe("release_ready");
     expect(stored?.spec.id).toBe(cinemaCharadesSpec.id);
     expect(stored?.playtest?.simulations).toBe(2);
+    expect(stored?.critique?.sourceSpecId).toBe(cinemaCharadesSpec.id);
   });
 
   it("rejects an invalid GameSpec before storage", async () => {
@@ -89,6 +98,12 @@ describe("MemoryBlueprintStore", () => {
     await store.savePlaytest("balance-source", "release_ready", beforeReport);
     await store.saveBlueprint({ id: "balance-derived", spec: applied.spec, status: "validating", provider: "test" });
     await store.savePlaytest("balance-derived", "validating", afterReport);
+    const afterCritique = await new FakeLlmProvider().critiqueComposedGameSpec(applied.spec, {
+      simulations: afterReport.simulations,
+      completionRate: afterReport.completionRate,
+      averageActions: afterReport.averageActions,
+      failures: afterReport.failures,
+    });
     await store.saveBalancePatch({
       id: "00000000-0000-4000-8000-000000000101",
       sourceBlueprintId: "balance-source",
@@ -100,6 +115,10 @@ describe("MemoryBlueprintStore", () => {
       status: "proposed",
     });
 
+    await expect(store.acceptBalancePatch("00000000-0000-4000-8000-000000000101")).rejects.toThrow(
+      "structured critique gate",
+    );
+    await store.saveCritique("balance-derived", "test", afterCritique);
     const accepted = await store.acceptBalancePatch("00000000-0000-4000-8000-000000000101");
     expect(accepted.status).toBe("accepted");
     expect((await store.get("balance-derived"))?.status).toBe("release_ready");

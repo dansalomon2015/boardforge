@@ -9,6 +9,10 @@ import {
   type ComposedBalancePatch,
 } from "@boardforge/game-spec";
 import type { ComposedPlaytestReport } from "@boardforge/game-engine";
+import {
+  composedGameCritiqueSchema,
+  type ComposedGameCritique,
+} from "@boardforge/llm";
 import type { GameAction, PublicPlayer } from "@boardforge/shared";
 
 export type BlueprintStatus = "draft" | "validating" | "playtesting" | "release_ready" | "needs_review";
@@ -20,6 +24,7 @@ export type BlueprintRecord = {
   provider: string;
   prompt?: string | undefined;
   playtest?: ComposedPlaytestReport | undefined;
+  critique?: ComposedGameCritique | undefined;
 };
 
 export type BalancePatchStatus = "proposed" | "accepted" | "rejected";
@@ -63,8 +68,9 @@ export type RoomSessionRecord = {
 export interface BlueprintStore {
   readonly mode: "memory" | "postgres";
   get(id: string): Promise<BlueprintRecord | undefined>;
-  saveBlueprint(record: Omit<BlueprintRecord, "playtest">): Promise<void>;
+  saveBlueprint(record: Omit<BlueprintRecord, "playtest" | "critique">): Promise<void>;
   savePlaytest(id: string, status: BlueprintStatus, report: ComposedPlaytestReport): Promise<void>;
+  saveCritique(id: string, provider: string, critique: ComposedGameCritique): Promise<void>;
   getBalancePatch(id: string): Promise<BalancePatchRecord | undefined>;
   saveBalancePatch(record: BalancePatchRecord): Promise<void>;
   acceptBalancePatch(id: string): Promise<BalancePatchRecord>;
@@ -95,6 +101,12 @@ function parseBalancePatch(input: unknown): ComposedBalancePatch {
   return parsed.data;
 }
 
+function parseCritique(input: unknown): ComposedGameCritique {
+  const parsed = composedGameCritiqueSchema.safeParse(input);
+  if (!parsed.success) throw new Error("Refusing invalid persisted game critique.");
+  return parsed.data;
+}
+
 export class MemoryBlueprintStore implements BlueprintStore {
   readonly mode = "memory" as const;
   private readonly records = new Map<string, BlueprintRecord>();
@@ -107,7 +119,7 @@ export class MemoryBlueprintStore implements BlueprintStore {
     return record ? cloneRecord(record) : undefined;
   }
 
-  async saveBlueprint(record: Omit<BlueprintRecord, "playtest">): Promise<void> {
+  async saveBlueprint(record: Omit<BlueprintRecord, "playtest" | "critique">): Promise<void> {
     const spec = parseSpec(record.spec);
     const existing = this.records.get(record.id);
     if (existing) {
@@ -121,6 +133,18 @@ export class MemoryBlueprintStore implements BlueprintStore {
     const existing = this.records.get(id);
     if (!existing) throw new Error(`Unknown blueprint: ${id}`);
     this.records.set(id, { ...existing, status, playtest: structuredClone(report) });
+  }
+
+  async saveCritique(id: string, _provider: string, input: ComposedGameCritique): Promise<void> {
+    const existing = this.records.get(id);
+    if (!existing) throw new Error(`Unknown blueprint: ${id}`);
+    if (existing.spec.template !== "composed") throw new Error("Only composed blueprints support structured critiques.");
+    const critique = parseCritique(input);
+    if (critique.sourceSpecId !== existing.spec.id) throw new Error("Critique sourceSpecId does not match the blueprint GameSpec.");
+    if (existing.critique && !isDeepStrictEqual(existing.critique, critique)) {
+      throw new Error(`Game critique for ${id} is immutable.`);
+    }
+    this.records.set(id, { ...existing, critique: structuredClone(critique) });
   }
 
   async getBalancePatch(id: string): Promise<BalancePatchRecord | undefined> {
@@ -145,6 +169,9 @@ export class MemoryBlueprintStore implements BlueprintStore {
     if (patch.status !== "proposed") throw new Error(`Balance patch ${id} is already ${patch.status}.`);
     const blueprint = this.records.get(patch.derivedBlueprintId);
     if (!blueprint) throw new Error(`Unknown blueprint: ${patch.derivedBlueprintId}`);
+    if (blueprint.status !== "validating" || blueprint.critique?.verdict !== "release_ready") {
+      throw new Error("The derived blueprint has not passed its structured critique gate.");
+    }
     const accepted = { ...patch, status: "accepted" as const };
     this.balancePatches.set(id, accepted);
     this.records.set(blueprint.id, { ...blueprint, status: "release_ready" });
@@ -192,6 +219,7 @@ type BlueprintRow = {
   provider: string;
   prompt: string | null;
   report: ComposedPlaytestReport | null;
+  critique: unknown | null;
 };
 
 type BalancePatchRow = {
@@ -262,7 +290,12 @@ class PostgresBlueprintStore implements BlueprintStore {
   constructor(private readonly pool: Pool) {}
 
   async migrate(): Promise<void> {
-    for (const filename of ["0001_blueprints.sql", "0002_room_events.sql", "0003_balance_patches.sql"]) {
+    for (const filename of [
+      "0001_blueprints.sql",
+      "0002_room_events.sql",
+      "0003_balance_patches.sql",
+      "0004_game_critiques.sql",
+    ]) {
       const migration = await readFile(new URL(`../migrations/${filename}`, import.meta.url), "utf8");
       await this.pool.query(migration);
     }
@@ -270,9 +303,10 @@ class PostgresBlueprintStore implements BlueprintStore {
 
   async get(id: string): Promise<BlueprintRecord | undefined> {
     const result = await this.pool.query<BlueprintRow>(
-      `SELECT b.id, b.spec, b.status, b.provider, b.prompt, p.report
+      `SELECT b.id, b.spec, b.status, b.provider, b.prompt, p.report, c.critique
        FROM blueprint_revisions b
        LEFT JOIN playtest_reports p ON p.blueprint_id = b.id
+       LEFT JOIN game_critiques c ON c.blueprint_id = b.id
        WHERE b.id = $1`,
       [id],
     );
@@ -285,10 +319,11 @@ class PostgresBlueprintStore implements BlueprintStore {
       provider: row.provider,
       ...(row.prompt ? { prompt: row.prompt } : {}),
       ...(row.report ? { playtest: row.report } : {}),
+      ...(row.critique ? { critique: parseCritique(row.critique) } : {}),
     };
   }
 
-  async saveBlueprint(record: Omit<BlueprintRecord, "playtest">): Promise<void> {
+  async saveBlueprint(record: Omit<BlueprintRecord, "playtest" | "critique">): Promise<void> {
     const spec = parseSpec(record.spec);
     const inserted = await this.pool.query(
       `INSERT INTO blueprint_revisions (id, spec, status, provider, prompt)
@@ -326,6 +361,30 @@ class PostgresBlueprintStore implements BlueprintStore {
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  async saveCritique(id: string, provider: string, input: ComposedGameCritique): Promise<void> {
+    const blueprint = await this.get(id);
+    if (!blueprint) throw new Error(`Unknown blueprint: ${id}`);
+    if (blueprint.spec.template !== "composed") throw new Error("Only composed blueprints support structured critiques.");
+    const critique = parseCritique(input);
+    if (critique.sourceSpecId !== blueprint.spec.id) throw new Error("Critique sourceSpecId does not match the blueprint GameSpec.");
+    const inserted = await this.pool.query(
+      `INSERT INTO game_critiques (blueprint_id, provider, critique)
+       VALUES ($1, $2, $3::jsonb)
+       ON CONFLICT (blueprint_id) DO NOTHING
+       RETURNING blueprint_id`,
+      [id, provider, JSON.stringify(critique)],
+    );
+    if (inserted.rowCount === 0) {
+      const existing = await this.pool.query<{ critique: unknown }>(
+        "SELECT critique FROM game_critiques WHERE blueprint_id = $1",
+        [id],
+      );
+      if (!existing.rows[0] || !isDeepStrictEqual(parseCritique(existing.rows[0].critique), critique)) {
+        throw new Error(`Game critique for ${id} is immutable.`);
+      }
     }
   }
 
@@ -382,6 +441,20 @@ class PostgresBlueprintStore implements BlueprintStore {
       if (!row) throw new Error(`Unknown balance patch: ${id}`);
       if (row.after_report.status !== "passed") throw new Error("A failing balance patch cannot be accepted.");
       if (row.status !== "proposed") throw new Error(`Balance patch ${id} is already ${row.status}.`);
+      const derived = await client.query<{ status: BlueprintStatus; critique: unknown | null }>(
+        `SELECT b.status, c.critique
+         FROM blueprint_revisions b
+         LEFT JOIN game_critiques c ON c.blueprint_id = b.id
+         WHERE b.id = $1
+         FOR UPDATE OF b`,
+        [row.derived_blueprint_id],
+      );
+      const derivedRow = derived.rows[0];
+      if (!derivedRow) throw new Error(`Unknown blueprint: ${row.derived_blueprint_id}`);
+      const critique = derivedRow.critique ? parseCritique(derivedRow.critique) : undefined;
+      if (derivedRow.status !== "validating" || critique?.verdict !== "release_ready") {
+        throw new Error("The derived blueprint has not passed its structured critique gate.");
+      }
       await client.query(
         "UPDATE balance_patches SET status = 'accepted', decided_at = now() WHERE id = $1::uuid",
         [id],
