@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cinemaCharadesSpec } from "@boardforge/game-spec";
+import { applyComposedBalancePatch, cinemaCharadesSpec } from "@boardforge/game-spec";
 import { runComposedPlaytest } from "@boardforge/game-engine";
 import { MemoryBlueprintStore } from "./persistence";
 
@@ -69,5 +69,39 @@ describe("MemoryBlueprintStore", () => {
     expect((await store.findRoomEvent("ABC234", "event-key-001"))?.resultingRevision).toBe(2);
     expect((await store.loadRooms())[0]?.events).toEqual([event]);
     await expect(store.appendRoomEvent(session, { ...event, id: "00000000-0000-4000-8000-000000000100", sequence: 2 })).rejects.toThrow("Duplicate");
+  });
+
+  it("persists and explicitly accepts a verified balance revision", async () => {
+    const store = new MemoryBlueprintStore();
+    const beforeReport = runComposedPlaytest(cinemaCharadesSpec, { simulations: 2, seed: "balance-before" });
+    const patch = {
+      schemaVersion: 1 as const,
+      sourceSpecId: cinemaCharadesSpec.id,
+      summary: "Resserre le chronomètre après un playtest sans blocage.",
+      changes: [{ kind: "set_timer_seconds" as const, componentId: "mime_timer", seconds: 55 }],
+    };
+    const applied = applyComposedBalancePatch(cinemaCharadesSpec, patch, "cinema_charades_balanced");
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) return;
+    const afterReport = runComposedPlaytest(applied.spec, { simulations: 2, seed: "balance-after" });
+
+    await store.saveBlueprint({ id: "balance-source", spec: cinemaCharadesSpec, status: "release_ready", provider: "test" });
+    await store.savePlaytest("balance-source", "release_ready", beforeReport);
+    await store.saveBlueprint({ id: "balance-derived", spec: applied.spec, status: "validating", provider: "test" });
+    await store.savePlaytest("balance-derived", "validating", afterReport);
+    await store.saveBalancePatch({
+      id: "00000000-0000-4000-8000-000000000101",
+      sourceBlueprintId: "balance-source",
+      derivedBlueprintId: "balance-derived",
+      provider: "test",
+      patch,
+      beforeReport,
+      afterReport,
+      status: "proposed",
+    });
+
+    const accepted = await store.acceptBalancePatch("00000000-0000-4000-8000-000000000101");
+    expect(accepted.status).toBe("accepted");
+    expect((await store.get("balance-derived"))?.status).toBe("release_ready");
   });
 });

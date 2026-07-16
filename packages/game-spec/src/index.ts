@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ComposedGameSpec } from "./composed";
 export * from "./composed";
 export * from "./composed-fixtures";
+export * from "./balance-patch";
 
 const idSchema = z.string().regex(/^[a-z][a-z0-9_]*$/).max(48);
 const shortTextSchema = z.string().trim().min(1).max(180);

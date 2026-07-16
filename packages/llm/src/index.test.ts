@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateGameSpec } from "@boardforge/game-spec";
+import { cinemaCharadesSpec, composedBalancePatchSchema, validateGameSpec } from "@boardforge/game-spec";
 import { FakeLlmProvider, createLlmProvider, type GameBrief } from "./index.js";
 
 const provider = new FakeLlmProvider();
@@ -59,5 +59,20 @@ describe("procedural local GameSpec compiler", () => {
       expect(cinema.questions.some((question) => question.type === "player_vote")).toBe(true);
       expect(cinema.questions.some((question) => question.type === "trivia")).toBe(true);
     }
+  });
+
+  it("proposes a deterministic allowlisted patch for a composed game", async () => {
+    const patch = await provider.proposeComposedBalancePatch(cinemaCharadesSpec, {
+      simulations: 24,
+      completionRate: 1,
+      averageActions: 14,
+      failures: [],
+    });
+
+    expect(composedBalancePatchSchema.safeParse(patch).success).toBe(true);
+    expect(patch.sourceSpecId).toBe(cinemaCharadesSpec.id);
+    expect(patch.changes).toEqual([
+      { kind: "set_timer_seconds", componentId: "mime_timer", seconds: 55 },
+    ]);
   });
 });

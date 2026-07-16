@@ -1,6 +1,8 @@
 import {
   cinemaCharadesSpec,
+  composedBalancePatchSchema,
   composedGameSpecSchema,
+  type ComposedBalancePatch,
   type GameSpec,
   type ComposedGameSpec,
   type HiddenRolesGameSpec,
@@ -41,9 +43,20 @@ export type BalancePatch = {
   changes: Array<{ path: string; value: string | number }>;
 };
 
+export type ComposedBalanceEvidence = {
+  simulations: number;
+  completionRate: number;
+  averageActions: number;
+  failures: Array<{ code: string; evidence: string }>;
+};
+
 export interface LlmProvider {
   readonly name: string;
   generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec>;
+  proposeComposedBalancePatch(
+    spec: ComposedGameSpec,
+    evidence: ComposedBalanceEvidence,
+  ): Promise<ComposedBalancePatch>;
   generateGameSpec(brief: GameBrief): Promise<GameSpec>;
   designPlaytest(spec: GameSpec): Promise<PlaytestPlan>;
   critiquePlaytest(spec: GameSpec, plan: PlaytestPlan): Promise<GameCritique>;
@@ -441,6 +454,41 @@ export class FakeLlmProvider implements LlmProvider {
     return validation.spec;
   }
 
+  async proposeComposedBalancePatch(
+    spec: ComposedGameSpec,
+    evidence: ComposedBalanceEvidence,
+  ): Promise<ComposedBalancePatch> {
+    const timer = spec.components.find((component) => component.kind === "timer");
+    if (timer?.kind === "timer") {
+      const adjustment = evidence.completionRate < 1 ? 15 : -5;
+      return {
+        schemaVersion: 1,
+        sourceSpecId: spec.id,
+        summary: evidence.completionRate < 1
+          ? "Donne davantage de temps aux joueurs pour réduire les parties bloquées."
+          : "Resserre légèrement le rythme après un playtest entièrement terminé.",
+        changes: [
+          {
+            kind: "set_timer_seconds",
+            componentId: timer.id,
+            seconds: Math.max(5, Math.min(900, timer.seconds + adjustment)),
+          },
+        ],
+      };
+    }
+    return {
+      schemaVersion: 1,
+      sourceSpecId: spec.id,
+      summary: "Ajuste la durée annoncée sans modifier les mécaniques validées du jeu.",
+      changes: [
+        {
+          kind: "set_duration",
+          minutes: Math.max(2, Math.min(180, (spec.suggestedDurationMinutes ?? 15) + 5)),
+        },
+      ],
+    };
+  }
+
   async generateGameSpec(brief: GameBrief): Promise<GameSpec> {
     const fingerprint = `${brief.template}|${normalizedPrompt(brief.prompt)}|${brief.players}|${brief.durationMinutes}`;
     const hash = hashText(fingerprint);
@@ -623,6 +671,32 @@ export class OpenAiLlmProvider implements LlmProvider {
     const repairedValidation = validateComposedGameSpec(repaired);
     if (!repairedValidation.ok) throw new Error(`OpenAI produced an invalid ComposedGameSpec after repair: ${JSON.stringify(repairedValidation.issues)}`);
     return repairedValidation.spec;
+  }
+
+  async proposeComposedBalancePatch(
+    spec: ComposedGameSpec,
+    evidence: ComposedBalanceEvidence,
+  ): Promise<ComposedBalancePatch> {
+    const response = await this.client.responses.parse({
+      model: this.model,
+      input: [
+        {
+          role: "system",
+          content: [
+            "You are BoardForge's constrained balance reviewer.",
+            "Propose one minimal balance revision for the validated ComposedGameSpec using only the supplied closed patch schema.",
+            "Never add, remove or rename mechanics, phases, actions, components, IDs or executable content.",
+            "Every target ID and effect index must already exist in the source spec and match the requested effect kind.",
+            "Prefer a single evidence-backed change. Keep all values within the schema bounds.",
+            "sourceSpecId must exactly equal the source GameSpec ID.",
+          ].join("\n"),
+        },
+        { role: "user", content: JSON.stringify({ spec, playtestEvidence: evidence }) },
+      ],
+      text: { format: zodTextFormat(composedBalancePatchSchema, "composed_balance_patch") },
+      max_output_tokens: 1_500,
+    });
+    return requireParsedOutput(response.output_parsed, "composed balance patch");
   }
 
   async generateGameSpec(brief: GameBrief): Promise<GameSpec> {

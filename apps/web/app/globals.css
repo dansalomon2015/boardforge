@@ -155,6 +155,30 @@ textarea:focus, input:focus { border-color: var(--violet); box-shadow: 0 0 0 4px
 .agent-report dt { color: #a8a2b7; font-size: 11px; }
 .agent-report dd { margin: 0; max-width: 57%; color: white; font-size: 11px; font-weight: 800; text-align: right; }
 .agent-report > p { margin: 20px 0 0; color: #cbc7d4; font-size: 12px; line-height: 1.55; }
+.balance-callout { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 26px; padding: 18px 20px; background: #f2eefc; border: 1px solid #ded4fb; border-radius: 15px; }
+.balance-callout > div { display: grid; gap: 4px; }
+.balance-callout strong { font: 700 15px 'Space Grotesk', sans-serif; }
+.balance-callout span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.balance-callout button, .balance-accept-button { flex: 0 0 auto; min-height: 42px; padding: 10px 15px; color: white; background: var(--violet); border: 0; border-radius: 11px; font-size: 12px; font-weight: 900; }
+.balance-callout button:disabled, .balance-accept-button:disabled { cursor: wait; opacity: .55; }
+.balance-review { margin-top: 26px; padding: 23px; background: #f8f6f2; border: 1px solid var(--line); border-left: 5px solid var(--violet); border-radius: 17px; }
+.balance-review.balance-passed { border-left-color: #39a873; }
+.balance-review.balance-failed { border-left-color: var(--coral); }
+.balance-review-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.balance-review-heading h3 { margin: 0; max-width: 760px; font: 700 19px/1.4 'Space Grotesk', sans-serif; }
+.balance-review-heading > span { flex: 0 0 auto; padding: 7px 10px; color: #267250; background: #e6f6ed; border-radius: 999px; font-size: 9px; font-weight: 900; letter-spacing: .7px; text-transform: uppercase; }
+.balance-failed .balance-review-heading > span { color: #8c3b2b; background: #ffebe6; }
+.balance-comparison { display: grid; grid-template-columns: minmax(120px, 180px) auto minmax(120px, 180px) minmax(230px, 1fr); gap: 14px; align-items: center; margin-top: 20px; }
+.balance-comparison > div { display: grid; gap: 3px; padding: 14px; background: white; border: 1px solid var(--line); border-radius: 12px; }
+.balance-comparison small { color: var(--muted); font-size: 9px; font-weight: 900; letter-spacing: .8px; text-transform: uppercase; }
+.balance-comparison strong { font: 700 25px 'Space Grotesk', sans-serif; }
+.balance-comparison span { color: var(--muted); font-size: 10px; }
+.balance-comparison > b { color: var(--violet); }
+.balance-comparison ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.balance-comparison li { padding: 9px 11px; color: #4e4762; background: #eee9fa; border-radius: 9px; font-size: 11px; font-weight: 800; }
+.balance-accept-button { display: block; margin: 18px 0 0 auto; background: #267250; }
+.balance-accept-button b { margin-left: 12px; }
+.balance-warning { margin: 16px 0 0; color: #8c3b2b; font-size: 12px; font-weight: 700; }
 
 .clean-lower-section { display: grid; grid-template-columns: 1.1fr .9fr; gap: 80px; align-items: center; padding: 90px max(28px, calc((100vw - 1184px)/2)) 106px; color: white; background: radial-gradient(circle at 85% 10%, rgba(108,66,245,.28), transparent 33%), #181624; }
 .clean-lower-copy h2 { max-width: 670px; margin: 0 0 22px; font: 700 clamp(38px, 5vw, 62px)/1 'Space Grotesk', sans-serif; letter-spacing: -3px; }
@@ -272,6 +296,8 @@ textarea:focus, input:focus { border-color: var(--violet); box-shadow: 0 0 0 4px
   .clean-hero { min-height: auto; padding-bottom: 92px; }
   .clean-proof-row { max-width: none; }
   .compiled-insights, .clean-lower-section { grid-template-columns: 1fr; }
+  .balance-comparison { grid-template-columns: 1fr auto 1fr; }
+  .balance-comparison ul { grid-column: 1 / -1; }
   .clean-lower-section { gap: 42px; }
 }
 
@@ -317,6 +343,12 @@ textarea:focus, input:focus { border-color: var(--violet); box-shadow: 0 0 0 4px
   .clean-compiled { margin-top: -34px; }
   .compiled-insights { gap: 18px; }
   .agent-report { padding: 20px; }
+  .balance-callout, .balance-review-heading { align-items: stretch; flex-direction: column; }
+  .balance-callout button { width: 100%; }
+  .balance-comparison { grid-template-columns: 1fr; }
+  .balance-comparison > b { display: none; }
+  .balance-comparison ul { grid-column: auto; }
+  .balance-accept-button { width: 100%; }
   .clean-lower-section { padding: 64px 18px 74px; }
   .clean-lower-copy h2 { font-size: 42px; letter-spacing: -2.5px; }
   .join-clean-card { padding: 21px; }

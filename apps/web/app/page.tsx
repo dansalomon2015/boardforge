@@ -37,6 +37,33 @@ type CompiledGame = {
   critique: { summary: string; issues: Array<{ code: string; severity: string; evidence: string }> };
 };
 
+type BalanceChange =
+  | { kind: "set_duration"; minutes: number }
+  | { kind: "set_timer_seconds"; componentId: string; seconds: number }
+  | { kind: "set_effect_amount"; owner: string; ownerId: string; effectIndex: number; amount: number }
+  | { kind: "set_draw_count"; owner: string; ownerId: string; effectIndex: number; count: number }
+  | { kind: "set_resource_initial"; resourceId: string; initialValue: number };
+
+type BalanceReview = {
+  balancePatchId: string;
+  status: "proposed" | "accepted";
+  sourceBlueprintId: string;
+  derivedBlueprintId: string;
+  patch: {
+    schemaVersion: 1;
+    sourceSpecId: string;
+    summary: string;
+    changes: BalanceChange[];
+  };
+  before: PlaytestReport;
+  after: PlaytestReport;
+  derived: {
+    game: GameSummary;
+    preview: ComposedPreview;
+    releaseStatus: "awaiting_acceptance" | "needs_review";
+  };
+};
+
 const promptIdeas = [
   { label: "Mime en équipes", prompt: "Deux équipes miment des films cultes dans une ambiance disco" },
   { label: "Devine l’animal", prompt: "Un jeu familial où l'on fait deviner des animaux sans prononcer leur nom" },
@@ -51,6 +78,14 @@ const componentLabels: Record<string, string> = {
   randomizer: "Hasard", buzzer: "Buzzer", ordering: "Classement", matching: "Associations", media: "Média",
 };
 
+function balanceChangeLabel(change: BalanceChange): string {
+  if (change.kind === "set_duration") return `Durée annoncée → ${change.minutes} min`;
+  if (change.kind === "set_timer_seconds") return `Chronomètre ${change.componentId} → ${change.seconds} s`;
+  if (change.kind === "set_effect_amount") return `Effet ${change.ownerId} #${change.effectIndex + 1} → ${change.amount}`;
+  if (change.kind === "set_draw_count") return `Pioche ${change.ownerId} #${change.effectIndex + 1} → ${change.count} carte(s)`;
+  return `Ressource ${change.resourceId} → valeur initiale ${change.initialValue}`;
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [prompt, setPrompt] = useState(promptIdeas[0]!.prompt);
@@ -59,6 +94,7 @@ export default function HomePage() {
   const [stage, setStage] = useState("Prêt à compiler");
   const [error, setError] = useState("");
   const [compiled, setCompiled] = useState<CompiledGame | null>(null);
+  const [balance, setBalance] = useState<BalanceReview | null>(null);
   const [provider, setProvider] = useState("connexion");
   const [demo, setDemo] = useState<DemoGame | null>(null);
 
@@ -78,6 +114,7 @@ export default function HomePage() {
     setBusy(true);
     setError("");
     setCompiled(null);
+    setBalance(null);
     setStage("L’IA assemble la GameSpec");
     try {
       const response = await fetch(`${apiUrl}/api/compile`, {
@@ -96,6 +133,71 @@ export default function HomePage() {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Erreur inattendue.");
       setStage("Prêt à compiler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function testBalance() {
+    if (!compiled) return;
+    setBusy(true);
+    setError("");
+    setStage("L’IA prépare un patch borné");
+    try {
+      const response = await fetch(`${apiUrl}/api/blueprints/${encodeURIComponent(compiled.blueprintId)}/balance`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const failure = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(failure?.error ?? "Le patch d’équilibrage n’a pas pu être testé.");
+      }
+      const result = (await response.json()) as BalanceReview;
+      setBalance(result);
+      setStage(result.after.status === "passed" ? "Patch vérifié, décision requise" : "Patch rejeté par les agents");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Erreur inattendue.");
+      setStage("Jeu compilé");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function acceptBalance() {
+    if (!compiled || !balance) return;
+    setBusy(true);
+    setError("");
+    setStage("Publication de la révision");
+    try {
+      const response = await fetch(`${apiUrl}/api/balance-patches/${balance.balancePatchId}/accept`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const failure = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(failure?.error ?? "La révision n’a pas pu être acceptée.");
+      }
+      const result = (await response.json()) as {
+        blueprintId: string;
+        releaseStatus: "release_ready";
+        game: GameSummary;
+        preview: ComposedPreview;
+        playtest: PlaytestReport;
+      };
+      setCompiled({
+        ...compiled,
+        blueprintId: result.blueprintId,
+        releaseStatus: result.releaseStatus,
+        game: result.game,
+        preview: result.preview,
+        playtest: result.playtest,
+        critique: {
+          summary: balance.patch.summary,
+          issues: result.playtest.failures.map((failure) => ({ ...failure, severity: "high" })),
+        },
+      });
+      setBalance({ ...balance, status: "accepted" });
+      setStage("Révision équilibrée release ready");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Erreur inattendue.");
     } finally {
       setBusy(false);
     }
@@ -215,8 +317,37 @@ export default function HomePage() {
             </div>
           </div>
 
+          {balance ? (
+            <div className={`balance-review ${balance.after.status === "passed" ? "balance-passed" : "balance-failed"}`}>
+              <div className="balance-review-heading">
+                <div>
+                  <p className="preview-label">Révision d’équilibrage IA</p>
+                  <h3>{balance.patch.summary}</h3>
+                </div>
+                <span>{balance.status === "accepted" ? "Acceptée" : balance.after.status === "passed" ? "À confirmer" : "Rejetée"}</span>
+              </div>
+              <div className="balance-comparison">
+                <div><small>Avant</small><strong>{Math.round(balance.before.completionRate * 100)}%</strong><span>{balance.before.averageActions} actions moy.</span></div>
+                <b>→</b>
+                <div><small>Après</small><strong>{Math.round(balance.after.completionRate * 100)}%</strong><span>{balance.after.averageActions} actions moy.</span></div>
+                <ul>{balance.patch.changes.map((change, index) => <li key={`${change.kind}-${index}`}>{balanceChangeLabel(change)}</li>)}</ul>
+              </div>
+              {balance.status === "proposed" && balance.after.status === "passed" ? (
+                <button className="balance-accept-button" onClick={() => void acceptBalance()} disabled={busy}>
+                  Accepter cette révision vérifiée <b>→</b>
+                </button>
+              ) : null}
+              {balance.after.status === "failed" ? <p className="balance-warning">Cette révision reste bloquée : les agents n’ont pas validé la nouvelle version.</p> : null}
+            </div>
+          ) : (
+            <div className="balance-callout">
+              <div><strong>Tester une variante d’équilibrage</strong><span>L’IA ne peut modifier que des paramètres audités, puis les agents rejouent le jeu avant toute décision.</span></div>
+              <button onClick={() => void testBalance()} disabled={busy}>Proposer et tester</button>
+            </div>
+          )}
+
           <div className="compiled-actions">
-            <button className="secondary-button" onClick={() => setCompiled(null)} disabled={busy}>Modifier l’idée</button>
+            <button className="secondary-button" onClick={() => { setCompiled(null); setBalance(null); }} disabled={busy}>Modifier l’idée</button>
             <button className="primary-button" onClick={() => void openRoom(compiled.blueprintId)} disabled={busy || compiled.releaseStatus !== "release_ready"}>
               <span>{compiled.releaseStatus === "release_ready" ? "Ouvrir la room" : "Release bloquée"}</span><b>→</b>
             </button>

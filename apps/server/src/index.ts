@@ -4,6 +4,7 @@ import { config as loadEnv } from "dotenv";
 import { Server as SocketServer, type Socket } from "socket.io";
 import { z } from "zod";
 import {
+  applyComposedBalancePatch,
   cinemaCharadesSpec,
   demoGameSpecs,
   partyPulseSpec,
@@ -298,6 +299,119 @@ app.post("/api/compile", async (request, reply) => {
       error: compilationErrorMessage(error),
       provider: llm.name,
     });
+  }
+});
+
+const balanceParamsSchema = z.object({ id: z.string().trim().min(1).max(120) }).strict();
+
+app.post<{ Params: { id: string } }>("/api/blueprints/:id/balance", async (request, reply) => {
+  const params = balanceParamsSchema.safeParse(request.params);
+  if (!params.success) return reply.code(400).send({ error: "Invalid blueprint ID." });
+
+  const source = await blueprintStore.get(params.data.id);
+  if (!source) return reply.code(404).send({ error: "Game blueprint not found." });
+  if (source.spec.template !== "composed") {
+    return reply.code(409).send({ error: "Only composed games support the constrained balance workflow." });
+  }
+  if (!source.playtest) {
+    return reply.code(409).send({ error: "The source blueprint must complete its initial playtest first." });
+  }
+
+  try {
+    const patch = await llm.proposeComposedBalancePatch(source.spec, {
+      simulations: source.playtest.simulations,
+      completionRate: source.playtest.completionRate,
+      averageActions: source.playtest.averageActions,
+      failures: source.playtest.failures.map((failure) => ({
+        code: failure.code,
+        evidence: failure.evidence,
+      })),
+    });
+    const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 6);
+    const derivedSpecId = `${source.spec.id.slice(0, 32).replace(/_+$/, "")}_balanced_${suffix}`;
+    const applied = applyComposedBalancePatch(source.spec, patch, derivedSpecId);
+    if (!applied.ok) {
+      app.log.warn({ issues: applied.issues }, "LLM balance patch rejected at the GameSpec boundary");
+      return reply.code(422).send({
+        error: "The proposed balance patch was rejected by the strict validator.",
+        issues: applied.issues,
+      });
+    }
+
+    const balancePatchId = crypto.randomUUID();
+    const derivedBlueprintId = `${applied.spec.id}-${crypto.randomUUID().slice(0, 8)}`;
+    await blueprintStore.saveBlueprint({
+      id: derivedBlueprintId,
+      spec: applied.spec,
+      status: "validating",
+      provider: llm.name,
+      ...(source.prompt ? { prompt: source.prompt } : {}),
+    });
+    const afterReport = runComposedPlaytest(applied.spec, {
+      simulations: source.playtest.simulations,
+      seed: `balance:${balancePatchId}`,
+    });
+    await blueprintStore.savePlaytest(
+      derivedBlueprintId,
+      afterReport.status === "passed" ? "validating" : "needs_review",
+      afterReport,
+    );
+    await blueprintStore.saveBalancePatch({
+      id: balancePatchId,
+      sourceBlueprintId: source.id,
+      derivedBlueprintId,
+      provider: llm.name,
+      patch: applied.patch,
+      beforeReport: source.playtest,
+      afterReport,
+      status: "proposed",
+    });
+
+    return {
+      balancePatchId,
+      status: "proposed",
+      sourceBlueprintId: source.id,
+      derivedBlueprintId,
+      patch: applied.patch,
+      before: source.playtest,
+      after: afterReport,
+      derived: {
+        game: summary(applied.spec),
+        preview: preview(applied.spec),
+        releaseStatus: afterReport.status === "passed" ? "awaiting_acceptance" : "needs_review",
+      },
+    };
+  } catch (error) {
+    app.log.warn({ message: error instanceof Error ? error.message : "Unknown balance error" }, "Balance workflow failed");
+    return reply.code(502).send({
+      error: compilationErrorMessage(error),
+      provider: llm.name,
+    });
+  }
+});
+
+const balancePatchParamsSchema = z.object({ id: z.string().uuid() }).strict();
+
+app.post<{ Params: { id: string } }>("/api/balance-patches/:id/accept", async (request, reply) => {
+  const params = balancePatchParamsSchema.safeParse(request.params);
+  if (!params.success) return reply.code(400).send({ error: "Invalid balance patch ID." });
+  try {
+    const patch = await blueprintStore.acceptBalancePatch(params.data.id);
+    const blueprint = await blueprintStore.get(patch.derivedBlueprintId);
+    if (!blueprint) return reply.code(500).send({ error: "Accepted blueprint could not be loaded." });
+    return {
+      balancePatchId: patch.id,
+      status: patch.status,
+      blueprintId: blueprint.id,
+      releaseStatus: blueprint.status,
+      game: summary(blueprint.spec),
+      preview: preview(blueprint.spec),
+      playtest: patch.afterReport,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Balance patch acceptance failed.";
+    const statusCode = message.includes("Unknown balance patch") ? 404 : 409;
+    return reply.code(statusCode).send({ error: message });
   }
 });
 

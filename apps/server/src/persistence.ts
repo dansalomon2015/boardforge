@@ -2,9 +2,11 @@ import { readFile } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import { Pool } from "pg";
 import {
+  composedBalancePatchSchema,
   validateComposedGameSpec,
   validateGameSpec,
   type BoardGameSpec,
+  type ComposedBalancePatch,
 } from "@boardforge/game-spec";
 import type { ComposedPlaytestReport } from "@boardforge/game-engine";
 import type { GameAction, PublicPlayer } from "@boardforge/shared";
@@ -18,6 +20,19 @@ export type BlueprintRecord = {
   provider: string;
   prompt?: string | undefined;
   playtest?: ComposedPlaytestReport | undefined;
+};
+
+export type BalancePatchStatus = "proposed" | "accepted" | "rejected";
+
+export type BalancePatchRecord = {
+  id: string;
+  sourceBlueprintId: string;
+  derivedBlueprintId: string;
+  provider: string;
+  patch: ComposedBalancePatch;
+  beforeReport: ComposedPlaytestReport;
+  afterReport: ComposedPlaytestReport;
+  status: BalancePatchStatus;
 };
 
 export type RoomEventRecord = {
@@ -50,6 +65,9 @@ export interface BlueprintStore {
   get(id: string): Promise<BlueprintRecord | undefined>;
   saveBlueprint(record: Omit<BlueprintRecord, "playtest">): Promise<void>;
   savePlaytest(id: string, status: BlueprintStatus, report: ComposedPlaytestReport): Promise<void>;
+  getBalancePatch(id: string): Promise<BalancePatchRecord | undefined>;
+  saveBalancePatch(record: BalancePatchRecord): Promise<void>;
+  acceptBalancePatch(id: string): Promise<BalancePatchRecord>;
   loadRooms(): Promise<RoomSessionRecord[]>;
   saveRoom(record: Omit<RoomSessionRecord, "events">): Promise<void>;
   appendRoomEvent(record: Omit<RoomSessionRecord, "events">, event: RoomEventRecord): Promise<void>;
@@ -71,9 +89,16 @@ function cloneRecord(record: BlueprintRecord): BlueprintRecord {
   return structuredClone(record);
 }
 
+function parseBalancePatch(input: unknown): ComposedBalancePatch {
+  const parsed = composedBalancePatchSchema.safeParse(input);
+  if (!parsed.success) throw new Error("Refusing invalid persisted balance patch.");
+  return parsed.data;
+}
+
 export class MemoryBlueprintStore implements BlueprintStore {
   readonly mode = "memory" as const;
   private readonly records = new Map<string, BlueprintRecord>();
+  private readonly balancePatches = new Map<string, BalancePatchRecord>();
   private readonly roomRecords = new Map<string, Omit<RoomSessionRecord, "events">>();
   private readonly roomEvents = new Map<string, RoomEventRecord[]>();
 
@@ -96,6 +121,34 @@ export class MemoryBlueprintStore implements BlueprintStore {
     const existing = this.records.get(id);
     if (!existing) throw new Error(`Unknown blueprint: ${id}`);
     this.records.set(id, { ...existing, status, playtest: structuredClone(report) });
+  }
+
+  async getBalancePatch(id: string): Promise<BalancePatchRecord | undefined> {
+    const record = this.balancePatches.get(id);
+    return record ? structuredClone(record) : undefined;
+  }
+
+  async saveBalancePatch(record: BalancePatchRecord): Promise<void> {
+    if (!this.records.has(record.sourceBlueprintId) || !this.records.has(record.derivedBlueprintId)) {
+      throw new Error("Balance patch blueprints must exist before the patch is persisted.");
+    }
+    const patch = parseBalancePatch(record.patch);
+    const existing = this.balancePatches.get(record.id);
+    if (existing && !isDeepStrictEqual(existing, record)) throw new Error(`Balance patch ${record.id} is immutable.`);
+    if (!existing) this.balancePatches.set(record.id, structuredClone({ ...record, patch }));
+  }
+
+  async acceptBalancePatch(id: string): Promise<BalancePatchRecord> {
+    const patch = this.balancePatches.get(id);
+    if (!patch) throw new Error(`Unknown balance patch: ${id}`);
+    if (patch.afterReport.status !== "passed") throw new Error("A failing balance patch cannot be accepted.");
+    if (patch.status !== "proposed") throw new Error(`Balance patch ${id} is already ${patch.status}.`);
+    const blueprint = this.records.get(patch.derivedBlueprintId);
+    if (!blueprint) throw new Error(`Unknown blueprint: ${patch.derivedBlueprintId}`);
+    const accepted = { ...patch, status: "accepted" as const };
+    this.balancePatches.set(id, accepted);
+    this.records.set(blueprint.id, { ...blueprint, status: "release_ready" });
+    return structuredClone(accepted);
   }
 
   async loadRooms(): Promise<RoomSessionRecord[]> {
@@ -141,6 +194,17 @@ type BlueprintRow = {
   report: ComposedPlaytestReport | null;
 };
 
+type BalancePatchRow = {
+  id: string;
+  source_blueprint_id: string;
+  derived_blueprint_id: string;
+  provider: string;
+  patch: unknown;
+  before_report: ComposedPlaytestReport;
+  after_report: ComposedPlaytestReport;
+  status: BalancePatchStatus;
+};
+
 type RoomSessionRow = {
   code: string;
   blueprint_id: string;
@@ -179,13 +243,26 @@ function roomEventFromRow(row: RoomEventRow): RoomEventRecord {
   };
 }
 
+function balancePatchFromRow(row: BalancePatchRow): BalancePatchRecord {
+  return {
+    id: row.id,
+    sourceBlueprintId: row.source_blueprint_id,
+    derivedBlueprintId: row.derived_blueprint_id,
+    provider: row.provider,
+    patch: parseBalancePatch(row.patch),
+    beforeReport: row.before_report,
+    afterReport: row.after_report,
+    status: row.status,
+  };
+}
+
 class PostgresBlueprintStore implements BlueprintStore {
   readonly mode = "postgres" as const;
 
   constructor(private readonly pool: Pool) {}
 
   async migrate(): Promise<void> {
-    for (const filename of ["0001_blueprints.sql", "0002_room_events.sql"]) {
+    for (const filename of ["0001_blueprints.sql", "0002_room_events.sql", "0003_balance_patches.sql"]) {
       const migration = await readFile(new URL(`../migrations/${filename}`, import.meta.url), "utf8");
       await this.pool.query(migration);
     }
@@ -244,6 +321,78 @@ class PostgresBlueprintStore implements BlueprintStore {
         [id, JSON.stringify(report)],
       );
       await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getBalancePatch(id: string): Promise<BalancePatchRecord | undefined> {
+    const result = await this.pool.query<BalancePatchRow>(
+      `SELECT id, source_blueprint_id, derived_blueprint_id, provider, patch,
+              before_report, after_report, status
+       FROM balance_patches
+       WHERE id = $1::uuid`,
+      [id],
+    );
+    return result.rows[0] ? balancePatchFromRow(result.rows[0]) : undefined;
+  }
+
+  async saveBalancePatch(record: BalancePatchRecord): Promise<void> {
+    const patch = parseBalancePatch(record.patch);
+    const inserted = await this.pool.query(
+      `INSERT INTO balance_patches (
+         id, source_blueprint_id, derived_blueprint_id, provider, patch,
+         before_report, after_report, status
+       ) VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8)
+       ON CONFLICT (id) DO NOTHING
+       RETURNING id`,
+      [
+        record.id,
+        record.sourceBlueprintId,
+        record.derivedBlueprintId,
+        record.provider,
+        JSON.stringify(patch),
+        JSON.stringify(record.beforeReport),
+        JSON.stringify(record.afterReport),
+        record.status,
+      ],
+    );
+    if (inserted.rowCount === 0) {
+      const existing = await this.getBalancePatch(record.id);
+      if (!existing || !isDeepStrictEqual(existing, record)) throw new Error(`Balance patch ${record.id} is immutable.`);
+    }
+  }
+
+  async acceptBalancePatch(id: string): Promise<BalancePatchRecord> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const selected = await client.query<BalancePatchRow>(
+        `SELECT id, source_blueprint_id, derived_blueprint_id, provider, patch,
+                before_report, after_report, status
+         FROM balance_patches
+         WHERE id = $1::uuid
+         FOR UPDATE`,
+        [id],
+      );
+      const row = selected.rows[0];
+      if (!row) throw new Error(`Unknown balance patch: ${id}`);
+      if (row.after_report.status !== "passed") throw new Error("A failing balance patch cannot be accepted.");
+      if (row.status !== "proposed") throw new Error(`Balance patch ${id} is already ${row.status}.`);
+      await client.query(
+        "UPDATE balance_patches SET status = 'accepted', decided_at = now() WHERE id = $1::uuid",
+        [id],
+      );
+      const updated = await client.query(
+        "UPDATE blueprint_revisions SET status = 'release_ready', updated_at = now() WHERE id = $1",
+        [row.derived_blueprint_id],
+      );
+      if (updated.rowCount !== 1) throw new Error(`Unknown blueprint: ${row.derived_blueprint_id}`);
+      await client.query("COMMIT");
+      return balancePatchFromRow({ ...row, status: "accepted" });
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
