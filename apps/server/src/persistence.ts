@@ -72,8 +72,10 @@ export interface BlueprintStore {
   savePlaytest(id: string, status: BlueprintStatus, report: ComposedPlaytestReport): Promise<void>;
   saveCritique(id: string, provider: string, critique: ComposedGameCritique): Promise<void>;
   getBalancePatch(id: string): Promise<BalancePatchRecord | undefined>;
+  listBalancePatchesForBlueprint(id: string): Promise<BalancePatchRecord[]>;
   saveBalancePatch(record: BalancePatchRecord): Promise<void>;
   acceptBalancePatch(id: string): Promise<BalancePatchRecord>;
+  rejectBalancePatch(id: string): Promise<BalancePatchRecord>;
   loadRooms(): Promise<RoomSessionRecord[]>;
   saveRoom(record: Omit<RoomSessionRecord, "events">): Promise<void>;
   appendRoomEvent(record: Omit<RoomSessionRecord, "events">, event: RoomEventRecord): Promise<void>;
@@ -152,6 +154,12 @@ export class MemoryBlueprintStore implements BlueprintStore {
     return record ? structuredClone(record) : undefined;
   }
 
+  async listBalancePatchesForBlueprint(id: string): Promise<BalancePatchRecord[]> {
+    return [...this.balancePatches.values()]
+      .filter((patch) => patch.sourceBlueprintId === id || patch.derivedBlueprintId === id)
+      .map((patch) => structuredClone(patch));
+  }
+
   async saveBalancePatch(record: BalancePatchRecord): Promise<void> {
     if (!this.records.has(record.sourceBlueprintId) || !this.records.has(record.derivedBlueprintId)) {
       throw new Error("Balance patch blueprints must exist before the patch is persisted.");
@@ -176,6 +184,18 @@ export class MemoryBlueprintStore implements BlueprintStore {
     this.balancePatches.set(id, accepted);
     this.records.set(blueprint.id, { ...blueprint, status: "release_ready" });
     return structuredClone(accepted);
+  }
+
+  async rejectBalancePatch(id: string): Promise<BalancePatchRecord> {
+    const patch = this.balancePatches.get(id);
+    if (!patch) throw new Error(`Unknown balance patch: ${id}`);
+    if (patch.status !== "proposed") throw new Error(`Balance patch ${id} is already ${patch.status}.`);
+    const blueprint = this.records.get(patch.derivedBlueprintId);
+    if (!blueprint) throw new Error(`Unknown blueprint: ${patch.derivedBlueprintId}`);
+    const rejected = { ...patch, status: "rejected" as const };
+    this.balancePatches.set(id, rejected);
+    this.records.set(blueprint.id, { ...blueprint, status: "needs_review" });
+    return structuredClone(rejected);
   }
 
   async loadRooms(): Promise<RoomSessionRecord[]> {
@@ -399,6 +419,18 @@ class PostgresBlueprintStore implements BlueprintStore {
     return result.rows[0] ? balancePatchFromRow(result.rows[0]) : undefined;
   }
 
+  async listBalancePatchesForBlueprint(id: string): Promise<BalancePatchRecord[]> {
+    const result = await this.pool.query<BalancePatchRow>(
+      `SELECT id, source_blueprint_id, derived_blueprint_id, provider, patch,
+              before_report, after_report, status
+       FROM balance_patches
+       WHERE source_blueprint_id = $1 OR derived_blueprint_id = $1
+       ORDER BY created_at, id`,
+      [id],
+    );
+    return result.rows.map(balancePatchFromRow);
+  }
+
   async saveBalancePatch(record: BalancePatchRecord): Promise<void> {
     const patch = parseBalancePatch(record.patch);
     const inserted = await this.pool.query(
@@ -466,6 +498,40 @@ class PostgresBlueprintStore implements BlueprintStore {
       if (updated.rowCount !== 1) throw new Error(`Unknown blueprint: ${row.derived_blueprint_id}`);
       await client.query("COMMIT");
       return balancePatchFromRow({ ...row, status: "accepted" });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async rejectBalancePatch(id: string): Promise<BalancePatchRecord> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const selected = await client.query<BalancePatchRow>(
+        `SELECT id, source_blueprint_id, derived_blueprint_id, provider, patch,
+                before_report, after_report, status
+         FROM balance_patches
+         WHERE id = $1::uuid
+         FOR UPDATE`,
+        [id],
+      );
+      const row = selected.rows[0];
+      if (!row) throw new Error(`Unknown balance patch: ${id}`);
+      if (row.status !== "proposed") throw new Error(`Balance patch ${id} is already ${row.status}.`);
+      await client.query(
+        "UPDATE balance_patches SET status = 'rejected', decided_at = now() WHERE id = $1::uuid",
+        [id],
+      );
+      const updated = await client.query(
+        "UPDATE blueprint_revisions SET status = 'needs_review', updated_at = now() WHERE id = $1",
+        [row.derived_blueprint_id],
+      );
+      if (updated.rowCount !== 1) throw new Error(`Unknown blueprint: ${row.derived_blueprint_id}`);
+      await client.query("COMMIT");
+      return balancePatchFromRow({ ...row, status: "rejected" });
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

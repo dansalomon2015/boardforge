@@ -61,7 +61,7 @@ type BalanceChange =
 
 type BalanceReview = {
   balancePatchId: string;
-  status: "proposed" | "accepted";
+  status: "proposed" | "accepted" | "rejected";
   sourceBlueprintId: string;
   derivedBlueprintId: string;
   patch: {
@@ -79,6 +79,24 @@ type BalanceReview = {
     preview: ComposedPreview;
     releaseStatus: "awaiting_acceptance" | "needs_review";
   };
+};
+
+type RevisionEntry = {
+  revision: number;
+  blueprintId: string;
+  parentBlueprintId?: string;
+  patch?: {
+    id: string;
+    status: "proposed" | "accepted" | "rejected";
+    summary: string;
+    changes: BalanceChange[];
+  };
+  releaseStatus: "draft" | "validating" | "playtesting" | "release_ready" | "needs_review";
+  canSelect: boolean;
+  game: GameSummary;
+  preview: ComposedPreview;
+  playtest?: PlaytestReport;
+  critique?: StructuredCritique;
 };
 
 const promptIdeas = [
@@ -122,6 +140,7 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [compiled, setCompiled] = useState<CompiledGame | null>(null);
   const [balance, setBalance] = useState<BalanceReview | null>(null);
+  const [history, setHistory] = useState<RevisionEntry[]>([]);
   const [provider, setProvider] = useState("connexion");
   const [demo, setDemo] = useState<DemoGame | null>(null);
 
@@ -142,6 +161,7 @@ export default function HomePage() {
     setError("");
     setCompiled(null);
     setBalance(null);
+    setHistory([]);
     setStage("L’IA assemble la GameSpec");
     try {
       const response = await fetch(`${apiUrl}/api/compile`, {
@@ -156,12 +176,24 @@ export default function HomePage() {
       const result = (await response.json()) as CompiledGame;
       setProvider(result.provider);
       setCompiled(result);
+      void loadHistory(result.blueprintId);
       setStage(result.releaseStatus === "release_ready" ? "Jeu validé pour la release" : "Révision nécessaire");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Erreur inattendue.");
       setStage("Prêt à compiler");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function loadHistory(blueprintId: string) {
+    try {
+      const response = await fetch(`${apiUrl}/api/blueprints/${encodeURIComponent(blueprintId)}/history`);
+      if (!response.ok) return;
+      const result = (await response.json()) as { revisions: RevisionEntry[] };
+      setHistory(result.revisions);
+    } catch {
+      // History is supplementary; compilation and room creation remain usable.
     }
   }
 
@@ -180,6 +212,7 @@ export default function HomePage() {
       }
       const result = (await response.json()) as BalanceReview;
       setBalance(result);
+      void loadHistory(result.sourceBlueprintId);
       setStage(result.after.status === "passed" ? "Patch vérifié, décision requise" : "Patch rejeté par les agents");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Erreur inattendue.");
@@ -220,12 +253,56 @@ export default function HomePage() {
         critique: result.critique,
       });
       setBalance({ ...balance, status: "accepted" });
+      void loadHistory(result.blueprintId);
       setStage("Révision équilibrée release ready");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Erreur inattendue.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function rejectBalance() {
+    if (!balance) return;
+    setBusy(true);
+    setError("");
+    setStage("Rejet de la révision");
+    try {
+      const response = await fetch(`${apiUrl}/api/balance-patches/${balance.balancePatchId}/reject`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const failure = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(failure?.error ?? "La révision n’a pas pu être rejetée.");
+      }
+      setBalance({ ...balance, status: "rejected" });
+      void loadHistory(balance.sourceBlueprintId);
+      setStage("Révision rejetée, version initiale conservée");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Erreur inattendue.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function selectRevision(revision: RevisionEntry) {
+    if (!compiled || !revision.canSelect || !revision.playtest || !revision.critique) {
+      setError("Cette révision ne possède pas tous les contrôles nécessaires pour être sélectionnée.");
+      return;
+    }
+    setCompiled({
+      ...compiled,
+      blueprintId: revision.blueprintId,
+      releaseStatus: "release_ready",
+      game: revision.game,
+      preview: revision.preview,
+      playtest: revision.playtest,
+      critique: revision.critique,
+    });
+    setBalance(null);
+    setError("");
+    setStage(`Révision ${revision.revision} sélectionnée`);
+    void loadHistory(revision.blueprintId);
   }
 
   async function openRoom(blueprintId: string) {
@@ -377,7 +454,7 @@ export default function HomePage() {
                   <p className="preview-label">Révision d’équilibrage IA</p>
                   <h3>{balance.patch.summary}</h3>
                 </div>
-                <span>{balance.status === "accepted" ? "Acceptée" : balance.after.status === "passed" ? "À confirmer" : "Rejetée"}</span>
+                <span>{balance.status === "accepted" ? "Acceptée" : balance.status === "rejected" ? "Rejetée" : balance.after.status === "passed" ? "À confirmer" : "Bloquée"}</span>
               </div>
               <div className="balance-comparison">
                 <div><small>Avant</small><strong>{Math.round(balance.before.completionRate * 100)}%</strong><span>{balance.before.averageActions} actions moy.</span></div>
@@ -387,9 +464,12 @@ export default function HomePage() {
               </div>
               <p className="balance-critique-result"><b>Nouvel avis IA :</b> {balance.afterCritique.summary}</p>
               {balance.status === "proposed" && balance.after.status === "passed" ? (
-                <button className="balance-accept-button" onClick={() => void acceptBalance()} disabled={busy}>
-                  Accepter cette révision vérifiée <b>→</b>
-                </button>
+                <div className="balance-decision-actions">
+                  <button className="balance-reject-button" onClick={() => void rejectBalance()} disabled={busy}>Rejeter</button>
+                  <button className="balance-accept-button" onClick={() => void acceptBalance()} disabled={busy}>
+                    Accepter cette révision vérifiée <b>→</b>
+                  </button>
+                </div>
               ) : null}
               {balance.after.status === "failed" ? <p className="balance-warning">Cette révision reste bloquée : les agents n’ont pas validé la nouvelle version.</p> : null}
             </div>
@@ -400,8 +480,40 @@ export default function HomePage() {
             </div>
           )}
 
+          {history.length > 0 ? (
+            <div className="revision-history">
+              <div className="revision-history-heading">
+                <div><p className="preview-label">Historique immuable</p><h3>{history.length} version{history.length > 1 ? "s" : ""}</h3></div>
+                <span>Aucune version n’est écrasée</span>
+              </div>
+              <div className="revision-list">
+                {history.map((revision) => {
+                  const selected = revision.blueprintId === compiled.blueprintId;
+                  return (
+                    <article className={`revision-card ${selected ? "is-selected" : ""}`} key={revision.blueprintId}>
+                      <div className="revision-card-top">
+                        <strong>V{revision.revision}</strong>
+                        <span className={`revision-status status-${revision.patch?.status ?? revision.releaseStatus}`}>
+                          {selected ? "Active" : revision.patch?.status === "accepted" ? "Acceptée" : revision.patch?.status === "rejected" ? "Rejetée" : revision.patch?.status === "proposed" ? "Proposée" : revision.releaseStatus === "release_ready" ? "Validée" : "Bloquée"}
+                        </span>
+                      </div>
+                      <h4>{revision.game.title}</h4>
+                      <p>{revision.patch?.summary ?? "Version compilée depuis le prompt initial."}</p>
+                      <dl>
+                        <div><dt>Complétion</dt><dd>{revision.playtest ? `${Math.round(revision.playtest.completionRate * 100)}%` : "—"}</dd></div>
+                        <div><dt>Actions moy.</dt><dd>{revision.playtest?.averageActions ?? "—"}</dd></div>
+                        <div><dt>Avis IA</dt><dd>{revision.critique?.verdict === "release_ready" ? "Favorable" : revision.critique ? "À revoir" : "—"}</dd></div>
+                      </dl>
+                      {revision.canSelect && !selected ? <button onClick={() => selectRevision(revision)}>Utiliser cette version</button> : null}
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
           <div className="compiled-actions">
-            <button className="secondary-button" onClick={() => { setCompiled(null); setBalance(null); }} disabled={busy}>Modifier l’idée</button>
+            <button className="secondary-button" onClick={() => { setCompiled(null); setBalance(null); setHistory([]); }} disabled={busy}>Modifier l’idée</button>
             <button className="primary-button" onClick={() => void openRoom(compiled.blueprintId)} disabled={busy || compiled.releaseStatus !== "release_ready"}>
               <span>{compiled.releaseStatus === "release_ready" ? "Ouvrir la room" : "Release bloquée"}</span><b>→</b>
             </button>

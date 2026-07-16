@@ -1,5 +1,17 @@
 # Implementation progress
 
+## 16 July 2026 — Immutable revision history
+
+Completed and verified:
+
+- revision families are reconstructed from immutable source/derived balance-patch links without overwriting a GameSpec;
+- API exposes every connected version with release status, patch decision, playtest metrics and structured critique;
+- proposed balance revisions can be explicitly rejected, with the patch decision and derived blueprint status updated transactionally;
+- creator UI renders version cards for original, proposed, accepted and rejected branches;
+- any previous `release_ready` blueprint can be selected again and used to open a room;
+- branch smoke test produced one rejected and one accepted variant while the original release remained playable;
+- full lint, typecheck, unit-test and production-build gate passes.
+
 ## 16 July 2026 — Structured critique and constrained balance review
 
 Completed and verified:
@@ -129,10 +141,9 @@ Verification evidence:
 
 ## Next implementation slice
 
-1. Add creator-facing revision history, rejection and rollback controls.
-2. Add server-issued expiry actions and deterministic timers.
-3. Add multi-client browser regression tests for the generic room controls.
-4. Prepare GitHub release evidence and hosted deployment.
+1. Add server-issued expiry actions and deterministic timers.
+2. Add multi-client browser regression tests for the generic room controls.
+3. Prepare GitHub release evidence and hosted deployment.
 
 ## Current deliberate limitations
 

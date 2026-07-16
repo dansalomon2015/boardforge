@@ -122,5 +122,45 @@ describe("MemoryBlueprintStore", () => {
     const accepted = await store.acceptBalancePatch("00000000-0000-4000-8000-000000000101");
     expect(accepted.status).toBe("accepted");
     expect((await store.get("balance-derived"))?.status).toBe("release_ready");
+
+    const rejectedPatch = {
+      ...patch,
+      sourceSpecId: applied.spec.id,
+      summary: "Teste une seconde variante qui sera explicitement rejetée.",
+      changes: [{ kind: "set_timer_seconds" as const, componentId: "mime_timer", seconds: 50 }],
+    };
+    const rejectedApplied = applyComposedBalancePatch(
+      applied.spec,
+      rejectedPatch,
+      "cinema_charades_balanced_two",
+    );
+    expect(rejectedApplied.ok).toBe(true);
+    if (!rejectedApplied.ok) return;
+    const rejectedReport = runComposedPlaytest(rejectedApplied.spec, {
+      simulations: 2,
+      seed: "balance-rejected",
+    });
+    await store.saveBlueprint({
+      id: "balance-rejected",
+      spec: rejectedApplied.spec,
+      status: "validating",
+      provider: "test",
+    });
+    await store.savePlaytest("balance-rejected", "validating", rejectedReport);
+    await store.saveBalancePatch({
+      id: "00000000-0000-4000-8000-000000000102",
+      sourceBlueprintId: "balance-derived",
+      derivedBlueprintId: "balance-rejected",
+      provider: "test",
+      patch: rejectedPatch,
+      beforeReport: afterReport,
+      afterReport: rejectedReport,
+      status: "proposed",
+    });
+
+    expect(await store.listBalancePatchesForBlueprint("balance-derived")).toHaveLength(2);
+    const rejected = await store.rejectBalancePatch("00000000-0000-4000-8000-000000000102");
+    expect(rejected.status).toBe("rejected");
+    expect((await store.get("balance-rejected"))?.status).toBe("needs_review");
   });
 });

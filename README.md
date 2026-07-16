@@ -85,6 +85,7 @@ The Compose stack waits for PostgreSQL and the API health check before starting 
 - deterministic virtual-agent release gate: 24 simulations across valid player and team configurations before room creation;
 - strict GPT critique with a verdict, evidence-backed issue categories and bounded recommendations for every generated revision;
 - allowlisted `BalancePatch` revisions that are revalidated, replayed, critiqued and explicitly accepted before release;
+- creator-facing immutable revision history with accepted, proposed and rejected branches plus safe selection of any prior `release_ready` version;
 - visible GameSpec, phase, component, critique and before/after playtest evidence before room creation;
 - mobile-first creator, lobby and game-room UI, verified without horizontal overflow at 390 × 844;
 - unit tests and an automated multi-client WebSocket smoke test;
@@ -94,7 +95,7 @@ Blueprints, playtest reports, critiques, balance decisions, room snapshots and a
 
 ## Status
 
-Local P0 prototype with deterministic recovery, structured critique, constrained balance revisions and CI. Hosted deployment, server timers, browser regression coverage and submission evidence remain.
+Local P0 prototype with deterministic recovery, structured critique, constrained balance revisions, revision history and CI. Hosted deployment, server timers, browser regression coverage and submission evidence remain.
 
 ## License
 
