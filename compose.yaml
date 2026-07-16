@@ -25,8 +25,8 @@ services:
       DATABASE_URL: postgresql://boardforge:boardforge@postgres:5432/boardforge
       DATABASE_REQUIRED: "true"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6}
-      OPENAI_REVIEW_MODEL: ${OPENAI_REVIEW_MODEL:-gpt-5.6}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-terra}
+      OPENAI_REVIEW_MODEL: ${OPENAI_REVIEW_MODEL:-gpt-5.6-luna}
       LLM_PROVIDER: ${LLM_PROVIDER:-fake}
     ports:
       - "4000:4000"

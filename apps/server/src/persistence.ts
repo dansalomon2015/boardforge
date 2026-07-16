@@ -41,6 +41,42 @@ export type BalancePatchRecord = {
   status: BalancePatchStatus;
 };
 
+export type CompilationJobStatus =
+  | "queued"
+  | "generating"
+  | "validating"
+  | "playtesting"
+  | "reviewing"
+  | "release_ready"
+  | "needs_review"
+  | "failed";
+
+export type CompilationJobRecord = {
+  id: string;
+  prompt: string;
+  provider: string;
+  status: CompilationJobStatus;
+  progress: number;
+  message: string;
+  blueprintId?: string | undefined;
+  errorCode?: string | undefined;
+  errorMessage?: string | undefined;
+  attempts: number;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string | undefined;
+};
+
+export type CompilationJobUpdate = {
+  status: CompilationJobStatus;
+  progress: number;
+  message: string;
+  blueprintId?: string | undefined;
+  errorCode?: string | undefined;
+  errorMessage?: string | undefined;
+  incrementAttempts?: boolean | undefined;
+};
+
 export type RoomEventRecord = {
   id: string;
   roomCode: string;
@@ -83,6 +119,10 @@ export interface BlueprintStore {
   saveBalancePatch(record: BalancePatchRecord): Promise<void>;
   acceptBalancePatch(id: string): Promise<BalancePatchRecord>;
   rejectBalancePatch(id: string): Promise<BalancePatchRecord>;
+  createCompilationJob(record: CompilationJobRecord): Promise<void>;
+  getCompilationJob(id: string): Promise<CompilationJobRecord | undefined>;
+  updateCompilationJob(id: string, update: CompilationJobUpdate): Promise<CompilationJobRecord>;
+  listRecoverableCompilationJobs(): Promise<CompilationJobRecord[]>;
   loadRooms(): Promise<RoomSessionRecord[]>;
   saveRoom(record: Omit<RoomSessionRecord, "events">): Promise<void>;
   appendRoomEvent(record: Omit<RoomSessionRecord, "events">, event: RoomEventRecord): Promise<void>;
@@ -120,6 +160,7 @@ export class MemoryBlueprintStore implements BlueprintStore {
   readonly mode = "memory" as const;
   private readonly records = new Map<string, BlueprintRecord>();
   private readonly balancePatches = new Map<string, BalancePatchRecord>();
+  private readonly compilationJobs = new Map<string, CompilationJobRecord>();
   private readonly roomRecords = new Map<string, Omit<RoomSessionRecord, "events">>();
   private readonly roomEvents = new Map<string, RoomEventRecord[]>();
 
@@ -226,6 +267,43 @@ export class MemoryBlueprintStore implements BlueprintStore {
     return structuredClone(rejected);
   }
 
+  async createCompilationJob(record: CompilationJobRecord): Promise<void> {
+    if (this.compilationJobs.has(record.id)) throw new Error(`Compilation job ${record.id} already exists.`);
+    this.compilationJobs.set(record.id, structuredClone(record));
+  }
+
+  async getCompilationJob(id: string): Promise<CompilationJobRecord | undefined> {
+    const record = this.compilationJobs.get(id);
+    return record ? structuredClone(record) : undefined;
+  }
+
+  async updateCompilationJob(id: string, update: CompilationJobUpdate): Promise<CompilationJobRecord> {
+    const existing = this.compilationJobs.get(id);
+    if (!existing) throw new Error(`Unknown compilation job: ${id}`);
+    const terminal = update.status === "release_ready" || update.status === "needs_review" || update.status === "failed";
+    const updated: CompilationJobRecord = {
+      ...existing,
+      status: update.status,
+      progress: update.progress,
+      message: update.message,
+      attempts: existing.attempts + (update.incrementAttempts ? 1 : 0),
+      updatedAt: new Date().toISOString(),
+      ...(update.blueprintId ? { blueprintId: update.blueprintId } : {}),
+      ...(update.errorCode ? { errorCode: update.errorCode } : {}),
+      ...(update.errorMessage ? { errorMessage: update.errorMessage } : {}),
+      ...(terminal ? { completedAt: new Date().toISOString() } : {}),
+    };
+    this.compilationJobs.set(id, updated);
+    return structuredClone(updated);
+  }
+
+  async listRecoverableCompilationJobs(): Promise<CompilationJobRecord[]> {
+    const terminal = new Set<CompilationJobStatus>(["release_ready", "needs_review", "failed"]);
+    return [...this.compilationJobs.values()]
+      .filter((job) => !terminal.has(job.status) && job.attempts < 2)
+      .map((job) => structuredClone(job));
+  }
+
   async loadRooms(): Promise<RoomSessionRecord[]> {
     return [...this.roomRecords.values()].map((record) => ({
       ...structuredClone(record),
@@ -282,6 +360,22 @@ type BalancePatchRow = {
   status: BalancePatchStatus;
 };
 
+type CompilationJobRow = {
+  id: string;
+  prompt: string;
+  provider: string;
+  status: CompilationJobStatus;
+  progress: number;
+  message: string;
+  blueprint_id: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  attempts: number;
+  created_at: Date;
+  updated_at: Date;
+  completed_at: Date | null;
+};
+
 type RoomSessionRow = {
   code: string;
   blueprint_id: string;
@@ -333,6 +427,24 @@ function balancePatchFromRow(row: BalancePatchRow): BalancePatchRecord {
   };
 }
 
+function compilationJobFromRow(row: CompilationJobRow): CompilationJobRecord {
+  return {
+    id: row.id,
+    prompt: row.prompt,
+    provider: row.provider,
+    status: row.status,
+    progress: row.progress,
+    message: row.message,
+    attempts: row.attempts,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+    ...(row.blueprint_id ? { blueprintId: row.blueprint_id } : {}),
+    ...(row.error_code ? { errorCode: row.error_code } : {}),
+    ...(row.error_message ? { errorMessage: row.error_message } : {}),
+    ...(row.completed_at ? { completedAt: row.completed_at.toISOString() } : {}),
+  };
+}
+
 class PostgresBlueprintStore implements BlueprintStore {
   readonly mode = "postgres" as const;
 
@@ -345,6 +457,7 @@ class PostgresBlueprintStore implements BlueprintStore {
       "0003_balance_patches.sql",
       "0004_game_critiques.sql",
       "0005_review_suggestions.sql",
+      "0006_compilation_jobs.sql",
     ]) {
       const migration = await readFile(new URL(`../migrations/${filename}`, import.meta.url), "utf8");
       await this.pool.query(migration);
@@ -588,6 +701,86 @@ class PostgresBlueprintStore implements BlueprintStore {
     } finally {
       client.release();
     }
+  }
+
+  async createCompilationJob(record: CompilationJobRecord): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO compilation_jobs (
+         id, prompt, provider, status, progress, message, blueprint_id,
+         error_code, error_message, attempts, created_at, updated_at, completed_at
+       ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [
+        record.id,
+        record.prompt,
+        record.provider,
+        record.status,
+        record.progress,
+        record.message,
+        record.blueprintId ?? null,
+        record.errorCode ?? null,
+        record.errorMessage ?? null,
+        record.attempts,
+        record.createdAt,
+        record.updatedAt,
+        record.completedAt ?? null,
+      ],
+    );
+  }
+
+  async getCompilationJob(id: string): Promise<CompilationJobRecord | undefined> {
+    const result = await this.pool.query<CompilationJobRow>(
+      `SELECT id, prompt, provider, status, progress, message, blueprint_id,
+              error_code, error_message, attempts, created_at, updated_at, completed_at
+       FROM compilation_jobs
+       WHERE id = $1::uuid`,
+      [id],
+    );
+    return result.rows[0] ? compilationJobFromRow(result.rows[0]) : undefined;
+  }
+
+  async updateCompilationJob(id: string, update: CompilationJobUpdate): Promise<CompilationJobRecord> {
+    const terminal = update.status === "release_ready" || update.status === "needs_review" || update.status === "failed";
+    const result = await this.pool.query<CompilationJobRow>(
+      `UPDATE compilation_jobs SET
+         status = $2,
+         progress = $3,
+         message = $4,
+         blueprint_id = COALESCE($5, blueprint_id),
+         error_code = COALESCE($6, error_code),
+         error_message = COALESCE($7, error_message),
+         attempts = attempts + $8,
+         updated_at = now(),
+         completed_at = CASE WHEN $9 THEN now() ELSE completed_at END
+       WHERE id = $1::uuid
+       RETURNING id, prompt, provider, status, progress, message, blueprint_id,
+                 error_code, error_message, attempts, created_at, updated_at, completed_at`,
+      [
+        id,
+        update.status,
+        update.progress,
+        update.message,
+        update.blueprintId ?? null,
+        update.errorCode ?? null,
+        update.errorMessage ?? null,
+        update.incrementAttempts ? 1 : 0,
+        terminal,
+      ],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error(`Unknown compilation job: ${id}`);
+    return compilationJobFromRow(row);
+  }
+
+  async listRecoverableCompilationJobs(): Promise<CompilationJobRecord[]> {
+    const result = await this.pool.query<CompilationJobRow>(
+      `SELECT id, prompt, provider, status, progress, message, blueprint_id,
+              error_code, error_message, attempts, created_at, updated_at, completed_at
+       FROM compilation_jobs
+       WHERE status NOT IN ('release_ready', 'needs_review', 'failed')
+         AND attempts < 2
+       ORDER BY created_at`,
+    );
+    return result.rows.map(compilationJobFromRow);
   }
 
   async loadRooms(): Promise<RoomSessionRecord[]> {

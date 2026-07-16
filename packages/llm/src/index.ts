@@ -824,13 +824,13 @@ export class OpenAiLlmProvider implements LlmProvider {
 
   constructor(
     apiKey: string,
-    private readonly model = "gpt-5.6",
+    private readonly model = "gpt-5.6-terra",
     private readonly reviewModel = model,
     private readonly onTelemetry?: (telemetry: LlmUsageTelemetry) => void,
   ) {
     if (!apiKey.trim()) throw new Error("OPENAI_API_KEY is required for the OpenAI provider.");
     this.name = `openai:${model}`;
-    this.client = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 1 });
+    this.client = new OpenAI({ apiKey, timeout: 180_000, maxRetries: 0 });
   }
 
   private recordTelemetry(

@@ -48,6 +48,42 @@ describe("MemoryBlueprintStore", () => {
     expect((await store.get("immutable"))?.spec.title).toBe(cinemaCharadesSpec.title);
   });
 
+  it("persists compilation progress and only recovers unfinished jobs", async () => {
+    const store = new MemoryBlueprintStore();
+    const now = new Date().toISOString();
+    const jobId = "00000000-0000-4000-8000-000000000200";
+    await store.createCompilationJob({
+      id: jobId,
+      prompt: "Un jeu coopératif de dessin et de déduction",
+      provider: "test",
+      status: "queued",
+      progress: 0,
+      message: "Queued",
+      attempts: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    expect(await store.listRecoverableCompilationJobs()).toHaveLength(1);
+    const generating = await store.updateCompilationJob(jobId, {
+      status: "generating",
+      progress: 12,
+      message: "Generating",
+      incrementAttempts: true,
+    });
+    expect(generating.attempts).toBe(1);
+    expect(generating.progress).toBe(12);
+
+    const completed = await store.updateCompilationJob(jobId, {
+      status: "needs_review",
+      progress: 100,
+      message: "Completed",
+    });
+    expect(completed.completedAt).toBeDefined();
+    expect(await store.listRecoverableCompilationJobs()).toEqual([]);
+    expect((await store.getCompilationJob(jobId))?.status).toBe("needs_review");
+  });
+
   it("persists room snapshots and append-only idempotent events", async () => {
     const store = new MemoryBlueprintStore();
     await store.saveBlueprint({ id: "cinema-room", spec: cinemaCharadesSpec, status: "release_ready", provider: "test" });

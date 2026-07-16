@@ -53,6 +53,14 @@ type CompiledGame = {
   balanceSuggestionAvailable: boolean;
 };
 
+type CompilationStatusResponse = {
+  id: string;
+  status: "queued" | "generating" | "validating" | "playtesting" | "reviewing" | "release_ready" | "needs_review" | "failed";
+  message: string;
+  errorMessage?: string;
+  result?: CompiledGame;
+};
+
 type BalanceChange =
   | { kind: "set_duration"; minutes: number }
   | { kind: "set_timer_seconds"; componentId: string; seconds: number }
@@ -157,6 +165,38 @@ export default function HomePage() {
       .catch(() => setError("Le serveur local n’est pas encore accessible."));
   }, []);
 
+  useEffect(() => {
+    const jobId = new URLSearchParams(window.location.search).get("job");
+    if (!jobId) return;
+    setBusy(true);
+    setError("");
+    setStage("Chargement du jeu compilé");
+    fetch(`${apiUrl}/api/compilations/${encodeURIComponent(jobId)}`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Cette compilation est introuvable.");
+        return response.json() as Promise<CompilationStatusResponse>;
+      })
+      .then((compilation) => {
+        if (compilation.result) {
+          setCompiled(compilation.result);
+          setProvider(compilation.result.provider);
+          setStage(compilation.result.releaseStatus === "release_ready" ? "Jeu validé pour la release" : "Révision nécessaire");
+          void loadHistory(compilation.result.blueprintId);
+          window.history.replaceState({}, "", "/");
+          return;
+        }
+        if (compilation.status === "failed") {
+          throw new Error(compilation.errorMessage ?? "La compilation n’a pas pu être terminée.");
+        }
+        router.replace(`/create/${jobId}`);
+      })
+      .catch((caught) => {
+        setError(caught instanceof Error ? caught.message : "Erreur inattendue.");
+        setStage("Prêt à compiler");
+      })
+      .finally(() => setBusy(false));
+  }, [router]);
+
   async function compileGame(event: FormEvent) {
     event.preventDefault();
     if (prompt.trim().length < 8) return;
@@ -165,22 +205,23 @@ export default function HomePage() {
     setCompiled(null);
     setBalance(null);
     setHistory([]);
-    setStage("L’IA assemble la GameSpec");
+    setStage("Ouverture de la forge");
     try {
-      const response = await fetch(`${apiUrl}/api/compile`, {
+      const idempotencyKey = crypto.randomUUID();
+      const response = await fetch(`${apiUrl}/api/compilations`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": idempotencyKey,
+        },
         body: JSON.stringify({ prompt: prompt.trim() }),
       });
       if (!response.ok) {
         const failure = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(failure?.error ?? "Le jeu n’a pas pu être compilé.");
       }
-      const result = (await response.json()) as CompiledGame;
-      setProvider(result.provider);
-      setCompiled(result);
-      void loadHistory(result.blueprintId);
-      setStage(result.releaseStatus === "release_ready" ? "Jeu validé pour la release" : "Révision nécessaire");
+      const result = (await response.json()) as { jobId: string };
+      router.push(`/create/${encodeURIComponent(result.jobId)}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Erreur inattendue.");
       setStage("Prêt à compiler");

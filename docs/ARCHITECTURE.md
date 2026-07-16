@@ -229,7 +229,7 @@ interface LlmProvider {
 }
 ```
 
-`OpenAiLlmProvider` uses environment configuration such as `OPENAI_MODEL=gpt-5.6`; a deterministic fake provider supports tests and the offline demo path. GPT-5.6 currently supports the Responses API and Structured Outputs according to the [official model documentation](https://developers.openai.com/api/docs/models).
+`OpenAiLlmProvider` uses separate environment configuration for generation and review, with local defaults `OPENAI_MODEL=gpt-5.6-terra` and `OPENAI_REVIEW_MODEL=gpt-5.6-luna`; a deterministic fake provider supports tests and the offline demo path.
 
 All outputs use strict structured schemas. The application rejects refusal, truncation, invalid structure, unknown fields and unsafe content explicitly.
 
@@ -278,11 +278,12 @@ For the no-account MVP, creator ownership uses an unguessable browser token. Pub
 
 ## 10. HTTP and WebSocket surfaces
 
-Minimum HTTP endpoints:
+Core HTTP endpoints:
 
 - health/readiness;
-- create a game from a brief;
-- retrieve generation/validation status;
+- `POST /api/compilations` to persist a prompt-first job and return `202 Accepted`;
+- `GET /api/compilations/:id` as the refresh-safe source of truth for progress and the terminal compiled result;
+- `GET /api/compilations/:id/events` for Server-Sent Event progress updates;
 - launch and retrieve playtests;
 - accept or reject a balance patch;
 - create a room from a valid revision;
@@ -306,8 +307,8 @@ All transport contracts are versioned and validated on both sides.
 The mobile-first happy path contains:
 
 1. Landing page with the compiler promise.
-2. Brief composer with players, duration, tone and complexity controls.
-3. Generation progress showing GPT-5.6's four visible contributions.
+2. One prompt-only brief composer; players, duration, team structure and mechanics are inferred from the requested experience.
+3. Durable generation progress showing model assembly, strict validation, deterministic playtest and structured review.
 4. Validated spec preview with clear template and mechanics.
 5. Playtest report with detected issue, evidence and proposed patch.
 6. Before/after patch approval.

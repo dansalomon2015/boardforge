@@ -1,5 +1,18 @@
 # Implementation progress
 
+## 16 July 2026 — Durable asynchronous game compilation
+
+Completed and verified:
+
+- prompt submission now creates a persisted compilation job and immediately returns `202 Accepted` instead of holding the browser connection open during model generation;
+- PostgreSQL stores stage, progress, attempt count, user-facing status, terminal error and final blueprint link;
+- interrupted non-terminal jobs are recovered at server startup with a bounded retry count;
+- Server-Sent Events publish stage changes while a periodic `GET` remains active as a fallback and refresh-safe source of truth;
+- the creator sees a dedicated animated forge screen during generation, strict validation, 24-agent playtest and structured AI review;
+- terminal jobs redirect to the persisted compiled-game result, so a refresh or temporary browser disconnection does not lose the generated game;
+- generation and review use separate defaults (`gpt-5.6-terra` and `gpt-5.6-luna`), a three-minute provider timeout and no automatic duplicate retry for long expensive requests;
+- idempotency keys prevent duplicate compilation jobs and reject reuse with a different prompt.
+
 ## 16 July 2026 — Optimized OpenAI review pipeline
 
 Completed and verified:
@@ -109,7 +122,8 @@ Completed and verified:
 
 External status:
 
-- the configured OpenAI request reaches the API, but the current project key reports exhausted quota/credits; the offline provider keeps the complete local acceptance path testable without mislabeling it as GPT output.
+- live OpenAI access is confirmed: an asynchronous Terra generation plus Luna review completed through Docker, persisted its terminal result and remained retrievable after a server restart;
+- the offline provider remains the deterministic acceptance path for repeatable release-ready and room-creation tests.
 
 ## 15 July 2026 — Composed engine foundation
 

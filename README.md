@@ -43,7 +43,7 @@ The app supports two explicitly labeled providers:
 - `LLM_PROVIDER=openai`: live GPT-5.6 generation through the Responses API, JSON-constrained output and strict local validation;
 - `LLM_PROVIDER=fake`: deterministic offline compiler for demos without API access.
 
-Copy `.env.example` to `.env`, set `OPENAI_API_KEY`, and keep that local file out of version control. `OPENAI_MODEL` controls GameSpec generation while `OPENAI_REVIEW_MODEL` can route compact critique and patch work to a lower-cost GPT-5.6 family model.
+Copy `.env.example` to `.env`, set `OPENAI_API_KEY`, and keep that local file out of version control. `OPENAI_MODEL` controls GameSpec generation while `OPENAI_REVIEW_MODEL` can route compact critique and patch work to a lower-cost GPT-5.6 family model. The local defaults use `gpt-5.6-terra` for generation and `gpt-5.6-luna` for review.
 
 Run the complete verification gate:
 
@@ -78,6 +78,8 @@ The Compose stack waits for PostgreSQL and the API health check before starting 
 - per-player hidden-state projection;
 - Fastify API and Socket.IO room service;
 - PostgreSQL-backed immutable blueprint revisions, playtest reports, structured AI critiques and balance patches, with idempotent startup migrations;
+- durable asynchronous compilation jobs: the creator receives `202 Accepted`, follows progress through Server-Sent Events with polling fallback, and can refresh while the server continues the OpenAI workflow;
+- animated compilation screen exposing generation, strict validation, virtual playtest and structured-review stages without holding a browser request open;
 - rotating reconnect credentials: the browser stores the token, while the server keeps only its SHA-256 hash and rejects stale or cross-player sessions;
 - revision-aware action envelopes with one idempotency key across every engine;
 - append-only PostgreSQL room events, deterministic replay checksums and server-start room restoration;
@@ -97,7 +99,7 @@ Blueprints, playtest reports, critiques, balance decisions, room snapshots and a
 
 ## Status
 
-Local P0 prototype with deterministic recovery, optimized structured review, constrained balance revisions, revision history and CI. Hosted deployment, server timers, browser regression coverage and submission evidence remain.
+Local P0 prototype with durable asynchronous compilation, deterministic room recovery, optimized structured review, constrained balance revisions, revision history and CI. Hosted deployment, server timers, browser regression coverage and submission evidence remain.
 
 ## License
 
