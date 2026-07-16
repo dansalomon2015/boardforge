@@ -50,6 +50,7 @@ type CompiledGame = {
   preview: ComposedPreview;
   playtest: PlaytestReport;
   critique: StructuredCritique;
+  balanceSuggestionAvailable: boolean;
 };
 
 type BalanceChange =
@@ -74,6 +75,7 @@ type BalanceReview = {
   beforeCritique: StructuredCritique;
   after: PlaytestReport;
   afterCritique: StructuredCritique;
+  optimization: { patchSource: "precomputed_review" | "live_fallback" };
   derived: {
     game: GameSummary;
     preview: ComposedPreview;
@@ -97,6 +99,7 @@ type RevisionEntry = {
   preview: ComposedPreview;
   playtest?: PlaytestReport;
   critique?: StructuredCritique;
+  balanceSuggestionAvailable: boolean;
 };
 
 const promptIdeas = [
@@ -201,7 +204,7 @@ export default function HomePage() {
     if (!compiled) return;
     setBusy(true);
     setError("");
-    setStage("L’IA prépare un patch borné");
+    setStage(compiled.balanceSuggestionAvailable ? "Application de la suggestion préparée" : "L’IA prépare un patch borné");
     try {
       const response = await fetch(`${apiUrl}/api/blueprints/${encodeURIComponent(compiled.blueprintId)}/balance`, {
         method: "POST",
@@ -242,6 +245,7 @@ export default function HomePage() {
         preview: ComposedPreview;
         playtest: PlaytestReport;
         critique: StructuredCritique;
+        balanceSuggestionAvailable: boolean;
       };
       setCompiled({
         ...compiled,
@@ -251,6 +255,7 @@ export default function HomePage() {
         preview: result.preview,
         playtest: result.playtest,
         critique: result.critique,
+        balanceSuggestionAvailable: result.balanceSuggestionAvailable,
       });
       setBalance({ ...balance, status: "accepted" });
       void loadHistory(result.blueprintId);
@@ -298,6 +303,7 @@ export default function HomePage() {
       preview: revision.preview,
       playtest: revision.playtest,
       critique: revision.critique,
+      balanceSuggestionAvailable: revision.balanceSuggestionAvailable,
     });
     setBalance(null);
     setError("");
@@ -456,6 +462,11 @@ export default function HomePage() {
                 </div>
                 <span>{balance.status === "accepted" ? "Acceptée" : balance.status === "rejected" ? "Rejetée" : balance.after.status === "passed" ? "À confirmer" : "Bloquée"}</span>
               </div>
+              <small className="balance-optimization-note">
+                {balance.optimization.patchSource === "precomputed_review"
+                  ? "Patch réutilisé depuis le ReviewBundle · aucun appel IA supplémentaire"
+                  : "Patch généré à la demande pour une ancienne révision compatible"}
+              </small>
               <div className="balance-comparison">
                 <div><small>Avant</small><strong>{Math.round(balance.before.completionRate * 100)}%</strong><span>{balance.before.averageActions} actions moy.</span></div>
                 <b>→</b>
@@ -475,8 +486,11 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="balance-callout">
-              <div><strong>Tester une variante d’équilibrage</strong><span>L’IA ne peut modifier que des paramètres audités, puis les agents rejouent le jeu avant toute décision.</span></div>
-              <button onClick={() => void testBalance()} disabled={busy}>Proposer et tester</button>
+              <div>
+                <strong>{compiled.balanceSuggestionAvailable ? "Suggestion IA déjà préparée" : "Tester une variante d’équilibrage"}</strong>
+                <span>{compiled.balanceSuggestionAvailable ? "La critique et le patch ont été produits ensemble : aucun nouvel appel IA n’est nécessaire pour lancer ce test." : "L’IA ne peut modifier que des paramètres audités, puis les agents rejouent le jeu avant toute décision."}</span>
+              </div>
+              <button onClick={() => void testBalance()} disabled={busy}>{compiled.balanceSuggestionAvailable ? "Appliquer et tester" : "Proposer et tester"}</button>
             </div>
           )}
 

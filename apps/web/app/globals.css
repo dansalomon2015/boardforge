@@ -186,6 +186,7 @@ textarea:focus, input:focus { border-color: var(--violet); box-shadow: 0 0 0 4px
 .balance-review-heading h3 { margin: 0; max-width: 760px; font: 700 19px/1.4 'Space Grotesk', sans-serif; }
 .balance-review-heading > span { flex: 0 0 auto; padding: 7px 10px; color: #267250; background: #e6f6ed; border-radius: 999px; font-size: 9px; font-weight: 900; letter-spacing: .7px; text-transform: uppercase; }
 .balance-failed .balance-review-heading > span { color: #8c3b2b; background: #ffebe6; }
+.balance-optimization-note { display: block; margin-top: 9px; color: #267250; font-size: 9px; font-weight: 800; }
 .balance-comparison { display: grid; grid-template-columns: minmax(120px, 180px) auto minmax(120px, 180px) minmax(230px, 1fr); gap: 14px; align-items: center; margin-top: 20px; }
 .balance-comparison > div { display: grid; gap: 3px; padding: 14px; background: white; border: 1px solid var(--line); border-radius: 12px; }
 .balance-comparison small { color: var(--muted); font-size: 9px; font-weight: 900; letter-spacing: .8px; text-transform: uppercase; }

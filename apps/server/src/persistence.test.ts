@@ -10,19 +10,20 @@ describe("MemoryBlueprintStore", () => {
     await store.saveBlueprint({ id: "cinema-test", spec: cinemaCharadesSpec, status: "playtesting", provider: "test", prompt: "test prompt" });
     const report = runComposedPlaytest(cinemaCharadesSpec, { simulations: 2, seed: "persistence-test" });
     await store.savePlaytest("cinema-test", "release_ready", report);
-    const critique = await new FakeLlmProvider().critiqueComposedGameSpec(cinemaCharadesSpec, {
+    const review = await new FakeLlmProvider().reviewComposedGameSpec(cinemaCharadesSpec, {
       simulations: report.simulations,
       completionRate: report.completionRate,
       averageActions: report.averageActions,
       failures: report.failures,
     });
-    await store.saveCritique("cinema-test", "test", critique);
+    await store.saveReview("cinema-test", "test", review.critique, review.suggestedPatch);
 
     const stored = await store.get("cinema-test");
     expect(stored?.status).toBe("release_ready");
     expect(stored?.spec.id).toBe(cinemaCharadesSpec.id);
     expect(stored?.playtest?.simulations).toBe(2);
     expect(stored?.critique?.sourceSpecId).toBe(cinemaCharadesSpec.id);
+    expect(stored?.suggestedPatch?.sourceSpecId).toBe(cinemaCharadesSpec.id);
   });
 
   it("rejects an invalid GameSpec before storage", async () => {

@@ -25,6 +25,7 @@ export type BlueprintRecord = {
   prompt?: string | undefined;
   playtest?: ComposedPlaytestReport | undefined;
   critique?: ComposedGameCritique | undefined;
+  suggestedPatch?: ComposedBalancePatch | undefined;
 };
 
 export type BalancePatchStatus = "proposed" | "accepted" | "rejected";
@@ -68,9 +69,15 @@ export type RoomSessionRecord = {
 export interface BlueprintStore {
   readonly mode: "memory" | "postgres";
   get(id: string): Promise<BlueprintRecord | undefined>;
-  saveBlueprint(record: Omit<BlueprintRecord, "playtest" | "critique">): Promise<void>;
+  saveBlueprint(record: Omit<BlueprintRecord, "playtest" | "critique" | "suggestedPatch">): Promise<void>;
   savePlaytest(id: string, status: BlueprintStatus, report: ComposedPlaytestReport): Promise<void>;
   saveCritique(id: string, provider: string, critique: ComposedGameCritique): Promise<void>;
+  saveReview(
+    id: string,
+    provider: string,
+    critique: ComposedGameCritique,
+    suggestedPatch: ComposedBalancePatch | null,
+  ): Promise<void>;
   getBalancePatch(id: string): Promise<BalancePatchRecord | undefined>;
   listBalancePatchesForBlueprint(id: string): Promise<BalancePatchRecord[]>;
   saveBalancePatch(record: BalancePatchRecord): Promise<void>;
@@ -121,7 +128,7 @@ export class MemoryBlueprintStore implements BlueprintStore {
     return record ? cloneRecord(record) : undefined;
   }
 
-  async saveBlueprint(record: Omit<BlueprintRecord, "playtest" | "critique">): Promise<void> {
+  async saveBlueprint(record: Omit<BlueprintRecord, "playtest" | "critique" | "suggestedPatch">): Promise<void> {
     const spec = parseSpec(record.spec);
     const existing = this.records.get(record.id);
     if (existing) {
@@ -137,16 +144,37 @@ export class MemoryBlueprintStore implements BlueprintStore {
     this.records.set(id, { ...existing, status, playtest: structuredClone(report) });
   }
 
-  async saveCritique(id: string, _provider: string, input: ComposedGameCritique): Promise<void> {
+  async saveCritique(id: string, provider: string, input: ComposedGameCritique): Promise<void> {
+    await this.saveReview(id, provider, input, null);
+  }
+
+  async saveReview(
+    id: string,
+    _provider: string,
+    input: ComposedGameCritique,
+    suggestedPatchInput: ComposedBalancePatch | null,
+  ): Promise<void> {
     const existing = this.records.get(id);
     if (!existing) throw new Error(`Unknown blueprint: ${id}`);
     if (existing.spec.template !== "composed") throw new Error("Only composed blueprints support structured critiques.");
     const critique = parseCritique(input);
     if (critique.sourceSpecId !== existing.spec.id) throw new Error("Critique sourceSpecId does not match the blueprint GameSpec.");
-    if (existing.critique && !isDeepStrictEqual(existing.critique, critique)) {
-      throw new Error(`Game critique for ${id} is immutable.`);
+    const suggestedPatch = suggestedPatchInput ? parseBalancePatch(suggestedPatchInput) : undefined;
+    if (suggestedPatch && suggestedPatch.sourceSpecId !== existing.spec.id) {
+      throw new Error("Suggested patch sourceSpecId does not match the blueprint GameSpec.");
     }
-    this.records.set(id, { ...existing, critique: structuredClone(critique) });
+    if (
+      existing.critique
+      && (!isDeepStrictEqual(existing.critique, critique)
+        || !isDeepStrictEqual(existing.suggestedPatch, suggestedPatch))
+    ) {
+      throw new Error(`Game review for ${id} is immutable.`);
+    }
+    this.records.set(id, {
+      ...existing,
+      critique: structuredClone(critique),
+      ...(suggestedPatch ? { suggestedPatch: structuredClone(suggestedPatch) } : {}),
+    });
   }
 
   async getBalancePatch(id: string): Promise<BalancePatchRecord | undefined> {
@@ -240,6 +268,7 @@ type BlueprintRow = {
   prompt: string | null;
   report: ComposedPlaytestReport | null;
   critique: unknown | null;
+  suggested_patch: unknown | null;
 };
 
 type BalancePatchRow = {
@@ -315,6 +344,7 @@ class PostgresBlueprintStore implements BlueprintStore {
       "0002_room_events.sql",
       "0003_balance_patches.sql",
       "0004_game_critiques.sql",
+      "0005_review_suggestions.sql",
     ]) {
       const migration = await readFile(new URL(`../migrations/${filename}`, import.meta.url), "utf8");
       await this.pool.query(migration);
@@ -323,7 +353,7 @@ class PostgresBlueprintStore implements BlueprintStore {
 
   async get(id: string): Promise<BlueprintRecord | undefined> {
     const result = await this.pool.query<BlueprintRow>(
-      `SELECT b.id, b.spec, b.status, b.provider, b.prompt, p.report, c.critique
+      `SELECT b.id, b.spec, b.status, b.provider, b.prompt, p.report, c.critique, c.suggested_patch
        FROM blueprint_revisions b
        LEFT JOIN playtest_reports p ON p.blueprint_id = b.id
        LEFT JOIN game_critiques c ON c.blueprint_id = b.id
@@ -340,10 +370,11 @@ class PostgresBlueprintStore implements BlueprintStore {
       ...(row.prompt ? { prompt: row.prompt } : {}),
       ...(row.report ? { playtest: row.report } : {}),
       ...(row.critique ? { critique: parseCritique(row.critique) } : {}),
+      ...(row.suggested_patch ? { suggestedPatch: parseBalancePatch(row.suggested_patch) } : {}),
     };
   }
 
-  async saveBlueprint(record: Omit<BlueprintRecord, "playtest" | "critique">): Promise<void> {
+  async saveBlueprint(record: Omit<BlueprintRecord, "playtest" | "critique" | "suggestedPatch">): Promise<void> {
     const spec = parseSpec(record.spec);
     const inserted = await this.pool.query(
       `INSERT INTO blueprint_revisions (id, spec, status, provider, prompt)
@@ -385,25 +416,44 @@ class PostgresBlueprintStore implements BlueprintStore {
   }
 
   async saveCritique(id: string, provider: string, input: ComposedGameCritique): Promise<void> {
+    await this.saveReview(id, provider, input, null);
+  }
+
+  async saveReview(
+    id: string,
+    provider: string,
+    input: ComposedGameCritique,
+    suggestedPatchInput: ComposedBalancePatch | null,
+  ): Promise<void> {
     const blueprint = await this.get(id);
     if (!blueprint) throw new Error(`Unknown blueprint: ${id}`);
     if (blueprint.spec.template !== "composed") throw new Error("Only composed blueprints support structured critiques.");
     const critique = parseCritique(input);
     if (critique.sourceSpecId !== blueprint.spec.id) throw new Error("Critique sourceSpecId does not match the blueprint GameSpec.");
+    const suggestedPatch = suggestedPatchInput ? parseBalancePatch(suggestedPatchInput) : undefined;
+    if (suggestedPatch && suggestedPatch.sourceSpecId !== blueprint.spec.id) {
+      throw new Error("Suggested patch sourceSpecId does not match the blueprint GameSpec.");
+    }
     const inserted = await this.pool.query(
-      `INSERT INTO game_critiques (blueprint_id, provider, critique)
-       VALUES ($1, $2, $3::jsonb)
+      `INSERT INTO game_critiques (blueprint_id, provider, critique, suggested_patch)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb)
        ON CONFLICT (blueprint_id) DO NOTHING
        RETURNING blueprint_id`,
-      [id, provider, JSON.stringify(critique)],
+      [id, provider, JSON.stringify(critique), suggestedPatch ? JSON.stringify(suggestedPatch) : null],
     );
     if (inserted.rowCount === 0) {
-      const existing = await this.pool.query<{ critique: unknown }>(
-        "SELECT critique FROM game_critiques WHERE blueprint_id = $1",
+      const existing = await this.pool.query<{ critique: unknown; suggested_patch: unknown | null }>(
+        "SELECT critique, suggested_patch FROM game_critiques WHERE blueprint_id = $1",
         [id],
       );
-      if (!existing.rows[0] || !isDeepStrictEqual(parseCritique(existing.rows[0].critique), critique)) {
-        throw new Error(`Game critique for ${id} is immutable.`);
+      const row = existing.rows[0];
+      const existingPatch = row?.suggested_patch ? parseBalancePatch(row.suggested_patch) : undefined;
+      if (
+        !row
+        || !isDeepStrictEqual(parseCritique(row.critique), critique)
+        || !isDeepStrictEqual(existingPatch, suggestedPatch)
+      ) {
+        throw new Error(`Game review for ${id} is immutable.`);
       }
     }
   }

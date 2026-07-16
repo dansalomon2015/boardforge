@@ -1,5 +1,20 @@
 # Implementation progress
 
+## 16 July 2026 — Optimized OpenAI review pipeline
+
+Completed and verified:
+
+- initial critique and optional `BalancePatch` are combined into one strict `ReviewBundle`, reducing creation plus a prepared balance suggestion from three sequential design calls to two;
+- the balance button reuses the persisted review suggestion without an additional OpenAI request;
+- post-patch critique remains a separate final gate, so an accepted balance workflow uses three calls instead of four;
+- review and critique requests receive a compact phase/action digest, deterministic telemetry and an allowlisted adjustable-parameter catalogue instead of the full GameSpec content;
+- every suggested patch is semantically applied to a temporary immutable spec and discarded before persistence if its target is invalid;
+- generation and review use stable prompt-cache keys, with static schema/instructions placed before dynamic creator content;
+- OpenAI usage logs expose operation, actual model, response ID, latency, input/output tokens, cached tokens and cache-write tokens without recording secrets;
+- `OPENAI_REVIEW_MODEL` supports lower-cost model routing independently from the generation model;
+- composed generation output is bounded to 8,000 tokens and compact critique output to 1,800 tokens;
+- PostgreSQL persists the precomputed patch suggestion with the immutable structured review.
+
 ## 16 July 2026 — Immutable revision history
 
 Completed and verified:

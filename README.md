@@ -43,7 +43,7 @@ The app supports two explicitly labeled providers:
 - `LLM_PROVIDER=openai`: live GPT-5.6 generation through the Responses API, JSON-constrained output and strict local validation;
 - `LLM_PROVIDER=fake`: deterministic offline compiler for demos without API access.
 
-Copy `.env.example` to `.env`, set `OPENAI_API_KEY`, and keep that local file out of version control.
+Copy `.env.example` to `.env`, set `OPENAI_API_KEY`, and keep that local file out of version control. `OPENAI_MODEL` controls GameSpec generation while `OPENAI_REVIEW_MODEL` can route compact critique and patch work to a lower-cost GPT-5.6 family model.
 
 Run the complete verification gate:
 
@@ -84,6 +84,8 @@ The Compose stack waits for PostgreSQL and the API health check before starting 
 - live GPT-5.6 provider plus deterministic offline provider behind `LlmProvider`;
 - deterministic virtual-agent release gate: 24 simulations across valid player and team configurations before room creation;
 - strict GPT critique with a verdict, evidence-backed issue categories and bounded recommendations for every generated revision;
+- combined `ReviewBundle` output: critique and optional bounded patch are produced in one call from compact structural telemetry;
+- stable prompt-cache keys for generation, review, critique and compatibility patch workflows, with token/cache/latency telemetry in server logs;
 - allowlisted `BalancePatch` revisions that are revalidated, replayed, critiqued and explicitly accepted before release;
 - creator-facing immutable revision history with accepted, proposed and rejected branches plus safe selection of any prior `release_ready` version;
 - visible GameSpec, phase, component, critique and before/after playtest evidence before room creation;
@@ -95,7 +97,7 @@ Blueprints, playtest reports, critiques, balance decisions, room snapshots and a
 
 ## Status
 
-Local P0 prototype with deterministic recovery, structured critique, constrained balance revisions, revision history and CI. Hosted deployment, server timers, browser regression coverage and submission evidence remain.
+Local P0 prototype with deterministic recovery, optimized structured review, constrained balance revisions, revision history and CI. Hosted deployment, server timers, browser regression coverage and submission evidence remain.
 
 ## License
 

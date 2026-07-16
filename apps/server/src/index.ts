@@ -59,6 +59,7 @@ const config = {
   llmProvider: process.env.LLM_PROVIDER,
   openAiApiKey: process.env.OPENAI_API_KEY,
   openAiModel: process.env.OPENAI_MODEL,
+  openAiReviewModel: process.env.OPENAI_REVIEW_MODEL,
   databaseUrl: process.env.DATABASE_URL,
   requireDatabase: process.env.DATABASE_REQUIRED === "true",
 };
@@ -91,6 +92,8 @@ const llm = createLlmProvider({
   provider: config.llmProvider,
   apiKey: config.openAiApiKey,
   model: config.openAiModel,
+  reviewModel: config.openAiReviewModel,
+  onTelemetry: (telemetry) => app.log.info({ llmUsage: telemetry }, "OpenAI workflow usage"),
 });
 const seededBlueprints: BlueprintRecord[] = availableDemoSpecs.map((spec) => {
   const playtest = spec.template === "composed" ? runComposedPlaytest(spec, { simulations: 24, seed: `release:${spec.id}` }) : undefined;
@@ -347,12 +350,22 @@ app.post("/api/compile", async (request, reply) => {
       prompt: parsed.data.prompt,
     });
     const playtest = runComposedPlaytest(spec, { simulations: 24, seed: `release:${blueprintId}` });
-    const critique = await llm.critiqueComposedGameSpec(spec, balanceEvidence(playtest));
-    const releaseStatus = playtest.status === "passed" && critique.verdict === "release_ready"
+    const review = await llm.reviewComposedGameSpec(spec, balanceEvidence(playtest));
+    let suggestedPatch = review.suggestedPatch;
+    if (suggestedPatch) {
+      const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 6);
+      const validationId = `${spec.id.slice(0, 32).replace(/_+$/, "")}_review_${suffix}`;
+      const patchValidation = applyComposedBalancePatch(spec, suggestedPatch, validationId);
+      if (!patchValidation.ok) {
+        app.log.warn({ issues: patchValidation.issues }, "Discarding invalid review patch suggestion");
+        suggestedPatch = null;
+      }
+    }
+    const releaseStatus = playtest.status === "passed" && review.critique.verdict === "release_ready"
       ? "release_ready"
       : "needs_review";
     await blueprintStore.savePlaytest(blueprintId, releaseStatus, playtest);
-    await blueprintStore.saveCritique(blueprintId, llm.name, critique);
+    await blueprintStore.saveReview(blueprintId, llm.name, review.critique, suggestedPatch);
 
     return {
       blueprintId,
@@ -362,7 +375,8 @@ app.post("/api/compile", async (request, reply) => {
       provider: llm.name,
       validation: { ok: true },
       playtest,
-      critique,
+      critique: review.critique,
+      balanceSuggestionAvailable: Boolean(suggestedPatch),
     };
   } catch (error) {
     app.log.warn({ message: error instanceof Error ? error.message : "Unknown provider error" }, "Game compilation failed");
@@ -406,6 +420,7 @@ app.get<{ Params: { id: string } }>("/api/blueprints/:id/history", async (reques
         preview: preview(blueprint.spec),
         playtest: blueprint.playtest,
         critique: blueprint.critique,
+        balanceSuggestionAvailable: Boolean(blueprint.suggestedPatch),
       };
     }),
   };
@@ -428,7 +443,8 @@ app.post<{ Params: { id: string } }>("/api/blueprints/:id/balance", async (reque
   }
 
   try {
-    const patch = await llm.proposeComposedBalancePatch(
+    const patchSource = source.suggestedPatch ? "precomputed_review" : "live_fallback";
+    const patch = source.suggestedPatch ?? await llm.proposeComposedBalancePatch(
       source.spec,
       balanceEvidence(source.playtest),
       source.critique,
@@ -488,6 +504,7 @@ app.post<{ Params: { id: string } }>("/api/blueprints/:id/balance", async (reque
       beforeCritique: source.critique,
       after: afterReport,
       afterCritique,
+      optimization: { patchSource },
       derived: {
         game: summary(applied.spec),
         preview: preview(applied.spec),
@@ -521,6 +538,7 @@ app.post<{ Params: { id: string } }>("/api/balance-patches/:id/accept", async (r
       preview: preview(blueprint.spec),
       playtest: patch.afterReport,
       critique: blueprint.critique,
+      balanceSuggestionAvailable: Boolean(blueprint.suggestedPatch),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Balance patch acceptance failed.";

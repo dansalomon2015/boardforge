@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { cinemaCharadesSpec, composedBalancePatchSchema, validateGameSpec } from "@boardforge/game-spec";
 import {
   FakeLlmProvider,
+  composedAdjustableParameters,
   composedGameCritiqueSchema,
+  composedGameReviewSchema,
   createLlmProvider,
   type GameBrief,
 } from "./index.js";
@@ -66,22 +68,30 @@ describe("procedural local GameSpec compiler", () => {
     }
   });
 
-  it("proposes a deterministic allowlisted patch for a composed game", async () => {
+  it("returns one deterministic review bundle with an allowlisted patch", async () => {
     const evidence = {
       simulations: 24,
       completionRate: 1,
       averageActions: 14,
       failures: [],
     };
-    const critique = await provider.critiqueComposedGameSpec(cinemaCharadesSpec, evidence);
-    const patch = await provider.proposeComposedBalancePatch(cinemaCharadesSpec, evidence, critique);
+    const review = await provider.reviewComposedGameSpec(cinemaCharadesSpec, evidence);
+    const patch = review.suggestedPatch;
 
-    expect(composedGameCritiqueSchema.safeParse(critique).success).toBe(true);
-    expect(critique.verdict).toBe("release_ready");
+    expect(composedGameReviewSchema.safeParse(review).success).toBe(true);
+    expect(composedGameCritiqueSchema.safeParse(review.critique).success).toBe(true);
+    expect(review.critique.verdict).toBe("release_ready");
     expect(composedBalancePatchSchema.safeParse(patch).success).toBe(true);
-    expect(patch.sourceSpecId).toBe(cinemaCharadesSpec.id);
-    expect(patch.changes).toEqual([
+    expect(patch?.sourceSpecId).toBe(cinemaCharadesSpec.id);
+    expect(patch?.changes).toEqual([
       { kind: "set_timer_seconds", componentId: "mime_timer", seconds: 55 },
     ]);
+    expect(composedAdjustableParameters(cinemaCharadesSpec)).toContainEqual({
+      kind: "timer",
+      componentId: "mime_timer",
+      current: 60,
+      min: 5,
+      max: 900,
+    });
   });
 });

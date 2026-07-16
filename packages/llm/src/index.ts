@@ -50,6 +50,30 @@ export type ComposedBalanceEvidence = {
   failures: Array<{ code: string; evidence: string }>;
 };
 
+export type ComposedAdjustableParameter =
+  | { kind: "duration"; current: number; min: 2; max: 180 }
+  | { kind: "timer"; componentId: string; current: number; min: 5; max: 900 }
+  | {
+      kind: "effect_amount";
+      owner: "action" | "rule" | "phase";
+      ownerId: string;
+      effectIndex: number;
+      effectKind: "add_score" | "add_resource";
+      current: number;
+      min: -100;
+      max: 100;
+    }
+  | {
+      kind: "draw_count";
+      owner: "action" | "rule" | "phase";
+      ownerId: string;
+      effectIndex: number;
+      current: number;
+      min: 1;
+      max: 12;
+    }
+  | { kind: "resource_initial"; resourceId: string; current: number; min: number; max: number };
+
 export const composedGameCritiqueSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -75,9 +99,35 @@ export const composedGameCritiqueSchema = z
 
 export type ComposedGameCritique = z.infer<typeof composedGameCritiqueSchema>;
 
+export const composedGameReviewSchema = z
+  .object({
+    critique: composedGameCritiqueSchema,
+    suggestedPatch: composedBalancePatchSchema.nullable(),
+  })
+  .strict();
+
+export type ComposedGameReview = z.infer<typeof composedGameReviewSchema>;
+
+export type LlmUsageTelemetry = {
+  operation: "composed_generation" | "composed_review" | "composed_critique" | "composed_patch";
+  provider: string;
+  model: string;
+  responseId: string;
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheWriteTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  latencyMs: number;
+};
+
 export interface LlmProvider {
   readonly name: string;
   generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec>;
+  reviewComposedGameSpec(
+    spec: ComposedGameSpec,
+    evidence: ComposedBalanceEvidence,
+  ): Promise<ComposedGameReview>;
   critiqueComposedGameSpec(
     spec: ComposedGameSpec,
     evidence: ComposedBalanceEvidence,
@@ -91,6 +141,108 @@ export interface LlmProvider {
   designPlaytest(spec: GameSpec): Promise<PlaytestPlan>;
   critiquePlaytest(spec: GameSpec, plan: PlaytestPlan): Promise<GameCritique>;
   proposeBalancePatch(spec: GameSpec, critique: GameCritique): Promise<BalancePatch>;
+}
+
+function adjustableEffects(
+  parameters: ComposedAdjustableParameter[],
+  owner: "action" | "rule" | "phase",
+  ownerId: string,
+  effects: ComposedGameSpec["actions"][number]["effects"],
+): void {
+  effects.forEach((effect, effectIndex) => {
+    if (effect.kind === "add_score" || effect.kind === "add_resource") {
+      parameters.push({
+        kind: "effect_amount",
+        owner,
+        ownerId,
+        effectIndex,
+        effectKind: effect.kind,
+        current: effect.amount,
+        min: -100,
+        max: 100,
+      });
+    } else if (effect.kind === "draw_cards") {
+      parameters.push({
+        kind: "draw_count",
+        owner,
+        ownerId,
+        effectIndex,
+        current: effect.count,
+        min: 1,
+        max: 12,
+      });
+    }
+  });
+}
+
+export function composedAdjustableParameters(spec: ComposedGameSpec): ComposedAdjustableParameter[] {
+  const parameters: ComposedAdjustableParameter[] = [];
+  if (spec.suggestedDurationMinutes !== undefined) {
+    parameters.push({
+      kind: "duration",
+      current: spec.suggestedDurationMinutes,
+      min: 2,
+      max: 180,
+    });
+  }
+  for (const component of spec.components) {
+    if (component.kind === "timer") {
+      parameters.push({
+        kind: "timer",
+        componentId: component.id,
+        current: component.seconds,
+        min: 5,
+        max: 900,
+      });
+    }
+  }
+  for (const resource of spec.resources) {
+    parameters.push({
+      kind: "resource_initial",
+      resourceId: resource.id,
+      current: resource.initialValue,
+      min: resource.min,
+      max: resource.max,
+    });
+  }
+  for (const action of spec.actions) adjustableEffects(parameters, "action", action.id, action.effects);
+  for (const rule of spec.rules) adjustableEffects(parameters, "rule", rule.id, rule.effects);
+  for (const phase of spec.phases) adjustableEffects(parameters, "phase", phase.id, phase.onComplete);
+  return parameters;
+}
+
+function composedReviewContext(spec: ComposedGameSpec, evidence: ComposedBalanceEvidence) {
+  const components = new Map(spec.components.map((component) => [component.id, component.kind]));
+  const actions = new Map(spec.actions.map((action) => [action.id, action]));
+  return {
+    game: {
+      id: spec.id,
+      title: spec.title,
+      description: spec.description,
+      players: { min: spec.minPlayers, max: spec.maxPlayers },
+      setup: {
+        mode: spec.setup.mode,
+        teamCount: spec.setup.teamPolicy?.teams.length ?? 0,
+      },
+      phases: spec.phases.map((phase) => ({
+        id: phase.id,
+        title: phase.title,
+        nextPhaseId: phase.nextPhaseId ?? null,
+        components: phase.componentIds.map((id) => ({ id, kind: components.get(id) ?? "unknown" })),
+        actions: phase.actionIds.map((id) => {
+          const action = actions.get(id);
+          return {
+            id,
+            kind: action?.kind ?? "unknown",
+            actor: action?.actor ?? "unknown",
+            effectKinds: action?.effects.map((effect) => effect.kind) ?? [],
+          };
+        }),
+      })),
+    },
+    playtestEvidence: evidence,
+    adjustableParameters: composedAdjustableParameters(spec),
+  };
 }
 
 const playtestPlanSchema = z
@@ -484,6 +636,15 @@ export class FakeLlmProvider implements LlmProvider {
     return validation.spec;
   }
 
+  async reviewComposedGameSpec(
+    spec: ComposedGameSpec,
+    evidence: ComposedBalanceEvidence,
+  ): Promise<ComposedGameReview> {
+    const critique = await this.critiqueComposedGameSpec(spec, evidence);
+    const suggestedPatch = await this.proposeComposedBalancePatch(spec, evidence, critique);
+    return { critique, suggestedPatch };
+  }
+
   async proposeComposedBalancePatch(
     spec: ComposedGameSpec,
     evidence: ComposedBalanceEvidence,
@@ -644,6 +805,19 @@ function generationInstructions(brief: GameBrief): string {
   ].join("\n");
 }
 
+type OpenAiTelemetryResponse = {
+  id: string;
+  usage?: {
+    input_tokens: number;
+    input_tokens_details?: {
+      cached_tokens?: number;
+      cache_write_tokens?: number;
+    };
+    output_tokens: number;
+    total_tokens: number;
+  } | null;
+};
+
 export class OpenAiLlmProvider implements LlmProvider {
   readonly name: string;
   private readonly client: OpenAI;
@@ -651,10 +825,34 @@ export class OpenAiLlmProvider implements LlmProvider {
   constructor(
     apiKey: string,
     private readonly model = "gpt-5.6",
+    private readonly reviewModel = model,
+    private readonly onTelemetry?: (telemetry: LlmUsageTelemetry) => void,
   ) {
     if (!apiKey.trim()) throw new Error("OPENAI_API_KEY is required for the OpenAI provider.");
     this.name = `openai:${model}`;
     this.client = new OpenAI({ apiKey, timeout: 60_000, maxRetries: 1 });
+  }
+
+  private recordTelemetry(
+    operation: LlmUsageTelemetry["operation"],
+    model: string,
+    startedAt: number,
+    response: OpenAiTelemetryResponse,
+  ): void {
+    const usage = response.usage;
+    if (!usage || !this.onTelemetry) return;
+    this.onTelemetry({
+      operation,
+      provider: this.name,
+      model,
+      responseId: response.id,
+      inputTokens: usage.input_tokens,
+      cachedInputTokens: usage.input_tokens_details?.cached_tokens ?? 0,
+      cacheWriteTokens: usage.input_tokens_details?.cache_write_tokens ?? 0,
+      outputTokens: usage.output_tokens,
+      totalTokens: usage.total_tokens,
+      latencyMs: Date.now() - startedAt,
+    });
   }
 
   private async generateCandidate(brief: GameBrief, repairContext?: string): Promise<GameSpec> {
@@ -706,26 +904,31 @@ export class OpenAiLlmProvider implements LlmProvider {
       "The current room UI reliably supports headers, prompts, decks, choices, text input, timers, turns, rounds, teams, players, scores and outcomes.",
       "Use other mechanics only when they are essential to the requested game.",
       "Return one JSON object conforming exactly to the JSON Schema supplied in the user message.",
-      repairContext ? `Repair the previous candidate using these semantic issues: ${repairContext}` : "",
-    ].filter(Boolean).join("\n");
+    ].join("\n");
     const schemaGuide = JSON.stringify(z.toJSONSchema(composedGameSpecSchema, { unrepresentable: "any" }));
+    const startedAt = Date.now();
     const response = await this.client.responses.create({
       model: this.model,
       input: [
-        { role: "system", content: instructions },
+        {
+          role: "system",
+          content: `${instructions}\n\nRequired ComposedGameSpec JSON Schema:\n${schemaGuide}`,
+        },
         {
           role: "user",
           content: [
             `Creator prompt: ${normalizedPrompt(prompt) || "Crée un jeu de soirée convivial et original."}`,
-            `Required ComposedGameSpec JSON Schema: ${schemaGuide}`,
+            repairContext ? `Repair these semantic issues: ${repairContext}` : "",
           ].join("\n\n"),
         },
       ],
+      prompt_cache_key: "boardforge:composed-generation:v2",
       // JSON mode handles optional GameSpec fields; the strict Zod and semantic
       // validators below remain authoritative before the engine sees any data.
       text: { format: { type: "json_object" } },
-      max_output_tokens: 14_000,
+      max_output_tokens: 8_000,
     });
+    this.recordTelemetry("composed_generation", this.model, startedAt, response);
     return parseJsonOutput(response.output_text, "composed GameSpec generation");
   }
 
@@ -740,13 +943,53 @@ export class OpenAiLlmProvider implements LlmProvider {
     return repairedValidation.spec;
   }
 
+  async reviewComposedGameSpec(
+    spec: ComposedGameSpec,
+    evidence: ComposedBalanceEvidence,
+  ): Promise<ComposedGameReview> {
+    const startedAt = Date.now();
+    const response = await this.client.responses.parse({
+      model: this.reviewModel,
+      input: [
+        {
+          role: "system",
+          content: [
+            "You are BoardForge's constrained playtest reviewer and balance editor.",
+            "Review only the compact validated game structure and deterministic telemetry supplied by the server.",
+            "Return the critique in the same language as the game.",
+            "Every claim must cite supplied evidence or visible structure.",
+            "Use verdict revise for any blocked simulation, private-information failure or unreachable ending.",
+            "You may suggest at most one minimal patch using only an entry from adjustableParameters.",
+            "Never add mechanics, IDs, executable content or targets absent from adjustableParameters.",
+            "Return suggestedPatch as null when no safe evidence-backed adjustment is justified.",
+            "Both critique.sourceSpecId and any patch.sourceSpecId must equal the supplied game ID.",
+          ].join("\n"),
+        },
+        { role: "user", content: JSON.stringify(composedReviewContext(spec, evidence)) },
+      ],
+      prompt_cache_key: "boardforge:composed-review:v1",
+      text: { format: zodTextFormat(composedGameReviewSchema, "composed_game_review") },
+      max_output_tokens: 2_800,
+    });
+    this.recordTelemetry("composed_review", this.reviewModel, startedAt, response);
+    const review = requireParsedOutput(response.output_parsed, "composed game review");
+    if (review.critique.sourceSpecId !== spec.id) {
+      throw new Error(`OpenAI critique targeted ${review.critique.sourceSpecId}, not ${spec.id}.`);
+    }
+    if (review.suggestedPatch && review.suggestedPatch.sourceSpecId !== spec.id) {
+      throw new Error(`OpenAI balance patch targeted ${review.suggestedPatch.sourceSpecId}, not ${spec.id}.`);
+    }
+    return review;
+  }
+
   async proposeComposedBalancePatch(
     spec: ComposedGameSpec,
     evidence: ComposedBalanceEvidence,
     critique: ComposedGameCritique,
   ): Promise<ComposedBalancePatch> {
+    const startedAt = Date.now();
     const response = await this.client.responses.parse({
-      model: this.model,
+      model: this.reviewModel,
       input: [
         {
           role: "system",
@@ -759,11 +1002,19 @@ export class OpenAiLlmProvider implements LlmProvider {
             "sourceSpecId must exactly equal the source GameSpec ID.",
           ].join("\n"),
         },
-        { role: "user", content: JSON.stringify({ spec, playtestEvidence: evidence, critique }) },
+        {
+          role: "user",
+          content: JSON.stringify({
+            ...composedReviewContext(spec, evidence),
+            critique,
+          }),
+        },
       ],
+      prompt_cache_key: "boardforge:composed-patch:v1",
       text: { format: zodTextFormat(composedBalancePatchSchema, "composed_balance_patch") },
       max_output_tokens: 1_500,
     });
+    this.recordTelemetry("composed_patch", this.reviewModel, startedAt, response);
     return requireParsedOutput(response.output_parsed, "composed balance patch");
   }
 
@@ -771,8 +1022,9 @@ export class OpenAiLlmProvider implements LlmProvider {
     spec: ComposedGameSpec,
     evidence: ComposedBalanceEvidence,
   ): Promise<ComposedGameCritique> {
+    const startedAt = Date.now();
     const response = await this.client.responses.parse({
-      model: this.model,
+      model: this.reviewModel,
       input: [
         {
           role: "system",
@@ -786,11 +1038,13 @@ export class OpenAiLlmProvider implements LlmProvider {
             "sourceSpecId must exactly equal the source GameSpec ID.",
           ].join("\n"),
         },
-        { role: "user", content: JSON.stringify({ spec, playtestEvidence: evidence }) },
+        { role: "user", content: JSON.stringify(composedReviewContext(spec, evidence)) },
       ],
+      prompt_cache_key: "boardforge:composed-critique:v1",
       text: { format: zodTextFormat(composedGameCritiqueSchema, "composed_game_critique") },
-      max_output_tokens: 2_500,
+      max_output_tokens: 1_800,
     });
+    this.recordTelemetry("composed_critique", this.reviewModel, startedAt, response);
     const critique = requireParsedOutput(response.output_parsed, "composed game critique");
     if (critique.sourceSpecId !== spec.id) {
       throw new Error(`OpenAI critique targeted ${critique.sourceSpecId}, not ${spec.id}.`);
@@ -864,6 +1118,8 @@ export type LlmProviderConfig = {
   provider: string | undefined;
   apiKey: string | undefined;
   model: string | undefined;
+  reviewModel?: string | undefined;
+  onTelemetry?: ((telemetry: LlmUsageTelemetry) => void) | undefined;
 };
 
 export function createLlmProvider(config?: LlmProviderConfig): LlmProvider {
@@ -871,7 +1127,13 @@ export function createLlmProvider(config?: LlmProviderConfig): LlmProvider {
   if (selected === "fake") return new FakeLlmProvider();
   if (selected === "openai") {
     if (!config?.apiKey) throw new Error("LLM_PROVIDER=openai requires OPENAI_API_KEY.");
-    return new OpenAiLlmProvider(config.apiKey, config.model ?? "gpt-5.6");
+    const generationModel = config.model ?? "gpt-5.6";
+    return new OpenAiLlmProvider(
+      config.apiKey,
+      generationModel,
+      config.reviewModel ?? generationModel,
+      config.onTelemetry,
+    );
   }
   throw new Error(`Unsupported LLM_PROVIDER: ${selected}`);
 }
