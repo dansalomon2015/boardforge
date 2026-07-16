@@ -7,7 +7,12 @@ import { z } from "zod";
 import {
   applyComposedBalancePatch,
   cinemaCharadesSpec,
+  composedThemeIdSchema,
+  createMovieMimeSpec,
+  createRandomMovieMimePack,
+  defaultMovieMimeSpec,
   demoGameSpecs,
+  movieMimeSetupSchema,
   partyPulseSpec,
   spaceHeistSpec,
   systemsLabSpec,
@@ -90,7 +95,7 @@ type Room = {
 };
 
 const rooms = new Map<string, Room>();
-const availableDemoSpecs: BoardGameSpec[] = [...demoGameSpecs, cinemaCharadesSpec, systemsLabSpec];
+const availableDemoSpecs: BoardGameSpec[] = [...demoGameSpecs, cinemaCharadesSpec, defaultMovieMimeSpec, systemsLabSpec];
 const llm = createLlmProvider({
   provider: config.llmProvider,
   apiKey: config.openAiApiKey,
@@ -489,9 +494,69 @@ app.get("/health", async () => ({
 }));
 
 app.get("/api/games", async () => ({
-  games: [{ id: cinemaCharadesSpec.id, ...summary(cinemaCharadesSpec) }],
+  games: [{ id: defaultMovieMimeSpec.id, ...summary(defaultMovieMimeSpec) }],
   provider: llm.name,
 }));
+
+const movieMimeBodySchema = z
+  .object({
+    themeId: composedThemeIdSchema.default("noir"),
+    filmCount: z.number().int().min(6).max(40).default(20),
+    preferences: z.string().trim().max(240).optional(),
+  })
+  .strict();
+
+app.post("/api/movie-mime/blueprints", async (request, reply) => {
+  const parsed = movieMimeBodySchema.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ error: "Invalid movie mime setup.", issues: parsed.error.issues });
+  }
+  const setup = movieMimeSetupSchema.parse({
+    themeId: parsed.data.themeId,
+    filmCount: parsed.data.filmCount,
+    ...(parsed.data.preferences ? { preferences: parsed.data.preferences } : {}),
+  });
+
+  try {
+    const pack = setup.preferences
+      ? await llm.generateMovieMimePack(setup)
+      : createRandomMovieMimePack(setup, crypto.randomUUID());
+    const spec = createMovieMimeSpec(pack);
+    const blueprintId = `${spec.id}-${crypto.randomUUID().slice(0, 8)}`;
+    await blueprintStore.saveBlueprint({
+      id: blueprintId,
+      spec,
+      status: "playtesting",
+      provider: setup.preferences ? llm.name : "catalog-random",
+      ...(setup.preferences ? { prompt: setup.preferences } : {}),
+    });
+    const playtest = runComposedPlaytest(spec, {
+      simulations: 24,
+      seed: `release:${blueprintId}`,
+    });
+    const releaseStatus = playtest.status === "passed" ? "release_ready" : "needs_review";
+    await blueprintStore.savePlaytest(blueprintId, releaseStatus, playtest);
+    return reply.code(201).send({
+      blueprintId,
+      releaseStatus,
+      source: pack.source,
+      themeId: pack.themeId,
+      filmCount: pack.films.length,
+      game: summary(spec),
+      playtest: {
+        status: playtest.status,
+        simulations: playtest.simulations,
+        completedSimulations: playtest.completedSimulations,
+      },
+    });
+  } catch (error) {
+    app.log.warn({ message: error instanceof Error ? error.message : "Unknown movie selection error" }, "Movie mime preparation failed");
+    return reply.code(502).send({
+      error: compilationErrorMessage(error),
+      provider: llm.name,
+    });
+  }
+});
 
 const compileBodySchema = z
   .object({

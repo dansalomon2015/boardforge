@@ -37,6 +37,19 @@ describe("procedural local GameSpec compiler", () => {
     expect(validateGameSpec(first).ok).toBe(true);
   });
 
+  it("selects a bounded movie mime pack from the audited catalog", async () => {
+    const pack = await provider.generateMovieMimePack({
+      themeId: "noir",
+      filmCount: 8,
+      preferences: "comédies familiales des années 1990",
+    });
+
+    expect(pack.source).toBe("ai");
+    expect(pack.films).toHaveLength(8);
+    expect(new Set(pack.films.map((film) => film.id)).size).toBe(8);
+    expect(pack.films.some((film) => film.genres.includes("comedy"))).toBe(true);
+  });
+
   it("changes hidden-role content when the requested universe changes", async () => {
     const common = { template: "hidden_roles" as const, players: 6, durationMinutes: 20 };
     const pirate = await provider.generateGameSpec({ ...common, prompt: "Mutinerie pirate autour d'un trésor maudit" });

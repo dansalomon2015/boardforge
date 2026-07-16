@@ -2,10 +2,15 @@ import {
   cinemaCharadesSpec,
   composedBalancePatchSchema,
   composedGameSpecSchema,
+  createMovieMimePack,
+  movieCatalog,
+  movieMimeSetupSchema,
   type ComposedBalancePatch,
   type GameSpec,
   type ComposedGameSpec,
   type HiddenRolesGameSpec,
+  type MimeFilmPack,
+  type MovieMimeSetup,
   type QuizVoteGameSpec,
   type QuizVoteQuestion,
   hiddenRolesGameSpecSchema,
@@ -109,7 +114,7 @@ export const composedGameReviewSchema = z
 export type ComposedGameReview = z.infer<typeof composedGameReviewSchema>;
 
 export type LlmUsageTelemetry = {
-  operation: "composed_generation" | "composed_review" | "composed_critique" | "composed_patch";
+  operation: "movie_mime_selection" | "composed_generation" | "composed_review" | "composed_critique" | "composed_patch";
   provider: string;
   model: string;
   responseId: string;
@@ -123,6 +128,7 @@ export type LlmUsageTelemetry = {
 
 export interface LlmProvider {
   readonly name: string;
+  generateMovieMimePack(setup: MovieMimeSetup): Promise<MimeFilmPack>;
   generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec>;
   reviewComposedGameSpec(
     spec: ComposedGameSpec,
@@ -622,6 +628,41 @@ function generateQuizVoteSpec(brief: GameBrief, hash: number): QuizVoteGameSpec 
 export class FakeLlmProvider implements LlmProvider {
   readonly name = "procedural-local";
 
+  async generateMovieMimePack(setupInput: MovieMimeSetup): Promise<MimeFilmPack> {
+    const setup = movieMimeSetupSchema.parse(setupInput);
+    const preferences = normalizedPrompt(setup.preferences ?? "sélection variée");
+    const preferenceWords = new Set(preferences.toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter((word) => word.length >= 4));
+    const genreAliases: Record<string, string[]> = {
+      action: ["action", "combat", "explosion"],
+      adventure: ["aventure", "voyage", "exploration"],
+      animation: ["animation", "dessin", "pixar", "disney"],
+      comedy: ["comedie", "comédie", "drole", "drôle", "humour"],
+      crime: ["policier", "crime", "mafia", "braquage"],
+      drama: ["drame", "dramatique", "emotion", "émotion"],
+      family: ["famille", "familial", "enfant", "enfants"],
+      fantasy: ["fantastique", "magie", "sorcier", "fantasy"],
+      horror: ["horreur", "peur", "frisson"],
+      musical: ["musical", "musique", "danse"],
+      romance: ["romance", "romantique", "amour"],
+      science_fiction: ["science", "fiction", "spatial", "futur"],
+      sport: ["sport", "competition", "compétition"],
+      thriller: ["thriller", "suspense", "tension"],
+    };
+    const ranked = movieCatalog
+      .map((film) => {
+        let score = hashText(`${preferences}:${film.id}`) % 100;
+        for (const genre of film.genres) {
+          if (genreAliases[genre]?.some((alias) => preferenceWords.has(alias))) score += 1_000;
+        }
+        if (film.audience === "family" && [...preferenceWords].some((word) => ["famille", "familial", "enfant", "enfants"].includes(word))) score += 800;
+        const decade = Math.floor(film.year / 10) * 10;
+        if (preferences.includes(String(decade))) score += 700;
+        return { film, score };
+      })
+      .sort((left, right) => right.score - left.score || left.film.id.localeCompare(right.film.id));
+    return createMovieMimePack(setup, ranked.slice(0, setup.filmCount).map(({ film }) => film.id), "ai");
+  }
+
   async generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec> {
     const normalized = normalizedPrompt(prompt) || "Un jeu de soirée convivial";
     const hash = hashText(normalized);
@@ -853,6 +894,60 @@ export class OpenAiLlmProvider implements LlmProvider {
       totalTokens: usage.total_tokens,
       latencyMs: Date.now() - startedAt,
     });
+  }
+
+  private async selectMovieMimeCandidate(
+    setup: MovieMimeSetup,
+    repairContext?: string,
+  ): Promise<{ filmIds: string[] }> {
+    const selectionSchema = z.object({
+      filmIds: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/).max(48)).min(6).max(40),
+    }).strict();
+    const startedAt = Date.now();
+    const response = await this.client.responses.parse({
+      model: this.reviewModel,
+      input: [
+        {
+          role: "system",
+          content: [
+            "You curate a movie-charades deck from an audited catalog.",
+            "Return only catalog IDs. Never invent, rename or repeat a movie.",
+            "Select exactly the requested count.",
+            "Prioritize the user's preferences, then balance recognizability, eras, genres and mimeability.",
+            "For family requests, select only entries whose audience is family.",
+            "The returned order should alternate easy and more surprising choices.",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            requestedCount: setup.filmCount,
+            preferences: setup.preferences,
+            catalog: movieCatalog,
+            ...(repairContext ? { repairContext } : {}),
+          }),
+        },
+      ],
+      prompt_cache_key: "boardforge:movie-mime-selection:v1",
+      text: { format: zodTextFormat(selectionSchema, "movie_mime_selection") },
+      max_output_tokens: 1_200,
+    });
+    this.recordTelemetry("movie_mime_selection", this.reviewModel, startedAt, response);
+    return requireParsedOutput(response.output_parsed, "movie mime selection");
+  }
+
+  async generateMovieMimePack(setupInput: MovieMimeSetup): Promise<MimeFilmPack> {
+    const setup = movieMimeSetupSchema.parse(setupInput);
+    const first = await this.selectMovieMimeCandidate(setup);
+    try {
+      return createMovieMimePack(setup, first.filmIds, "ai");
+    } catch (error) {
+      const repaired = await this.selectMovieMimeCandidate(
+        setup,
+        error instanceof Error ? error.message : "The previous selection was invalid.",
+      );
+      return createMovieMimePack(setup, repaired.filmIds, "ai");
+    }
   }
 
   private async generateCandidate(brief: GameBrief, repairContext?: string): Promise<GameSpec> {
