@@ -74,8 +74,8 @@ export const cinemaCharadesSpec: ComposedGameSpec = {
   ],
   actions: [
     { id: "draw_film", label: "Piocher un film", kind: "draw", actor: "active_player", oncePerPhase: true, deckId: "films", effects: [{ kind: "draw_cards", deckId: "films", count: 1, target: "actor" }, { kind: "advance_phase" }] },
-    { id: "film_guessed", label: "Film trouvé", kind: "complete_challenge", actor: "active_player", oncePerPhase: true, effects: [{ kind: "add_score", target: "actor_team", amount: 2 }, { kind: "discard_selected_card", deckId: "films" }, { kind: "advance_round", resetPhaseActions: true }, { kind: "set_active_player", mode: "next" }, { kind: "advance_phase" }] },
-    { id: "film_passed", label: "Passer", kind: "advance", actor: "active_player", oncePerPhase: true, effects: [{ kind: "discard_selected_card", deckId: "films" }, { kind: "advance_round", resetPhaseActions: true }, { kind: "set_active_player", mode: "next" }, { kind: "advance_phase" }] },
+    { id: "film_guessed", label: "Film trouvé", kind: "complete_challenge", actor: "active_player", oncePerPhase: true, effects: [{ kind: "add_score", target: "actor_team", amount: 2 }, { kind: "discard_selected_card", deckId: "films", target: "actor" }, { kind: "advance_round", resetPhaseActions: true }, { kind: "set_active_player", mode: "next" }, { kind: "advance_phase" }] },
+    { id: "film_passed", label: "Passer", kind: "advance", actor: "active_player", oncePerPhase: true, effects: [{ kind: "discard_selected_card", deckId: "films", target: "actor" }, { kind: "advance_round", resetPhaseActions: true }, { kind: "set_active_player", mode: "next" }, { kind: "advance_phase" }] },
   ],
   rules: [
     { id: "end_after_success", trigger: { kind: "after_action", actionId: "film_guessed" }, conditionMode: "all", conditions: [{ kind: "round_at_least", round: 7 }], effects: [{ kind: "end_game", winnerBy: "highest_score" }] },
@@ -150,7 +150,7 @@ export const systemsLabSpec: ComposedGameSpec = {
     { id: "buzz", label: "Buzzer", kind: "buzz", actor: "any_player", oncePerPhase: true, effects: [] },
     { id: "order", label: "Valider l’ordre", kind: "order", actor: "active_player", oncePerPhase: true, itemIds: ["early", "middle", "late"], effects: [] },
     { id: "match", label: "Valider les paires", kind: "match", actor: "active_player", oncePerPhase: true, itemIds: ["cat", "dog", "red", "blue"], effects: [] },
-    { id: "play_card", label: "Jouer la carte", kind: "play_card", actor: "active_player", oncePerPhase: true, deckId: "tools", effects: [{ kind: "discard_selected_card", deckId: "tools" }] },
+    { id: "play_card", label: "Jouer la carte", kind: "play_card", actor: "active_player", oncePerPhase: true, deckId: "tools", effects: [{ kind: "discard_selected_card", deckId: "tools", target: "actor" }] },
     { id: "choose", label: "Valider le choix", kind: "choose", actor: "active_player", oncePerPhase: true, optionIds: ["answer_a", "answer_b"], effects: [{ kind: "reveal", revealId: "clue_one" }] },
     { id: "write", label: "Envoyer la réponse", kind: "text", actor: "active_player", oncePerPhase: true, effects: [{ kind: "reveal", revealId: "secret_panel" }] },
     { id: "draw", label: "Piocher un outil", kind: "draw", actor: "active_player", oncePerPhase: true, deckId: "tools", effects: [{ kind: "draw_cards", deckId: "tools", count: 1, target: "actor" }] },

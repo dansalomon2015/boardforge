@@ -47,7 +47,8 @@
 .catalog .eyebrow { color: #756d61; }
 .catalogHeading h2 { margin: 0; font: 700 clamp(46px, 5vw, 72px)/.92 'Space Grotesk'; letter-spacing: -4.5px; }
 .catalogHeading > p { margin: 0; color: #6d665d; line-height: 1.7; }
-.gameCard { min-height: 440px; display: grid; grid-template-columns: 1.08fr .92fr; overflow: hidden; color: inherit; background: #0e0e0e; border-radius: 5px 34px 5px 5px; box-shadow: 0 30px 75px rgba(54,42,25,.18); text-decoration: none; }
+.gamesGrid { display: grid; gap: 24px; }
+.gameCard { min-height: 440px; display: grid; grid-template-columns: 1.08fr .92fr; overflow: hidden; color: inherit; background: #0e0e0e; border-radius: 5px 34px 5px 5px; box-shadow: 0 30px 75px rgba(54,42,25,.18); text-decoration: none; transition: transform .25s,box-shadow .25s; }.gameCard:hover { transform: translateY(-4px); box-shadow: 0 38px 90px rgba(54,42,25,.24); }
 .gameArtwork { position: relative; overflow: hidden; min-height: 440px; background: radial-gradient(circle at 50% 44%, #803453, transparent 31%), linear-gradient(145deg,#251334,#09090b 73%); }
 .gameArtwork::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 32px, rgba(255,255,255,.025) 33px); }
 .gameNumber { position: absolute; z-index: 2; top: 27px; left: 29px; color: rgba(255,255,255,.45); font-size: 9px; font-weight: 900; letter-spacing: 1.5px; }
@@ -56,6 +57,7 @@
 .clapper i { position: absolute; inset: 18px; border: 2px solid #111; }
 .clapper strong { position: absolute; inset: 0; display: grid; place-items: center; color: #111; font: 800 27px 'Space Grotesk'; letter-spacing: -1px; }
 .lightCone { position: absolute; width: 400px; height: 500px; left: 50%; top: -70px; transform: translateX(-50%); background: linear-gradient(to bottom, rgba(255,234,169,.18), transparent 80%); clip-path: polygon(44% 0,56% 0,100% 100%,0 100%); }
+.wordTrapCard { background: #111414; }.wordTrapArtwork { display: grid; place-items: center; background: radial-gradient(circle at 50% 45%,rgba(255,211,59,.22),transparent 28%),linear-gradient(145deg,#173e37,#090d0c 72%); }.wordTrapArtwork::before { content: ''; position: absolute; inset: 0; opacity: .13; background-image: repeating-linear-gradient(45deg,transparent 0 20px,#fff 21px 22px); }.wordBolt { position: absolute; z-index: 1; color: rgba(255,211,59,.13); font-size: 290px; transform: rotate(9deg); filter: blur(1px); }.wordCard { position: relative; z-index: 2; width: 230px; height: 280px; display: flex; flex-direction: column; justify-content: space-between; padding: 25px; color: #141712; background: #ffd33b; border-radius: 7px 30px 7px 7px; box-shadow: 0 30px 70px rgba(0,0,0,.45); transform: rotate(-5deg); }.wordCard::after { content: ''; position: absolute; inset: 10px; border: 1px dashed rgba(20,23,18,.35); border-radius: inherit; }.wordCard small,.wordCard span { position: relative; z-index: 1; font-size: 8px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }.wordCard strong { position: relative; z-index: 1; align-self: center; font: 700 95px 'Space Grotesk'; }
 .gameInfo { padding: 56px; display: flex; flex-direction: column; color: #f7f2e8; }
 .gameInfo > p { margin: 0; color: #e4b64d; font-size: 9px; font-weight: 900; letter-spacing: 1.3px; text-transform: uppercase; }
 .gameInfo h3 { margin: 18px 0; font: 700 clamp(48px, 5vw, 72px)/.9 'Space Grotesk'; letter-spacing: -4px; }

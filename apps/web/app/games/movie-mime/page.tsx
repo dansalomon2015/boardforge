@@ -29,8 +29,8 @@ export default function MovieMimeSetupPage() {
   const [theme, setTheme] = useState<GameThemeName>("noir");
   const [filmCount, setFilmCount] = useState<(typeof filmCounts)[number]>(20);
   const [teams, setTeams] = useState<TeamDraft[]>([
-    { id: "team-draft-1", name: "Les Projecteurs", color: teamColors[0] },
-    { id: "team-draft-2", name: "Les Clapboards", color: teamColors[1] },
+    { id: "team-draft-1", name: "The Spotlights", color: teamColors[0] },
+    { id: "team-draft-2", name: "The Clapboards", color: teamColors[1] },
   ]);
   const [preferences, setPreferences] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,7 +47,7 @@ export default function MovieMimeSetupPage() {
       ? current
       : [...current, {
           id: crypto.randomUUID(),
-          name: `Équipe ${current.length + 1}`,
+          name: `Team ${current.length + 1}`,
           color: teamColors[current.length] ?? teamColors[0],
         }]);
   }
@@ -62,8 +62,8 @@ export default function MovieMimeSetupPage() {
     setError("");
     try {
       const normalizedNames = teams.map((team) => team.name.trim().toLocaleLowerCase("fr"));
-      if (teams.some((team) => team.name.trim().length < 2)) throw new Error("Chaque équipe doit avoir un nom.");
-      if (new Set(normalizedNames).size !== normalizedNames.length) throw new Error("Donnez un nom différent à chaque équipe.");
+      if (teams.some((team) => team.name.trim().length < 2)) throw new Error("Every team needs a name.");
+      if (new Set(normalizedNames).size !== normalizedNames.length) throw new Error("Every team needs a unique name.");
       const blueprintResponse = await fetch(`${apiUrl}/api/movie-mime/blueprints`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -76,11 +76,11 @@ export default function MovieMimeSetupPage() {
       });
       if (!blueprintResponse.ok) {
         const failure = (await blueprintResponse.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(failure?.error ?? "La sélection de films n’a pas pu être préparée.");
+        throw new Error(failure?.error ?? "The movie selection could not be prepared.");
       }
       const prepared = await blueprintResponse.json() as PreparedGame;
       if (prepared.releaseStatus !== "release_ready") {
-        throw new Error("Cette sélection n’a pas passé les vérifications de jouabilité.");
+        throw new Error("This selection did not pass the playability checks.");
       }
       const roomResponse = await fetch(`${apiUrl}/api/rooms`, {
         method: "POST",
@@ -89,12 +89,12 @@ export default function MovieMimeSetupPage() {
       });
       if (!roomResponse.ok) {
         const failure = (await roomResponse.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(failure?.error ?? "La room n’a pas pu être ouverte.");
+        throw new Error(failure?.error ?? "The room could not be opened.");
       }
       const room = await roomResponse.json() as { code: string };
       router.push(`/room/${room.code}`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Une erreur inattendue est survenue.");
+      setError(caught instanceof Error ? caught.message : "Something unexpected happened.");
       setBusy(false);
     }
   }
@@ -103,19 +103,19 @@ export default function MovieMimeSetupPage() {
     <main className={styles.page}>
       <nav className={styles.nav}>
         <Link className={styles.brand} href="/"><span>BF</span><b>BoardForge</b></Link>
-        <Link className={styles.back} href="/">← Retour à la collection</Link>
+        <Link className={styles.back} href="/">← Back to the collection</Link>
       </nav>
 
       <form className={styles.layout} onSubmit={prepareGame}>
         <section className={styles.configuration}>
           <div className={styles.titleBlock}>
             <p>BoardForge Original Nº 01</p>
-            <h1>Créez votre<br /><em>CinéMimes.</em></h1>
-            <span>Les règles sont déjà parfaitement réglées. Vous ne choisissez que l’ambiance et la programmation.</span>
+            <h1>Build your<br /><em>CineMimes.</em></h1>
+            <span>The rules are locked and tested. You choose the atmosphere and the movie lineup.</span>
           </div>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>01</b><span>Direction artistique</span><small>Choisissez l’atmosphère de votre table</small></legend>
+            <legend><b>01</b><span>Art direction</span><small>Choose the atmosphere at your table</small></legend>
             <div className={styles.themeGrid}>
               {themeIds.map((themeId) => {
                 const item = gameThemes[themeId];
@@ -138,13 +138,13 @@ export default function MovieMimeSetupPage() {
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>02</b><span>Vos équipes</span><small>De 2 à 4 équipes, nommées par vous</small></legend>
+            <legend><b>02</b><span>Your teams</span><small>Create and name two to four teams</small></legend>
             <div className={styles.teamEditor}>
               {teams.map((team, index) => (
                 <article className={styles.teamDraft} style={{ "--team-color": team.color } as CSSProperties} key={team.id}>
-                  <div className={styles.teamNumber}><i />Équipe {index + 1}</div>
+                  <div className={styles.teamNumber}><i />Team {index + 1}</div>
                   <input
-                    aria-label={`Nom de l’équipe ${index + 1}`}
+                    aria-label={`Team ${index + 1} name`}
                     maxLength={24}
                     onChange={(event) => updateTeam(team.id, { name: event.target.value })}
                     value={team.name}
@@ -152,7 +152,7 @@ export default function MovieMimeSetupPage() {
                   <div className={styles.teamPalette} aria-label={`Couleur de ${team.name}`}>
                     {teamColors.map((color) => (
                       <button
-                        aria-label={`Choisir la couleur ${color}`}
+                        aria-label={`Choose color ${color}`}
                         className={team.color === color ? styles.selectedColor : ""}
                         key={color}
                         onClick={() => updateTeam(team.id, { color })}
@@ -161,36 +161,36 @@ export default function MovieMimeSetupPage() {
                       />
                     ))}
                   </div>
-                  {teams.length > 2 ? <button className={styles.removeTeam} onClick={() => removeTeam(team.id)} type="button">Retirer</button> : null}
+                  {teams.length > 2 ? <button className={styles.removeTeam} onClick={() => removeTeam(team.id)} type="button">Remove</button> : null}
                 </article>
               ))}
-              {teams.length < 4 ? <button className={styles.addTeam} onClick={addTeam} type="button"><b>＋</b><span>Ajouter une équipe</span><small>Jusqu’à quatre équipes</small></button> : null}
+              {teams.length < 4 ? <button className={styles.addTeam} onClick={addTeam} type="button"><b>＋</b><span>Add a team</span><small>Up to four teams</small></button> : null}
             </div>
-            <p className={styles.captainNote}><span>★</span> Les joueurs rejoindront leur équipe dans la room. L’hôte choisira ensuite un chef par équipe.</p>
+            <p className={styles.captainNote}><span>★</span> Players join teams in the room. The host then appoints one captain per team.</p>
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>03</b><span>Durée de la séance</span><small>Un film correspond à environ une minute</small></legend>
+            <legend><b>03</b><span>Game length</span><small>One movie takes roughly one minute</small></legend>
             <div className={styles.countGrid}>
               {filmCounts.map((count) => (
                 <button className={filmCount === count ? styles.selectedCount : ""} key={count} onClick={() => setFilmCount(count)} type="button">
-                  <strong>{count}</strong><span>films</span><small>~{Math.ceil(count * 1.2)} min</small>
+                  <strong>{count}</strong><span>movies</span><small>~{Math.ceil(count * 1.2)} min</small>
                 </button>
               ))}
             </div>
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>04</b><span>Votre programmation</span><small>Facultatif · BoardForge choisit sinon au hasard</small></legend>
+            <legend><b>04</b><span>Your movie lineup</span><small>Optional · BoardForge picks a balanced mix otherwise</small></legend>
             <textarea
               maxLength={240}
               onChange={(event) => setPreferences(event.target.value)}
-              placeholder="Ex. Comédies familiales des années 90, très connues et faciles à mimer…"
+              placeholder="e.g. Famous family comedies from the 1990s that are easy to act out…"
               rows={4}
               value={preferences}
             />
             <div className={styles.suggestions}>
-              {["Films cultes", "Soirée famille", "Science-fiction", "Comédies françaises"].map((suggestion) => (
+              {["Cult classics", "Family night", "Science fiction", "Easy comedies"].map((suggestion) => (
                 <button key={suggestion} onClick={() => setPreferences(suggestion)} type="button">{suggestion}</button>
               ))}
               <span>{preferences.length}/240</span>
@@ -199,36 +199,36 @@ export default function MovieMimeSetupPage() {
 
           {error ? <p className={styles.error} role="alert">{error}</p> : null}
           <button className={styles.submit} disabled={busy} type="submit">
-            <span>{busy ? "Préparation de votre séance…" : "Ouvrir la salle de projection"}</span><b>{busy ? "•••" : "↗"}</b>
+            <span>{busy ? "Preparing your game…" : "Open the screening room"}</span><b>{busy ? "•••" : "↗"}</b>
           </button>
           <p className={styles.submitNote}>
-            {preferences.trim() ? "GPT-5.6 sélectionnera uniquement des films du catalogue BoardForge." : "Sélection aléatoire instantanée, sans appel IA."}
+            {preferences.trim() ? "AI selects only audited movies from the BoardForge catalogue." : "Instant randomized selection with no AI request."}
           </p>
         </section>
 
         <aside className={styles.previewColumn}>
           <div className={styles.sticky}>
-            <p className={styles.previewLabel}>Aperçu de votre édition</p>
+            <p className={styles.previewLabel}>Your edition preview</p>
             <div className={styles.gamePreview} style={previewStyle}>
               <div className={styles.previewGlow} />
               <div className={styles.previewTop}>
                 <span>BoardForge Original</span><strong>{activeTheme.emoji}</strong>
               </div>
               <div className={styles.previewCenter}>
-                <small>Jeu de mime cinéma</small>
-                <h2>Ciné<br />Mimes</h2>
-                <p>{preferences.trim() || "Une sélection surprise de films connus, variés et mémorables."}</p>
+                <small>Movie-charades showdown</small>
+                <h2>Cine<br />Mimes</h2>
+                <p>{preferences.trim() || "A surprise lineup of famous, varied, and memorable movies."}</p>
               </div>
               <div className={styles.previewStats}>
-                <span><b>{filmCount}</b> films</span>
-                <span><b>{teams.length}</b> équipes</span>
+                <span><b>{filmCount}</b> movies</span>
+                <span><b>{teams.length}</b> teams</span>
                 <span><b>60</b> sec.</span>
               </div>
             </div>
             <div className={styles.previewDetails}>
-              <div><span>Ambiance</span><b>{activeTheme.name}</b></div>
-              <div><span>Sélection</span><b>{preferences.trim() ? "Personnalisée par IA" : "Surprise aléatoire"}</b></div>
-              <div><span>Jouabilité</span><b>24 simulations validées</b></div>
+              <div><span>Atmosphere</span><b>{activeTheme.name}</b></div>
+              <div><span>Selection</span><b>{preferences.trim() ? "AI-curated" : "Balanced surprise"}</b></div>
+              <div><span>Playability</span><b>24 simulations passed</b></div>
             </div>
           </div>
         </aside>
@@ -237,8 +237,8 @@ export default function MovieMimeSetupPage() {
       {busy ? (
         <div className={styles.loading} aria-live="polite">
           <div className={styles.loadingMark}><span>BF</span><i /></div>
-          <p>{preferences.trim() ? "Le programmateur compose votre sélection…" : "Les bobines sont en cours de préparation…"}</p>
-          <small>Validation du paquet · préparation du moteur · ouverture de la room</small>
+          <p>{preferences.trim() ? "The curator is building your lineup…" : "The reels are being prepared…"}</p>
+          <small>Validating the deck · testing the engine · opening the room</small>
         </div>
       ) : null}
     </main>

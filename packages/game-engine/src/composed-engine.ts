@@ -358,6 +358,11 @@ function isActorAllowed(state: ComposedGameState, action: ActionDefinition, acto
     const activeTeamId = state.teamByPlayer[state.activePlayerId];
     return Boolean(activeTeamId && state.captainByTeam?.[activeTeamId] === actorId);
   }
+  if (action.actor === "opponents") {
+    const actorTeamId = state.teamByPlayer[actorId];
+    const activeTeamId = state.teamByPlayer[state.activePlayerId];
+    return Boolean(actorTeamId && activeTeamId && actorTeamId !== activeTeamId);
+  }
   if (action.actor === "team") return Boolean(state.teamByPlayer[actorId]) && state.teamByPlayer[actorId] === state.teamByPlayer[state.activePlayerId];
   return state.playerOrder.includes(actorId);
 }
@@ -403,7 +408,7 @@ function validatePayload(state: ComposedGameState, spec: ComposedGameSpec, actio
   if (action.kind === "select_player") {
     const actorTeamId = state.teamByPlayer[actorId];
     if (!payload.targetPlayerId || !actorTeamId || state.teamByPlayer[payload.targetPlayerId] !== actorTeamId) {
-      throw new ComposedGameRuleError("Captains must select a mime player from their own team.");
+      throw new ComposedGameRuleError("Captains must select an active player from their own team.");
     }
     return null;
   }
@@ -482,11 +487,12 @@ function applyEffect(state: ComposedGameState, spec: ComposedGameSpec, effect: E
   else if (effect.kind === "draw_cards") drawCards(state, effect.deckId, effect.target === "actor" ? actorId : state.activePlayerId, effect.count);
   else if (effect.kind === "discard_selected_card") {
     const deck = state.decks[effect.deckId];
-    const cardId = payload.cardId ?? state.activeCards[actorId]?.[effect.deckId];
-    if (!deck || !cardId || !deck.handsByPlayer[actorId]?.includes(cardId)) throw new ComposedGameRuleError("No selected card is available to discard.");
-    deck.handsByPlayer[actorId] = deck.handsByPlayer[actorId]!.filter((id) => id !== cardId);
+    const ownerId = effect.target === "active_player" ? state.activePlayerId : actorId;
+    const cardId = payload.cardId ?? state.activeCards[ownerId]?.[effect.deckId];
+    if (!deck || !cardId || !deck.handsByPlayer[ownerId]?.includes(cardId)) throw new ComposedGameRuleError("No selected card is available to discard.");
+    deck.handsByPlayer[ownerId] = deck.handsByPlayer[ownerId]!.filter((id) => id !== cardId);
     deck.discardPile.push(cardId);
-    delete state.activeCards[actorId]?.[effect.deckId];
+    delete state.activeCards[ownerId]?.[effect.deckId];
   } else if (effect.kind === "move_selected_token") {
     const token = payload.tokenId ? state.boardTokens[effect.boardId]?.[payload.tokenId] : undefined;
     if (!token || !payload.spaceId) throw new ComposedGameRuleError("No token and destination were selected.");
@@ -507,7 +513,7 @@ function applyEffect(state: ComposedGameState, spec: ComposedGameSpec, effect: E
     if (effect.mode === "actor") state.activePlayerId = actorId;
     else if (effect.mode === "selected") {
       if (!payload.targetPlayerId || !state.playerOrder.includes(payload.targetPlayerId)) {
-        throw new ComposedGameRuleError("No valid mime player was selected.");
+        throw new ComposedGameRuleError("No valid active player was selected.");
       }
       state.activePlayerId = payload.targetPlayerId;
     } else if (effect.mode === "next_team_captain") {

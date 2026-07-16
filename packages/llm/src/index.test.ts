@@ -41,13 +41,21 @@ describe("procedural local GameSpec compiler", () => {
     const pack = await provider.generateMovieMimePack({
       themeId: "noir",
       filmCount: 8,
-      preferences: "comédies familiales des années 1990",
+      preferences: "family comedies from the 1990s",
     });
 
     expect(pack.source).toBe("ai");
     expect(pack.films).toHaveLength(8);
     expect(new Set(pack.films.map((film) => film.id)).size).toBe(8);
     expect(pack.films.some((film) => film.genres.includes("comedy"))).toBe(true);
+  });
+
+  it("selects a bounded WordTrap pack from the audited catalog", async () => {
+    const pack = await provider.generateWordTrapPack({ themeId: "disco", cardCount: 8, preferences: "food and travel" });
+    expect(pack.source).toBe("ai");
+    expect(pack.cards).toHaveLength(8);
+    expect(new Set(pack.cards.map((card) => card.id)).size).toBe(8);
+    expect(pack.cards.some((card) => card.category === "food" || card.category === "places")).toBe(true);
   });
 
   it("changes hidden-role content when the requested universe changes", async () => {

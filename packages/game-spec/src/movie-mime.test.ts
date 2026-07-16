@@ -32,7 +32,7 @@ describe("movie mime game", () => {
 
   it("compiles a film pack into the fixed captain-led game loop", () => {
     const pack = createRandomMovieMimePack(
-      { themeId: "cosmic", filmCount: 10, preferences: "science-fiction familiale" },
+      { themeId: "cosmic", filmCount: 10, preferences: "family science fiction" },
       "cosmic-night",
     );
     const spec = createMovieMimeSpec(pack);
@@ -51,14 +51,14 @@ describe("movie mime game", () => {
       themeId: "retro",
       filmCount: 6,
       teams: [
-        { name: "Les Bobines", color: "#6c42f5" },
-        { name: "Les Cascades", color: "#ff6b4a" },
-        { name: "Les Oscars", color: "#22a699" },
+        { name: "The Reels", color: "#6c42f5" },
+        { name: "The Stunts", color: "#ff6b4a" },
+        { name: "The Oscars", color: "#22a699" },
       ],
     }, "three-teams");
     const spec = createMovieMimeSpec(pack);
     expect(spec.setup.mode).toBe("teams");
-    expect(spec.setup.teamPolicy?.teams.map((team) => team.name)).toEqual(["Les Bobines", "Les Cascades", "Les Oscars"]);
+    expect(spec.setup.teamPolicy?.teams.map((team) => team.name)).toEqual(["The Reels", "The Stunts", "The Oscars"]);
     expect(spec.minPlayers).toBe(3);
   });
 });

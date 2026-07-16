@@ -28,22 +28,22 @@ type CompilationJob = {
 };
 
 const waitingMessages = [
-  "Les mécaniques sont choisies dans le catalogue audité.",
-  "Aucun code généré par l’IA n’est exécuté.",
-  "Le moteur vérifie chaque action et chaque condition.",
-  "Les agents explorent plusieurs tailles de groupe.",
-  "La critique IA cherche les blocages et les déséquilibres.",
+  "Mechanics are selected from the audited catalogue.",
+  "No AI-generated code is ever executed.",
+  "The engine verifies every action and condition.",
+  "Virtual players explore several group sizes.",
+  "The AI review looks for dead ends and balance issues.",
 ];
 
 const statusLabels: Record<CompilationStatus, string> = {
-  queued: "Dans la file",
-  generating: "Assemblage IA",
-  validating: "Validation stricte",
-  playtesting: "Playtest virtuel",
-  reviewing: "Critique et équilibre",
-  release_ready: "Prêt à jouer",
-  needs_review: "Révision disponible",
-  failed: "Compilation interrompue",
+  queued: "Queued",
+  generating: "AI assembly",
+  validating: "Strict validation",
+  playtesting: "Virtual playtest",
+  reviewing: "Review and balance",
+  release_ready: "Ready to play",
+  needs_review: "Review available",
+  failed: "Compilation interrupted",
 };
 
 export default function CompilationPage() {
@@ -52,7 +52,7 @@ export default function CompilationPage() {
   const jobId = params.jobId;
   const [job, setJob] = useState<CompilationJob | null>(null);
   const [messageIndex, setMessageIndex] = useState(0);
-  const [connectionNote, setConnectionNote] = useState("Connexion à la forge…");
+  const [connectionNote, setConnectionNote] = useState("Connecting to the forge…");
   const [loadError, setLoadError] = useState("");
 
   const terminal = job?.status === "release_ready" || job?.status === "needs_review" || job?.status === "failed";
@@ -86,15 +86,15 @@ export default function CompilationPage() {
         });
         if (!response.ok) {
           const failure = (await response.json().catch(() => null)) as { error?: string } | null;
-          setLoadError(failure?.error ?? "La compilation est introuvable.");
+          setLoadError(failure?.error ?? "This compilation could not be found.");
           return;
         }
         setLoadError("");
         handleJob(await response.json() as CompilationJob);
-        setConnectionNote("Suivi en temps réel actif");
+        setConnectionNote("Live updates active");
       } catch (error) {
         if (!cancelled) {
-          setConnectionNote(error instanceof Error ? error.message : "Connexion momentanément indisponible.");
+          setConnectionNote(error instanceof Error ? error.message : "Connection temporarily unavailable.");
         }
       }
     };
@@ -107,12 +107,12 @@ export default function CompilationPage() {
         handleJob(next);
         if (next.status === "release_ready" || next.status === "needs_review") void fetchStatus();
       } catch {
-        setConnectionNote("Mise à jour reçue invalide, suivi périodique actif");
+        setConnectionNote("Invalid update received; periodic checks are active");
       }
     });
-    eventSource.onopen = () => setConnectionNote("Suivi en temps réel actif");
+    eventSource.onopen = () => setConnectionNote("Live updates active");
     eventSource.onerror = () => {
-      setConnectionNote("Suivi périodique de secours actif");
+      setConnectionNote("Backup periodic checks active");
       eventSource?.close();
       eventSource = null;
     };
@@ -133,7 +133,7 @@ export default function CompilationPage() {
   return (
     <main className="compilation-shell">
       <nav className="topbar compilation-topbar">
-        <a className="brand" href="/" aria-label="Accueil BoardForge">
+        <a className="brand" href="/" aria-label="BoardForge home">
           <span className="brand-mark">BF</span><span>BoardForge</span>
         </a>
         <span className="compilation-connection"><i /> {connectionNote}</span>
@@ -147,29 +147,29 @@ export default function CompilationPage() {
           <i className="orbit-piece piece-three">▲</i>
         </div>
 
-        <p className="eyebrow">{job ? statusLabels[job.status] : "Initialisation"}</p>
-        <h1>{failed ? "La forge s’est arrêtée." : "Votre jeu prend forme."}</h1>
+        <p className="eyebrow">{job ? statusLabels[job.status] : "Initializing"}</p>
+        <h1>{failed ? "The forge has stopped." : "Your game is taking shape."}</h1>
         <p className="compilation-message">
-          {failed ? loadError || job?.errorMessage || "La compilation n’a pas pu être terminée." : job?.message ?? "Préparation de votre idée…"}
+          {failed ? loadError || job?.errorMessage || "The compilation could not be completed." : job?.message ?? "Preparing your idea…"}
         </p>
 
-        <div className="compilation-progress" aria-label={`Progression ${progress}%`}>
+        <div className="compilation-progress" aria-label={`Progress ${progress}%`}>
           <i style={{ width: `${progress}%` }} />
         </div>
         <div className="compilation-progress-meta">
-          <span>{failed ? job?.errorCode ?? "Erreur" : currentWaitingMessage}</span>
+          <span>{failed ? job?.errorCode ?? "Error" : currentWaitingMessage}</span>
           <strong>{progress}%</strong>
         </div>
 
         {failed ? (
           <div className="compilation-error-actions">
-            <button type="button" className="secondary-button" onClick={() => router.push("/")}>Modifier mon idée</button>
+            <button type="button" className="secondary-button" onClick={() => router.push("/")}>Edit my idea</button>
             <button type="button" className="primary-button" onClick={() => window.location.reload()}>
-              <span>Vérifier à nouveau</span><b>↻</b>
+              <span>Check again</span><b>↻</b>
             </button>
           </div>
         ) : (
-          <p className="compilation-footnote">Vous pouvez laisser cette page ouverte : le résultat est sauvegardé côté serveur.</p>
+          <p className="compilation-footnote">You can leave this page open: the result is saved on the server.</p>
         )}
       </section>
     </main>

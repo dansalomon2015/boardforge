@@ -4,6 +4,7 @@ export * from "./composed";
 export * from "./composed-fixtures";
 export * from "./balance-patch";
 export * from "./movie-mime";
+export * from "./word-trap";
 
 const idSchema = z.string().regex(/^[a-z][a-z0-9_]*$/).max(48);
 const shortTextSchema = z.string().trim().min(1).max(180);

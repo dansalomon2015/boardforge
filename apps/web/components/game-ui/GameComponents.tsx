@@ -105,7 +105,7 @@ export function PromptCard({
   return (
     <article className={classes("game-ui", "prompt-card", className)} style={themedStyle(theme)}>
       <div className="prompt-card__top">
-        <span>{category ?? "À vous de jouer"}</span>
+        <span>{category ?? "Your turn"}</span>
         <b aria-hidden="true">{icon}</b>
       </div>
       <p className="prompt-card__prompt">{prompt}</p>
@@ -127,7 +127,7 @@ export function CardDeck({
   className,
   cards,
   activeIndex = 0,
-  label = "Pioche",
+  label = "Deck",
   onDraw,
 }: ThemedProps & {
   cards: DeckCard[];
@@ -139,16 +139,16 @@ export function CardDeck({
   const remaining = Math.max(cards.length - activeIndex, 0);
   return (
     <article className={classes("game-ui", "card-deck", className)} style={themedStyle(theme)}>
-      <div className="card-deck__meta"><span>{label}</span><b>{remaining} carte{remaining > 1 ? "s" : ""}</b></div>
+      <div className="card-deck__meta"><span>{label}</span><b>{remaining} card{remaining === 1 ? "" : "s"}</b></div>
       <div className="card-deck__stack" aria-live="polite">
         <i /><i />
         <div className="card-deck__card">
           <span aria-hidden="true">{activeCard?.icon ?? "◆"}</span>
-          <strong>{activeCard?.label ?? "Pioche vide"}</strong>
+          <strong>{activeCard?.label ?? "Empty deck"}</strong>
           {activeCard?.detail ? <small>{activeCard.detail}</small> : null}
         </div>
       </div>
-      {onDraw ? <GameButton theme={theme} onClick={onDraw} disabled={!activeCard}>Piocher la suivante <span>→</span></GameButton> : null}
+      {onDraw ? <GameButton theme={theme} onClick={onDraw} disabled={!activeCard}>Draw next <span>→</span></GameButton> : null}
     </article>
   );
 }
@@ -159,8 +159,8 @@ export function CardZone({
   theme,
   className,
   cards,
-  label = "Votre main",
-  actionLabel = "Jouer la carte",
+  label = "Your hand",
+  actionLabel = "Play card",
   onPlay,
   disabled = false,
 }: ThemedProps & {
@@ -176,7 +176,7 @@ export function CardZone({
   }, [cards, selectedId]);
   return (
     <article className={classes("game-ui", "card-zone", className)} style={themedStyle(theme)}>
-      <div className="card-zone__heading"><span className="game-eyebrow">Cartes</span><strong>{label}</strong><b>{cards.length}</b></div>
+      <div className="card-zone__heading"><span className="game-eyebrow">Cards</span><strong>{label}</strong><b>{cards.length}</b></div>
       {cards.length ? (
         <div className="card-zone__cards">
           {cards.map((card) => (
@@ -185,7 +185,7 @@ export function CardZone({
             </button>
           ))}
         </div>
-      ) : <p className="game-empty-state">Aucune carte dans cette zone.</p>}
+      ) : <p className="game-empty-state">There are no cards in this area.</p>}
       {onPlay ? <GameButton theme={theme} disabled={disabled || !selectedId} onClick={() => { onPlay(selectedId); setSelectedId(""); }}>{actionLabel}</GameButton> : null}
     </article>
   );
@@ -197,11 +197,11 @@ export type GameBoardToken = { id: string; label: string; spaceId: string; owned
 export function GameBoard({
   theme,
   className,
-  title = "Plateau",
+  title = "Board",
   layout = "track",
   spaces,
   tokens,
-  actionLabel = "Déplacer",
+  actionLabel = "Move",
   onMove,
   disabled = false,
 }: ThemedProps & {
@@ -221,8 +221,8 @@ export function GameBoard({
   }, [spaces, spaceId, tokenId, tokens]);
   return (
     <article className={classes("game-ui", "game-board", `game-board--${layout}`, className)} style={themedStyle(theme)}>
-      <div className="game-board__heading"><div><span className="game-eyebrow">Déplacement</span><h3>{title}</h3></div><small>Choisissez un pion puis une destination</small></div>
-      <div className="game-board__tokens" role="group" aria-label="Pions disponibles">
+      <div className="game-board__heading"><div><span className="game-eyebrow">Movement</span><h3>{title}</h3></div><small>Choose a token, then a destination</small></div>
+      <div className="game-board__tokens" role="group" aria-label="Available tokens">
         {tokens.map((token) => <button type="button" className={tokenId === token.id ? "is-selected" : undefined} disabled={disabled || !token.owned} onClick={() => setTokenId(token.id)} key={token.id}><i />{token.label}</button>)}
       </div>
       <ol className="game-board__spaces">
@@ -240,13 +240,13 @@ export function GameBoard({
 
 export type GameResource = { id: string; name: string; icon?: ReactNode; value: number; min: number; max: number; scope: "global" | "player" | "team" };
 
-export function ResourcePanel({ theme, className, resources, title = "Ressources" }: ThemedProps & { resources: GameResource[]; title?: string }) {
+export function ResourcePanel({ theme, className, resources, title = "Resources" }: ThemedProps & { resources: GameResource[]; title?: string }) {
   return (
     <article className={classes("game-ui", "resource-panel", className)} style={themedStyle(theme)}>
       <h3>{title}</h3>
       <div>{resources.map((resource) => {
         const progress = resource.max === resource.min ? 100 : ((resource.value - resource.min) / (resource.max - resource.min)) * 100;
-        return <div className="resource-panel__item" key={resource.id}><span aria-hidden="true">{resource.icon ?? "◆"}</span><p><strong>{resource.name}</strong><small>{resource.scope === "global" ? "Commun" : resource.scope === "team" ? "Équipe" : "Personnel"}</small></p><b>{resource.value}</b><i><em style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} /></i></div>;
+        return <div className="resource-panel__item" key={resource.id}><span aria-hidden="true">{resource.icon ?? "◆"}</span><p><strong>{resource.name}</strong><small>{resource.scope === "global" ? "Shared" : resource.scope === "team" ? "Team" : "Personal"}</small></p><b>{resource.value}</b><i><em style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} /></i></div>;
       })}</div>
     </article>
   );
@@ -258,13 +258,13 @@ export function RandomizerPanel({
   label,
   kind,
   result,
-  actionLabel = "Lancer",
+  actionLabel = "Roll",
   onTrigger,
   disabled = false,
 }: ThemedProps & { label: string; kind: "die" | "spinner"; result?: string | number; actionLabel?: string; onTrigger?: () => void; disabled?: boolean }) {
   return (
     <article className={classes("game-ui", "randomizer-panel", className)} style={themedStyle(theme)}>
-      <span aria-hidden="true">{kind === "die" ? "⚄" : "◉"}</span><div><small>{kind === "die" ? "Dé" : "Roue"}</small><strong>{label}</strong></div><b>{result ?? "—"}</b>
+      <span aria-hidden="true">{kind === "die" ? "⚄" : "◉"}</span><div><small>{kind === "die" ? "Die" : "Spinner"}</small><strong>{label}</strong></div><b>{result ?? "—"}</b>
       {onTrigger ? <GameButton theme={theme} onClick={onTrigger} disabled={disabled}>{actionLabel}</GameButton> : null}
     </article>
   );
@@ -274,14 +274,14 @@ export function Buzzer({ theme, className, label = "Buzzer", claimedBy, onBuzz, 
   return (
     <article className={classes("game-ui", "game-buzzer", claimedBy && "is-claimed", className)} style={themedStyle(theme)}>
       <button type="button" onClick={onBuzz} disabled={disabled || Boolean(claimedBy)} aria-label={label}><span aria-hidden="true">!</span></button>
-      <div><span className="game-eyebrow">Réflexe</span><strong>{claimedBy ? `${claimedBy} a buzzé` : label}</strong><small>{claimedBy ? "Le buzzer est verrouillé pour cette phase." : "Soyez le premier à appuyer."}</small></div>
+      <div><span className="game-eyebrow">Reflex</span><strong>{claimedBy ? `${claimedBy} buzzed` : label}</strong><small>{claimedBy ? "The buzzer is locked for this phase." : "Be the first to press it."}</small></div>
     </article>
   );
 }
 
 export type SortableItem = { id: string; label: string };
 
-export function OrderingBoard({ theme, className, items, actionLabel = "Valider l’ordre", onSubmit, disabled = false }: ThemedProps & { items: SortableItem[]; actionLabel?: string; onSubmit?: (ids: string[]) => void; disabled?: boolean }) {
+export function OrderingBoard({ theme, className, items, actionLabel = "Confirm order", onSubmit, disabled = false }: ThemedProps & { items: SortableItem[]; actionLabel?: string; onSubmit?: (ids: string[]) => void; disabled?: boolean }) {
   const [ordered, setOrdered] = useState(items);
   useEffect(() => setOrdered(items), [items]);
   function move(index: number, offset: number) {
@@ -293,14 +293,14 @@ export function OrderingBoard({ theme, className, items, actionLabel = "Valider 
   }
   return (
     <article className={classes("game-ui", "ordering-board", className)} style={themedStyle(theme)}>
-      <div><span className="game-eyebrow">Classement</span><h3>Placez les éléments dans le bon ordre</h3></div>
-      <ol>{ordered.map((item, index) => <li key={item.id}><b>{index + 1}</b><strong>{item.label}</strong><span><button type="button" onClick={() => move(index, -1)} disabled={disabled || index === 0} aria-label={`Monter ${item.label}`}>↑</button><button type="button" onClick={() => move(index, 1)} disabled={disabled || index === ordered.length - 1} aria-label={`Descendre ${item.label}`}>↓</button></span></li>)}</ol>
+      <div><span className="game-eyebrow">Ranking</span><h3>Place the items in the correct order</h3></div>
+      <ol>{ordered.map((item, index) => <li key={item.id}><b>{index + 1}</b><strong>{item.label}</strong><span><button type="button" onClick={() => move(index, -1)} disabled={disabled || index === 0} aria-label={`Move ${item.label} up`}>↑</button><button type="button" onClick={() => move(index, 1)} disabled={disabled || index === ordered.length - 1} aria-label={`Move ${item.label} down`}>↓</button></span></li>)}</ol>
       {onSubmit ? <GameButton theme={theme} onClick={() => onSubmit(ordered.map((item) => item.id))} disabled={disabled || !ordered.length}>{actionLabel}</GameButton> : null}
     </article>
   );
 }
 
-export function MatchingBoard({ theme, className, items, actionLabel = "Valider les associations", onSubmit, disabled = false }: ThemedProps & { items: SortableItem[]; actionLabel?: string; onSubmit?: (pairs: Array<{ leftId: string; rightId: string }>) => void; disabled?: boolean }) {
+export function MatchingBoard({ theme, className, items, actionLabel = "Confirm matches", onSubmit, disabled = false }: ThemedProps & { items: SortableItem[]; actionLabel?: string; onSubmit?: (pairs: Array<{ leftId: string; rightId: string }>) => void; disabled?: boolean }) {
   const [selectedId, setSelectedId] = useState("");
   const [pairs, setPairs] = useState<Array<{ leftId: string; rightId: string }>>([]);
   useEffect(() => { setPairs([]); setSelectedId(""); }, [items]);
@@ -312,9 +312,9 @@ export function MatchingBoard({ theme, className, items, actionLabel = "Valider 
   const name = (id: string) => items.find((item) => item.id === id)?.label ?? id;
   return (
     <article className={classes("game-ui", "matching-board", className)} style={themedStyle(theme)}>
-      <div><span className="game-eyebrow">Associations</span><h3>Formez les paires</h3><button type="button" onClick={() => { setPairs([]); setSelectedId(""); }} disabled={disabled || (!pairs.length && !selectedId)}>Recommencer</button></div>
+      <div><span className="game-eyebrow">Matching</span><h3>Build the pairs</h3><button type="button" onClick={() => { setPairs([]); setSelectedId(""); }} disabled={disabled || (!pairs.length && !selectedId)}>Start over</button></div>
       <div className="matching-board__items">{items.map((item) => <button type="button" className={selectedId === item.id ? "is-selected" : undefined} disabled={disabled || usedIds.has(item.id)} onClick={() => select(item.id)} key={item.id}>{item.label}</button>)}</div>
-      {pairs.length ? <ol>{pairs.map((pair, index) => <li key={`${pair.leftId}-${pair.rightId}`}><b>{index + 1}</b><span>{name(pair.leftId)}</span><i>↔</i><span>{name(pair.rightId)}</span></li>)}</ol> : <p className="game-empty-state">Sélectionnez deux éléments pour créer une paire.</p>}
+      {pairs.length ? <ol>{pairs.map((pair, index) => <li key={`${pair.leftId}-${pair.rightId}`}><b>{index + 1}</b><span>{name(pair.leftId)}</span><i>↔</i><span>{name(pair.rightId)}</span></li>)}</ol> : <p className="game-empty-state">Select two items to create a pair.</p>}
       {onSubmit ? <GameButton theme={theme} onClick={() => onSubmit(pairs)} disabled={disabled || pairs.length * 2 !== items.length}>{actionLabel}</GameButton> : null}
     </article>
   );
@@ -324,11 +324,11 @@ export function MediaPanel({ theme, className, kind, title, url, alt }: ThemedPr
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [url]);
 
-  const fallback = <div className="media-panel__fallback" role="img" aria-label={alt}><span aria-hidden="true">▧</span><small>Média indisponible</small></div>;
+  const fallback = <div className="media-panel__fallback" role="img" aria-label={alt}><span aria-hidden="true">▧</span><small>Media unavailable</small></div>;
   return (
     <figure className={classes("game-ui", "media-panel", className)} style={themedStyle(theme)}>
       {failed ? fallback : kind === "image" ? <img src={url} alt={alt} loading="lazy" onError={() => setFailed(true)} /> : kind === "audio" ? <audio src={url} controls preload="metadata" onError={() => setFailed(true)}>{alt}</audio> : <video src={url} controls preload="metadata" onError={() => setFailed(true)}>{alt}</video>}
-      <figcaption><span className="game-eyebrow">Média</span><strong>{title}</strong><small>{alt}</small></figcaption>
+      <figcaption><span className="game-eyebrow">Media</span><strong>{title}</strong><small>{alt}</small></figcaption>
     </figure>
   );
 }
@@ -349,7 +349,7 @@ export function TurnIndicator({
   return (
     <div className={classes("game-ui", "turn-indicator", `turn-indicator--${status}`, className)} style={themedStyle(theme)}>
       <span className="turn-indicator__avatar" aria-hidden="true">{avatar ?? player.slice(0, 1).toUpperCase()}</span>
-      <span><small>{status === "active" ? "Tour en cours" : status === "done" ? "Tour terminé" : "Prochain tour"}</small><strong>{player}</strong></span>
+      <span><small>{status === "active" ? "Current turn" : status === "done" ? "Turn complete" : "Next turn"}</small><strong>{player}</strong></span>
       <p>{instruction}</p>
     </div>
   );
@@ -360,14 +360,14 @@ export function RoundTracker({
   className,
   current,
   total,
-  label = "Manche",
+  label = "Round",
 }: ThemedProps & { current: number; total: number; label?: string }) {
   const safeTotal = Math.max(total, 1);
   const safeCurrent = Math.min(Math.max(current, 0), safeTotal);
   return (
     <div className={classes("game-ui", "round-tracker", className)} style={themedStyle(theme)}>
       <div><span>{label}</span><b>{safeCurrent} / {safeTotal}</b></div>
-      <ol aria-label={`${label} ${safeCurrent} sur ${safeTotal}`}>
+      <ol aria-label={`${label} ${safeCurrent} of ${safeTotal}`}>
         {Array.from({ length: safeTotal }, (_, index) => <li className={index < safeCurrent ? "is-complete" : ""} key={index} />)}
       </ol>
     </div>
@@ -379,7 +379,7 @@ export function GameTimer({
   className,
   seconds,
   totalSeconds,
-  label = "Temps restant",
+  label = "Time left",
   urgentAt = 10,
 }: ThemedProps & { seconds: number; totalSeconds: number; label?: string; urgentAt?: number }) {
   const safeSeconds = Math.max(0, seconds);
@@ -443,9 +443,9 @@ export function TextAnswer({
   value,
   onChange,
   onSubmit,
-  label = "Votre réponse",
-  placeholder = "Écrivez ici…",
-  submitLabel = "Valider",
+  label = "Your answer",
+  placeholder = "Type here…",
+  submitLabel = "Submit",
   multiline = false,
   maxLength = 180,
   disabled = false,
@@ -506,7 +506,7 @@ export function PlayerStrip({
   activePlayerId,
 }: ThemedProps & { players: Player[]; activePlayerId?: string }) {
   return (
-    <div className={classes("game-ui", "player-strip", className)} style={themedStyle(theme)} aria-label="Joueurs">
+    <div className={classes("game-ui", "player-strip", className)} style={themedStyle(theme)} aria-label="Players">
       {players.map((player) => (
         <div className={activePlayerId === player.id ? "is-active" : undefined} key={player.id} title={player.name}>
           <span aria-hidden="true">{player.avatar ?? player.name.slice(0, 1).toUpperCase()}</span>
@@ -548,7 +548,7 @@ export function ClueList({
   className,
   clues,
   revealed = clues.length,
-  title = "Indices",
+  title = "Clues",
 }: ThemedProps & { clues: Array<string | null>; revealed?: number; title?: string }) {
   return (
     <article className={classes("game-ui", "clue-list", className)} style={themedStyle(theme)}>
@@ -556,7 +556,7 @@ export function ClueList({
       <ol>
         {clues.map((clue, index) => {
           const visible = index < revealed && Boolean(clue);
-          return <li className={visible ? "is-revealed" : undefined} key={`${clue ?? "hidden"}-${index}`}><b>{index + 1}</b><span>{visible ? clue : "Indice verrouillé"}</span></li>;
+          return <li className={visible ? "is-revealed" : undefined} key={`${clue ?? "hidden"}-${index}`}><b>{index + 1}</b><span>{visible ? clue : "Locked clue"}</span></li>;
         })}
       </ol>
     </article>
@@ -580,7 +580,7 @@ export function ChallengeCard({
   icon?: ReactNode;
   children?: ReactNode;
 }) {
-  const difficultyLabel = { easy: "Facile", medium: "Intermédiaire", hard: "Corsé" }[difficulty];
+  const difficultyLabel = { easy: "Easy", medium: "Intermediate", hard: "Hard" }[difficulty];
   return (
     <article className={classes("game-ui", "challenge-card", `challenge-card--${difficulty}`, className)} style={themedStyle(theme)}>
       <div className="challenge-card__icon" aria-hidden="true">{icon}</div>
@@ -601,7 +601,7 @@ export function DrawingCanvas({
   className,
   strokes,
   onChange,
-  label = "Zone de dessin",
+  label = "Drawing area",
   disabled = false,
 }: ThemedProps & {
   strokes: SketchStroke[];
@@ -643,7 +643,7 @@ export function DrawingCanvas({
 
   return (
     <article className={classes("game-ui", "drawing-canvas", className)} style={themedStyle(theme)}>
-      <div><strong>{label}</strong><GameButton theme={theme} variant="ghost" type="button" onClick={() => onChange([])} disabled={disabled || strokes.length === 0}>Effacer</GameButton></div>
+      <div><strong>{label}</strong><GameButton theme={theme} variant="ghost" type="button" onClick={() => onChange([])} disabled={disabled || strokes.length === 0}>Clear</GameButton></div>
       <svg ref={svgRef} viewBox="0 0 600 340" role="img" aria-label={label} onPointerDown={startStroke} onPointerMove={extendStroke} onPointerUp={finishStroke} onPointerCancel={finishStroke}>
         <title>{label}</title>
         {strokes.map((stroke) => <path d={pointsToPath(stroke.points)} key={stroke.id} />)}
@@ -656,11 +656,11 @@ export function DrawingCanvas({
 export function RevealPanel({
   theme,
   className,
-  label = "Révélation",
+  label = "Reveal",
   title,
   description,
   revealed = true,
-  concealedText = "Touchez pour révéler",
+  concealedText = "Tap to reveal",
   onReveal,
   icon = "✦",
 }: ThemedProps & {
@@ -697,7 +697,7 @@ export function OutcomeBanner({
   return (
     <article className={classes("game-ui", "outcome-banner", `outcome-banner--${status}`, className)} style={themedStyle(theme)}>
       <div className="outcome-banner__mark" aria-hidden="true">{status === "success" ? "✓" : status === "failure" ? "×" : "◆"}</div>
-      <div className="outcome-banner__copy"><span>Résultat</span><h2>{title}</h2>{description ? <p>{description}</p> : null}</div>
+      <div className="outcome-banner__copy"><span>Result</span><h2>{title}</h2>{description ? <p>{description}</p> : null}</div>
       {stats?.length ? <dl>{stats.map((stat) => <div key={stat.label}><dt>{stat.label}</dt><dd>{stat.value}</dd></div>)}</dl> : null}
       {actions ? <div className="outcome-banner__actions">{actions}</div> : null}
     </article>

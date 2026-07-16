@@ -10,9 +10,13 @@ import {
   composedThemeIdSchema,
   createMovieMimeSpec,
   createRandomMovieMimePack,
+  createRandomWordTrapPack,
+  createWordTrapSpec,
   defaultMovieMimeSpec,
+  defaultWordTrapSpec,
   demoGameSpecs,
   movieMimeSetupSchema,
+  wordTrapSetupSchema,
   partyPulseSpec,
   spaceHeistSpec,
   systemsLabSpec,
@@ -96,7 +100,7 @@ type Room = {
 };
 
 const rooms = new Map<string, Room>();
-const availableDemoSpecs: BoardGameSpec[] = [...demoGameSpecs, cinemaCharadesSpec, defaultMovieMimeSpec, systemsLabSpec];
+const availableDemoSpecs: BoardGameSpec[] = [...demoGameSpecs, cinemaCharadesSpec, defaultMovieMimeSpec, defaultWordTrapSpec, systemsLabSpec];
 const llm = createLlmProvider({
   provider: config.llmProvider,
   apiKey: config.openAiApiKey,
@@ -195,9 +199,9 @@ async function compilePrompt(
   prompt: string,
   onStage: (status: ActiveCompilationStatus, progress: number, message: string) => Promise<void> = async () => {},
 ): Promise<BlueprintRecord> {
-  await onStage("generating", 12, "L’IA assemble les composants et les règles du jeu…");
+  await onStage("generating", 12, "AI is assembling the game components and rules…");
   const spec = await llm.generateComposedGameSpec(prompt);
-  await onStage("validating", 42, "La GameSpec est validée avant toute exécution…");
+  await onStage("validating", 42, "The GameSpec is being validated before execution…");
   const blueprintId = `${spec.id}-${crypto.randomUUID().slice(0, 8)}`;
   await blueprintStore.saveBlueprint({
     id: blueprintId,
@@ -207,9 +211,9 @@ async function compilePrompt(
     prompt,
   });
 
-  await onStage("playtesting", 58, "24 agents virtuels testent les configurations de joueurs et d’équipes…");
+  await onStage("playtesting", 58, "24 virtual agents are testing player and team configurations…");
   const playtest = runComposedPlaytest(spec, { simulations: 24, seed: `release:${blueprintId}` });
-  await onStage("reviewing", 82, "L’IA analyse le rythme, l’équilibre et les résultats des simulations…");
+  await onStage("reviewing", 82, "AI is reviewing pacing, balance, and simulation evidence…");
   const review = await llm.reviewComposedGameSpec(spec, balanceEvidence(playtest));
   let suggestedPatch = review.suggestedPatch;
   if (suggestedPatch) {
@@ -301,13 +305,13 @@ async function runCompilationJob(id: string): Promise<void> {
     const job = await blueprintStore.getCompilationJob(id);
     if (!job) return;
     if (job.attempts >= 2) {
-      await updateCompilationJob(id, "failed", 100, "La compilation a été interrompue trop de fois.", {
+      await updateCompilationJob(id, "failed", 100, "Compilation was interrupted too many times.", {
         errorCode: "RETRY_LIMIT_REACHED",
-        errorMessage: "La compilation doit être relancée depuis le prompt.",
+        errorMessage: "Restart compilation from the original prompt.",
       });
       return;
     }
-    await updateCompilationJob(id, "generating", 8, "Préparation de la compilation…", {
+    await updateCompilationJob(id, "generating", 8, "Preparing compilation…", {
       incrementAttempts: true,
     });
     const blueprint = await compilePrompt(job.prompt, async (status, progress, message) => {
@@ -319,13 +323,13 @@ async function runCompilationJob(id: string): Promise<void> {
       terminalStatus,
       100,
       terminalStatus === "release_ready"
-        ? "Le jeu est validé et prêt à ouvrir une room."
-        : "Le jeu a été compilé mais nécessite une révision.",
+        ? "The game is validated and ready to open a room."
+        : "The game compiled but needs review.",
       { blueprintId: blueprint.id },
     );
   } catch (error) {
     app.log.warn({ jobId: id, message: error instanceof Error ? error.message : "Unknown error" }, "Compilation job failed");
-    await updateCompilationJob(id, "failed", 100, "La compilation n’a pas pu être terminée.", {
+    await updateCompilationJob(id, "failed", 100, "Compilation could not be completed.", {
       errorCode: compilationErrorCode(error),
       errorMessage: compilationErrorMessage(error),
     }).catch((updateError) => app.log.error({ jobId: id, updateError }, "Failed to persist compilation failure"));
@@ -461,8 +465,8 @@ function viewFor(room: Room, playerId: string): RoomView {
         startBlockReason: composedStart && !composedStart.ok
           ? composedStart.reason
           : missingCaptainTeam
-            ? `Choisissez un chef pour ${missingCaptainTeam.name}.`
-          : `${Math.max(0, room.spec.minPlayers - players.length)} joueur(s) supplémentaire(s) requis.`,
+            ? `Choose a captain for ${missingCaptainTeam.name}.`
+          : `${Math.max(0, room.spec.minPlayers - players.length)} more player(s) required.`,
       } : {}),
       ...(teamPolicy ? {
         teamSetup: {
@@ -508,7 +512,7 @@ app.get("/health", async () => ({
 }));
 
 app.get("/api/games", async () => ({
-  games: [{ id: defaultMovieMimeSpec.id, ...summary(defaultMovieMimeSpec) }],
+  games: [defaultMovieMimeSpec, defaultWordTrapSpec].map((spec) => ({ id: spec.id, ...summary(spec) })),
   provider: llm.name,
 }));
 
@@ -581,6 +585,59 @@ app.post("/api/movie-mime/blueprints", async (request, reply) => {
   }
 });
 
+const wordTrapBodySchema = z.object({
+  themeId: composedThemeIdSchema.default("disco"),
+  cardCount: z.number().int().min(6).max(40).default(20),
+  teams: z.array(z.object({
+    name: z.string().trim().min(2).max(24),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  }).strict()).min(2).max(4).optional(),
+  preferences: z.string().trim().max(240).optional(),
+}).strict();
+
+app.post("/api/word-trap/blueprints", async (request, reply) => {
+  const parsed = wordTrapBodySchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ error: "Invalid WordTrap setup.", issues: parsed.error.issues });
+  const setupResult = wordTrapSetupSchema.safeParse({
+    themeId: parsed.data.themeId,
+    cardCount: parsed.data.cardCount,
+    ...(parsed.data.teams ? { teams: parsed.data.teams } : {}),
+    ...(parsed.data.preferences ? { preferences: parsed.data.preferences } : {}),
+  });
+  if (!setupResult.success) return reply.code(400).send({ error: "Invalid WordTrap setup.", issues: setupResult.error.issues });
+  const setup = setupResult.data;
+
+  try {
+    const pack = setup.preferences
+      ? await llm.generateWordTrapPack(setup)
+      : createRandomWordTrapPack(setup, crypto.randomUUID());
+    const spec = createWordTrapSpec(pack);
+    const blueprintId = `${spec.id}-${crypto.randomUUID().slice(0, 8)}`;
+    await blueprintStore.saveBlueprint({
+      id: blueprintId,
+      spec,
+      status: "playtesting",
+      provider: setup.preferences ? llm.name : "catalog-random",
+      ...(setup.preferences ? { prompt: setup.preferences } : {}),
+    });
+    const playtest = runComposedPlaytest(spec, { simulations: 24, seed: `release:${blueprintId}` });
+    const releaseStatus = playtest.status === "passed" ? "release_ready" : "needs_review";
+    await blueprintStore.savePlaytest(blueprintId, releaseStatus, playtest);
+    return reply.code(201).send({
+      blueprintId,
+      releaseStatus,
+      source: pack.source,
+      themeId: pack.themeId,
+      cardCount: pack.cards.length,
+      game: summary(spec),
+      playtest: { status: playtest.status, simulations: playtest.simulations, completedSimulations: playtest.completedSimulations },
+    });
+  } catch (error) {
+    app.log.warn({ message: error instanceof Error ? error.message : "Unknown WordTrap selection error" }, "WordTrap preparation failed");
+    return reply.code(502).send({ error: compilationErrorMessage(error), provider: llm.name });
+  }
+});
+
 const compileBodySchema = z
   .object({
     prompt: z.string().trim().min(8).max(500),
@@ -637,7 +694,7 @@ app.post("/api/compilations", async (request, reply) => {
     provider: llm.name,
     status: "queued",
     progress: 0,
-    message: "Votre idée a rejoint la forge.",
+    message: "Your idea has entered the forge.",
     attempts: 0,
     createdAt: now,
     updatedAt: now,
@@ -1053,10 +1110,10 @@ function compilationErrorMessage(error: unknown): string {
   const status = typeof error === "object" && error !== null && "status" in error
     ? Number(error.status)
     : null;
-  if (status === 401) return "La clé OpenAI est invalide ou a été révoquée.";
-  if (status === 429) return "Le quota ou les crédits du projet OpenAI sont épuisés. Vérifiez la facturation API.";
-  if (status === 403 || status === 404) return "Ce projet OpenAI n’a pas accès au modèle configuré.";
-  return "La génération OpenAI a échoué. Vérifiez la connexion et réessayez.";
+  if (status === 401) return "The OpenAI API key is invalid or has been revoked.";
+  if (status === 429) return "This OpenAI project has exhausted its quota or credits. Check API billing.";
+  if (status === 403 || status === 404) return "This OpenAI project cannot access the configured model.";
+  return "The OpenAI request failed. Check the connection and try again.";
 }
 
 async function restorePersistedRooms(): Promise<void> {

@@ -24,37 +24,37 @@ export default function HomePage() {
         </Link>
         <form className={styles.join} onSubmit={joinRoom}>
           <input
-            aria-label="Code de room"
+            aria-label="Room code"
             maxLength={6}
             onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
             placeholder="CODE"
             value={joinCode}
           />
-          <button disabled={joinCode.trim().length !== 6}>Rejoindre</button>
+          <button disabled={joinCode.trim().length !== 6}>Join</button>
         </form>
       </nav>
 
       <section className={styles.hero}>
         <div className={styles.heroCopy}>
-          <p className={styles.eyebrow}><span /> Une soirée. Un jeu. Votre édition.</p>
-          <h1>Le cinéma passe<br /><em>à l’action.</em></h1>
+          <p className={styles.eyebrow}><span /> One night. One game. Your edition.</p>
+          <h1>Game night,<br /><em>forged beautifully.</em></h1>
           <p className={styles.lead}>
-            Des jeux de soirée conçus avec soin, personnalisés pour votre groupe et habillés comme de véritables objets de collection.
+            Premium social games, personalized for your group and designed like collectible objects worth bringing to the table.
           </p>
           <div className={styles.heroActions}>
             <Link className={styles.primaryAction} href="/games/movie-mime">
-              Préparer une partie <b>↗</b>
+              Build a game <b>↗</b>
             </Link>
-            <a className={styles.secondaryAction} href="#games">Découvrir le jeu</a>
+            <a className={styles.secondaryAction} href="#games">Explore the collection</a>
           </div>
           <div className={styles.proof}>
             <span><b>24/24</b> playtests</span>
-            <span><b>60</b> films audités</span>
-            <span><b>20</b> directions artistiques</span>
+            <span><b>110</b> audited cards</span>
+            <span><b>20</b> art directions</span>
           </div>
         </div>
 
-        <div className={styles.heroVisual} aria-label="Aperçu de CinéMimes">
+        <div className={styles.heroVisual} aria-label="CineMimes preview">
           <div className={styles.posterBack} />
           <div className={styles.poster}>
             <div className={styles.posterTop}>
@@ -66,18 +66,18 @@ export default function HomePage() {
               <strong>🎬</strong>
             </div>
             <div className={styles.posterTitle}>
-              <small>Le jeu de mime cinéma</small>
-              <h2>Ciné<br />Mimes</h2>
-              <p>Piochez. Mimez. Faites exploser le box-office.</p>
+              <small>The movie-charades showdown</small>
+              <h2>Cine<br />Mimes</h2>
+              <p>Draw. Perform. Take over the box office.</p>
             </div>
             <div className={styles.posterFooter}>
-              <span>2–12 joueurs</span><span>Équipes</span><span>12+ min</span>
+              <span>2–12 players</span><span>Teams</span><span>12+ min</span>
             </div>
           </div>
           <div className={styles.floatingCard}>
-            <span>Film secret</span>
+            <span>Secret movie</span>
             <strong>?</strong>
-            <small>À découvrir par le mimeur</small>
+            <small>Performer access only</small>
           </div>
           <div className={styles.timerChip}><i /> 00:42</div>
         </div>
@@ -86,12 +86,13 @@ export default function HomePage() {
       <section className={styles.catalog} id="games">
         <div className={styles.catalogHeading}>
           <div>
-            <p className={styles.eyebrow}><span /> La collection BoardForge</p>
-            <h2>Un premier jeu.<br />Aucun compromis.</h2>
+            <p className={styles.eyebrow}><span /> The BoardForge collection</p>
+            <h2>Two real games.<br />No compromises.</h2>
           </div>
-          <p>Chaque jeu possède son propre moteur, sa direction artistique et une expérience multijoueur pensée jusque dans les détails.</p>
+          <p>Every title has its own tuned rule loop, art direction, private information model, and multiplayer experience.</p>
         </div>
 
+        <div className={styles.gamesGrid}>
         <Link className={styles.gameCard} href="/games/movie-mime">
           <div className={styles.gameArtwork}>
             <span className={styles.gameNumber}>Nº 01</span>
@@ -99,15 +100,28 @@ export default function HomePage() {
             <div className={styles.lightCone} />
           </div>
           <div className={styles.gameInfo}>
-            <p>Jeu d’équipes · Mime</p>
-            <h3>CinéMimes</h3>
-            <span>Faites reconnaître des films sans prononcer un mot. Choisissez votre ambiance et laissez BoardForge préparer la sélection.</span>
+            <p>Team game · Charades</p>
+            <h3>CineMimes</h3>
+            <span>Act out famous movies without saying a word. Choose your atmosphere and let BoardForge prepare the lineup.</span>
             <div>
-              <b>Créer mon édition</b>
+              <b>Build my edition</b>
               <strong>→</strong>
             </div>
           </div>
         </Link>
+        <Link className={`${styles.gameCard} ${styles.wordTrapCard}`} href="/games/word-trap">
+          <div className={`${styles.gameArtwork} ${styles.wordTrapArtwork}`}>
+            <span className={styles.gameNumber}>No. 02</span>
+            <div className={styles.wordBolt}>⚡</div>
+            <div className={styles.wordCard}><small>SECRET WORD</small><strong>?</strong><span>5 forbidden clues</span></div>
+          </div>
+          <div className={styles.gameInfo}>
+            <p>Team game · Forbidden words</p><h3>WordTrap</h3>
+            <span>Give brilliant clues, avoid five dangerous words, and beat the opposing team’s buzzer.</span>
+            <div><b>Build my edition</b><strong>→</strong></div>
+          </div>
+        </Link>
+        </div>
       </section>
 
       <footer className={styles.footer}>

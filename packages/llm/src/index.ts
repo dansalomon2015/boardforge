@@ -3,8 +3,11 @@ import {
   composedBalancePatchSchema,
   composedGameSpecSchema,
   createMovieMimePack,
+  createWordTrapPack,
   movieCatalog,
   movieMimeSetupSchema,
+  wordTrapCatalog,
+  wordTrapSetupSchema,
   type ComposedBalancePatch,
   type GameSpec,
   type ComposedGameSpec,
@@ -12,6 +15,9 @@ import {
   type MimeFilmPack,
   type MovieMimeSetup,
   type MovieMimeSetupInput,
+  type WordTrapPack,
+  type WordTrapSetup,
+  type WordTrapSetupInput,
   type QuizVoteGameSpec,
   type QuizVoteQuestion,
   hiddenRolesGameSpecSchema,
@@ -115,7 +121,7 @@ export const composedGameReviewSchema = z
 export type ComposedGameReview = z.infer<typeof composedGameReviewSchema>;
 
 export type LlmUsageTelemetry = {
-  operation: "movie_mime_selection" | "composed_generation" | "composed_review" | "composed_critique" | "composed_patch";
+  operation: "movie_mime_selection" | "word_trap_selection" | "composed_generation" | "composed_review" | "composed_critique" | "composed_patch";
   provider: string;
   model: string;
   responseId: string;
@@ -130,6 +136,7 @@ export type LlmUsageTelemetry = {
 export interface LlmProvider {
   readonly name: string;
   generateMovieMimePack(setup: MovieMimeSetupInput): Promise<MimeFilmPack>;
+  generateWordTrapPack(setup: WordTrapSetupInput): Promise<WordTrapPack>;
   generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec>;
   reviewComposedGameSpec(
     spec: ComposedGameSpec,
@@ -635,18 +642,18 @@ export class FakeLlmProvider implements LlmProvider {
     const preferenceWords = new Set(preferences.toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter((word) => word.length >= 4));
     const genreAliases: Record<string, string[]> = {
       action: ["action", "combat", "explosion"],
-      adventure: ["aventure", "voyage", "exploration"],
+      adventure: ["adventure", "aventure", "travel", "voyage", "exploration"],
       animation: ["animation", "dessin", "pixar", "disney"],
-      comedy: ["comedie", "comédie", "drole", "drôle", "humour"],
+      comedy: ["comedy", "comedie", "comédie", "funny", "humor", "humour"],
       crime: ["policier", "crime", "mafia", "braquage"],
-      drama: ["drame", "dramatique", "emotion", "émotion"],
-      family: ["famille", "familial", "enfant", "enfants"],
-      fantasy: ["fantastique", "magie", "sorcier", "fantasy"],
-      horror: ["horreur", "peur", "frisson"],
-      musical: ["musical", "musique", "danse"],
-      romance: ["romance", "romantique", "amour"],
-      science_fiction: ["science", "fiction", "spatial", "futur"],
-      sport: ["sport", "competition", "compétition"],
+      drama: ["drama", "drame", "dramatic", "emotion", "émotion"],
+      family: ["family", "famille", "familial", "children", "enfant", "enfants"],
+      fantasy: ["fantasy", "magic", "wizard", "fantastique", "magie", "sorcier"],
+      horror: ["horror", "scary", "horreur", "peur", "frisson"],
+      musical: ["musical", "music", "dance", "musique", "danse"],
+      romance: ["romance", "romantic", "love", "romantique", "amour"],
+      science_fiction: ["science", "fiction", "space", "future", "spatial", "futur"],
+      sport: ["sport", "sports", "competition", "compétition"],
       thriller: ["thriller", "suspense", "tension"],
     };
     const ranked = movieCatalog
@@ -655,13 +662,27 @@ export class FakeLlmProvider implements LlmProvider {
         for (const genre of film.genres) {
           if (genreAliases[genre]?.some((alias) => preferenceWords.has(alias))) score += 1_000;
         }
-        if (film.audience === "family" && [...preferenceWords].some((word) => ["famille", "familial", "enfant", "enfants"].includes(word))) score += 800;
+        if (film.audience === "family" && [...preferenceWords].some((word) => ["family", "children", "kids", "famille", "familial", "enfant", "enfants"].includes(word))) score += 800;
         const decade = Math.floor(film.year / 10) * 10;
         if (preferences.includes(String(decade))) score += 700;
         return { film, score };
       })
       .sort((left, right) => right.score - left.score || left.film.id.localeCompare(right.film.id));
     return createMovieMimePack(setup, ranked.slice(0, setup.filmCount).map(({ film }) => film.id), "ai");
+  }
+
+  async generateWordTrapPack(setupInput: WordTrapSetupInput): Promise<WordTrapPack> {
+    const setup = wordTrapSetupSchema.parse(setupInput);
+    const preferences = normalizedPrompt(setup.preferences ?? "a varied party mix").toLowerCase();
+    const preferenceWords = new Set(preferences.split(/[^a-z0-9]+/).filter((word) => word.length >= 3));
+    const ranked = wordTrapCatalog
+      .map((card) => {
+        const searchable = [card.word, card.category, card.difficulty, ...card.forbidden].join(" ").toLowerCase();
+        const matches = [...preferenceWords].filter((word) => searchable.includes(word)).length;
+        return { card, score: matches * 1_000 + hashText(`${preferences}:${card.id}`) % 100 };
+      })
+      .sort((left, right) => right.score - left.score || left.card.id.localeCompare(right.card.id));
+    return createWordTrapPack(setup, ranked.slice(0, setup.cardCount).map(({ card }) => card.id), "ai");
   }
 
   async generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec> {
@@ -948,6 +969,51 @@ export class OpenAiLlmProvider implements LlmProvider {
         error instanceof Error ? error.message : "The previous selection was invalid.",
       );
       return createMovieMimePack(setup, repaired.filmIds, "ai");
+    }
+  }
+
+  private async selectWordTrapCandidate(
+    setup: WordTrapSetup,
+    repairContext?: string,
+  ): Promise<{ cardIds: string[] }> {
+    const selectionSchema = z.object({
+      cardIds: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/).max(48)).min(6).max(40),
+    }).strict();
+    const startedAt = Date.now();
+    const response = await this.client.responses.parse({
+      model: this.reviewModel,
+      input: [
+        {
+          role: "system",
+          content: [
+            "You curate a forbidden-word party deck from an audited catalog.",
+            "Return only catalog IDs. Never invent, rename or repeat a card.",
+            "Select exactly the requested count.",
+            "Honor the requested mood or topic, while balancing categories and difficulty.",
+            "Prefer words that are recognizable, social and fun to describe aloud.",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ requestedCount: setup.cardCount, preferences: setup.preferences, catalog: wordTrapCatalog, ...(repairContext ? { repairContext } : {}) }),
+        },
+      ],
+      prompt_cache_key: "boardforge:word-trap-selection:v1",
+      text: { format: zodTextFormat(selectionSchema, "word_trap_selection") },
+      max_output_tokens: 1_200,
+    });
+    this.recordTelemetry("word_trap_selection", this.reviewModel, startedAt, response);
+    return requireParsedOutput(response.output_parsed, "WordTrap selection");
+  }
+
+  async generateWordTrapPack(setupInput: WordTrapSetupInput): Promise<WordTrapPack> {
+    const setup = wordTrapSetupSchema.parse(setupInput);
+    const first = await this.selectWordTrapCandidate(setup);
+    try {
+      return createWordTrapPack(setup, first.cardIds, "ai");
+    } catch (error) {
+      const repaired = await this.selectWordTrapCandidate(setup, error instanceof Error ? error.message : "The previous selection was invalid.");
+      return createWordTrapPack(setup, repaired.cardIds, "ai");
     }
   }
 

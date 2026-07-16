@@ -67,7 +67,7 @@ export default function RoomPage() {
     socket.on("connect", () => setConnected(true));
     socket.on("disconnect", () => setConnected(false));
     socket.on("room:state", (nextView: RoomView) => setView(nextView));
-    socket.on("session:replaced", () => setError("Cette session a été reprise dans un autre onglet."));
+    socket.on("session:replaced", () => setError("This session was resumed in another tab."));
 
     const savedId = localStorage.getItem(`boardforge:${code}:playerId`);
     const savedName = localStorage.getItem(`boardforge:${code}:name`);
@@ -199,45 +199,47 @@ export default function RoomPage() {
 
   const self = view?.players.find((player) => player.id === playerId);
   const currentTitle = view?.kind === "lobby" ? view.game.title : view?.kind === "composed" ? view.title : roomTitle;
-  const isMovieMime = currentTitle === "CinéMimes";
+  const isMovieMime = currentTitle === "CinéMimes" || currentTitle === "CineMimes";
+  const isWordTrap = currentTitle === "WordTrap";
+  const isOriginal = isMovieMime || isWordTrap;
 
   return (
-    <main className={`room-shell ${isMovieMime ? roomChromeStyles.movieRoom : ""}`}>
+    <main className={`room-shell ${isOriginal ? roomChromeStyles.movieRoom : ""}`}>
       <header className="room-topbar">
         <a className="brand" href="/"><span className="brand-mark">BF</span><span>BoardForge</span></a>
-        <div className="room-code"><span>SALLE</span><strong>{code}</strong><button onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/room/${code}`)}>Copier l’invitation</button></div>
-        <span className={`connection ${connected ? "online" : ""}`}><i />{connected ? "En direct" : "Reconnexion"}</span>
+        <div className="room-code"><span>ROOM</span><strong>{code}</strong><button onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/room/${code}`)}>Copy invite</button></div>
+        <span className={`connection ${connected ? "online" : ""}`}><i />{connected ? "Live" : "Reconnecting"}</span>
       </header>
 
       {!view ? (
         <section className="join-panel">
-          {isMovieMime ? <div className={roomChromeStyles.ticketPunch}>Admit one</div> : null}
-          <p className="eyebrow">{isMovieMime ? "Votre séance privée" : "Vous êtes invité"}</p>
-          <h1>{isMovieMime ? "Entrez dans la salle." : "Rejoignez la room"}</h1>
-          <p>{isMovieMime ? "Choisissez le nom qui apparaîtra au générique de cette partie." : "Choisissez le nom que vos amis verront pendant la partie."}</p>
-          {isMovieMime ? <div className={roomChromeStyles.joinCode}><span>Invitation</span><strong>{code}</strong><small>CinéMimes · BoardForge Original</small></div> : null}
+          {isOriginal ? <div className={roomChromeStyles.ticketPunch}>Admit one</div> : null}
+          <p className="eyebrow">{isOriginal ? "Your private game night" : "You are invited"}</p>
+          <h1>{isOriginal ? "Step into the room." : "Join the room"}</h1>
+          <p>{isOriginal ? "Choose the player name that will appear throughout this game." : "Choose the name your friends will see during the game."}</p>
+          {isOriginal ? <div className={roomChromeStyles.joinCode}><span>Invitation</span><strong>{code}</strong><small>{isWordTrap ? "WordTrap" : "CineMimes"} · BoardForge Original</small></div> : null}
           <form onSubmit={join}>
-            <label htmlFor="player-name">Votre nom de joueur</label>
-            <input id="player-name" autoFocus placeholder="Ex. Camille" maxLength={24} value={name} onChange={(event) => setName(event.target.value)} />
-            <button className="primary-button" disabled={pending || !name.trim()}>Entrer dans la salle <b>→</b></button>
+            <label htmlFor="player-name">Your player name</label>
+            <input id="player-name" autoFocus placeholder="e.g. Alex" maxLength={24} value={name} onChange={(event) => setName(event.target.value)} />
+            <button className="primary-button" disabled={pending || !name.trim()}>Enter the room <b>→</b></button>
           </form>
         </section>
       ) : view.kind === "lobby" ? (
         <section className="lobby-layout">
           <div className="lobby-hero">
-            {isMovieMime ? <div className={roomChromeStyles.lobbyEdition}><span>BoardForge Original</span><b>Nº 01</b></div> : null}
-            <p className="eyebrow">{isMovieMime ? "Casting en cours" : "La table se prépare"}</p>
+            {isOriginal ? <div className={roomChromeStyles.lobbyEdition}><span>BoardForge Original</span><b>No. {isWordTrap ? "02" : "01"}</b></div> : null}
+            <p className="eyebrow">{isWordTrap ? "Teams are entering the trap" : isMovieMime ? "Casting in progress" : "The table is getting ready"}</p>
             <h1>{view.game.title}</h1>
             <p>{view.game.description}</p>
-            {isMovieMime ? <div className={roomChromeStyles.lobbyFacts}><span>🎬 Mime cinéma</span><span>⏱ 60 secondes</span><span>✦ {view.teamSetup?.teams.length ?? 2} équipes</span></div> : null}
+            {isOriginal ? <div className={roomChromeStyles.lobbyFacts}><span>{isWordTrap ? "⚡ Forbidden words" : "🎬 Movie charades"}</span><span>⏱ 60 seconds</span><span>✦ {view.teamSetup?.teams.length ?? 2} teams</span></div> : null}
             <div className="lobby-progress"><span style={{ width: `${Math.min(100, (view.players.length / view.game.minPlayers) * 100)}%` }} /></div>
-            <small>{view.players.length} joueur(s) au casting · minimum {view.game.minPlayers}</small>
+            <small>{view.players.length} player(s) in the room · minimum {view.game.minPlayers}</small>
             {view.teamSetup ? <TeamSetup view={view} pending={pending} selectTeam={selectTeam} selectCaptain={selectCaptain} /> : null}
             {self?.isHost ? (
               <button className="primary-button host-start" disabled={!view.canStart || pending} onClick={startGame}>
-                {view.canStart ? "Lancer la partie" : view.startBlockReason ?? "La table n’est pas encore prête"} <b>→</b>
+                {view.canStart ? "Start the game" : view.startBlockReason ?? "The room is not ready yet"} <b>→</b>
               </button>
-            ) : <div className="waiting-card">L’hôte lancera la partie lorsque la table sera prête.</div>}
+            ) : <div className="waiting-card">The host will start when every team is ready.</div>}
           </div>
           <PlayerRail view={view} />
         </section>
@@ -260,13 +262,13 @@ function TeamSetup({ view, pending, selectTeam, selectCaptain }: {
   selectCaptain: (teamId: string, captainPlayerId: string) => void;
 }) {
   if (!view.teamSetup) return null;
-  const playerName = (id: string) => view.players.find((player) => player.id === id)?.name ?? "Joueur";
+  const playerName = (id: string) => view.players.find((player) => player.id === id)?.name ?? "Player";
   const isHost = Boolean(view.players.find((player) => player.id === view.selfPlayerId)?.isHost);
   return (
     <section className="team-setup" aria-labelledby="team-setup-title">
       <div className="team-setup-heading">
-        <div><p className="preview-label">Composition libre</p><h2 id="team-setup-title">Choisissez votre équipe</h2></div>
-        <span>{view.teamSetup.allowUnevenTeams ? "Équipes flexibles" : "Équipes équilibrées"}</span>
+        <div><p className="preview-label">Open team selection</p><h2 id="team-setup-title">Choose your team</h2></div>
+        <span>{view.teamSetup.allowUnevenTeams ? "Flexible teams" : "Balanced teams"}</span>
       </div>
       <div className="team-choice-grid">
         {view.teamSetup.teams.map((team) => {
@@ -277,19 +279,19 @@ function TeamSetup({ view, pending, selectTeam, selectCaptain }: {
             <article className={`team-choice-card ${selected ? "selected" : ""}`} style={{ "--team-color": team.color } as CSSProperties} key={team.id}>
               <div className="team-choice-title"><i /><strong>{team.name}</strong><small>{team.playerIds.length}{team.maxMembers ? `/${team.maxMembers}` : ""}</small></div>
               <div className="team-member-pills">
-                {team.playerIds.length ? team.playerIds.map((id) => <span className={id === team.captainPlayerId ? "captain" : ""} key={id}>{id === team.captainPlayerId ? "★ " : ""}{playerName(id)}</span>) : <em>Équipe disponible</em>}
+                {team.playerIds.length ? team.playerIds.map((id) => <span className={id === team.captainPlayerId ? "captain" : ""} key={id}>{id === team.captainPlayerId ? "★ " : ""}{playerName(id)}</span>) : <em>Available team</em>}
               </div>
               {isHost && team.playerIds.length ? (
                 <label className="captain-select">
-                  <span>Chef d’équipe</span>
+                  <span>Team captain</span>
                   <select disabled={pending} onChange={(event) => event.target.value && selectCaptain(team.id, event.target.value)} value={team.captainPlayerId ?? ""}>
-                    <option value="">À choisir…</option>
+                    <option value="">Choose one…</option>
                     {team.playerIds.map((id) => <option key={id} value={id}>{playerName(id)}</option>)}
                   </select>
                 </label>
-              ) : captainName ? <div className="captain-display"><span>★ Chef</span><strong>{captainName}</strong></div> : null}
+              ) : captainName ? <div className="captain-display"><span>★ Captain</span><strong>{captainName}</strong></div> : null}
               <button disabled={pending || selected || full} onClick={() => selectTeam(team.id)}>
-                {selected ? "Votre équipe ✓" : full ? "Équipe complète" : "Rejoindre"}
+                {selected ? "Your team ✓" : full ? "Team full" : "Join team"}
               </button>
             </article>
           );
@@ -302,17 +304,17 @@ function TeamSetup({ view, pending, selectTeam, selectCaptain }: {
 function PlayerRail({ view }: { view: RoomView }) {
   return (
     <aside className="player-rail">
-      <div className="rail-heading"><span>AU GÉNÉRIQUE</span><b>{view.players.length}</b></div>
+      <div className="rail-heading"><span>PLAYERS</span><b>{view.players.length}</b></div>
       <div className="player-list">
         {view.players.map((player, index) => (
           <div className={`player-row ${player.id === view.selfPlayerId ? "self" : ""}`} key={player.id}>
             <span className={`avatar avatar-${index % 4}`}>{player.name.slice(0, 1).toUpperCase()}</span>
-            <div><strong>{player.name}</strong><small>{view.kind === "lobby" && view.teamSetup ? view.teamSetup.teams.find((team) => team.playerIds.includes(player.id))?.name ?? "Choix en attente" : player.isHost ? "Hôte" : player.id === view.selfPlayerId ? "Vous" : "Joueur"}</small></div>
+            <div><strong>{player.name}</strong><small>{view.kind === "lobby" && view.teamSetup ? view.teamSetup.teams.find((team) => team.playerIds.includes(player.id))?.name ?? "Waiting for team" : player.isHost ? "Host" : player.id === view.selfPlayerId ? "You" : "Player"}</small></div>
             <i className={player.connected ? "present" : ""} />
           </div>
         ))}
       </div>
-      <div className="rail-footer"><span>État sécurisé</span><span>Cartes privées</span></div>
+      <div className="rail-footer"><span>Secure state</span><span>Private cards</span></div>
     </aside>
   );
 }
@@ -359,9 +361,10 @@ function GameStage({ view, isHost, pending, sendAction }: {
   }
 
   if (view.kind === "composed") {
-    if (view.title === "CinéMimes") {
+    if (view.title === "CinéMimes" || view.title === "CineMimes") {
       return <MovieMimeStage view={view} pending={pending} sendAction={sendAction} />;
     }
+    if (view.title === "WordTrap") return <WordTrapStage view={view} pending={pending} sendAction={sendAction} />;
     return <ComposedStage view={view} pending={pending} sendAction={sendAction} />;
   }
 
@@ -404,7 +407,7 @@ function themeForRoom(theme: ComposedTheme): GameThemeInput {
     id: theme.id,
     name: theme.name,
     emoji: "🎲",
-    description: "Ambiance personnalisée par la GameSpec.",
+    description: "Custom atmosphere defined by the GameSpec.",
     colors: theme.colors,
     radius: theme.radius,
     shadow: "0 18px 55px rgba(0, 0, 0, .2)",
@@ -446,10 +449,10 @@ function MovieMimeStage({ view, pending, sendAction }: {
       <header className={movieMimeStyles.header}>
         <div>
           <span>BoardForge Original</span>
-          <strong>CinéMimes</strong>
+          <strong>CineMimes</strong>
         </div>
         <div className={movieMimeStyles.progress}>
-          <small>Film</small><b>{Math.min(view.round, view.totalRounds)}</b><i>/</i><span>{view.totalRounds}</span>
+          <small>Movie</small><b>{Math.min(view.round, view.totalRounds)}</b><i>/</i><span>{view.totalRounds}</span>
         </div>
       </header>
 
@@ -465,21 +468,21 @@ function MovieMimeStage({ view, pending, sendAction }: {
 
       {view.status === "completed" ? (
         <section className={movieMimeStyles.final}>
-          <span>Fin de la séance</span>
+          <span>That is a wrap</span>
           <div className={movieMimeStyles.trophy}>✦</div>
-          <h1>{winnerNames.join(" & ") || "Égalité parfaite"}</h1>
-          <p>{winnerNames.length ? "remporte le box-office de la soirée." : "Les équipes se partagent l’affiche."}</p>
-          <a href="/">Retour à la collection <b>→</b></a>
+          <h1>{winnerNames.join(" & ") || "Perfect tie"}</h1>
+          <p>{winnerNames.length ? "wins tonight’s box office." : "The teams share top billing."}</p>
+          <a href="/">Back to the collection <b>→</b></a>
         </section>
       ) : view.phase.id === "select_mimer" ? (
         <section className={movieMimeStyles.castingStage}>
           <div className={movieMimeStyles.spotlight} />
-          <p>Au tour de {activeTeam?.name ?? "l’équipe active"}</p>
-          <h1>{isActiveCaptain ? "Choisissez votre mimeur." : `${view.players.find((player) => player.id === activeCaptainId)?.name ?? "Le chef"} fait son choix.`}</h1>
+          <p>{activeTeam?.name ?? "The active team"} is up</p>
+          <h1>{isActiveCaptain ? "Choose your performer." : `${view.players.find((player) => player.id === activeCaptainId)?.name ?? "The captain"} is choosing.`}</h1>
           <span>
             {isActiveCaptain
-              ? "Vous êtes chef d’équipe pour cette partie. Confiez la prochaine carte à l’un de vos joueurs."
-              : "Le prochain mimeur sera appelé sur scène dans un instant."}
+              ? "You are this team’s captain. Choose who will act out the next movie."
+              : "The next performer will step into the spotlight in a moment."}
           </span>
           <div className={movieMimeStyles.castGrid}>
             {activeTeam?.playerIds.map((id, index) => {
@@ -491,63 +494,156 @@ function MovieMimeStage({ view, pending, sendAction }: {
                   onClick={() => selectMimerAction && perform(selectMimerAction.id, { targetPlayerId: id })}
                 >
                   <i>{player?.name.slice(0, 1).toUpperCase() ?? "?"}</i>
-                  <span><small>{index === 0 ? "Au casting" : "Prêt à jouer"}</small><strong>{player?.name ?? "Joueur"}</strong></span>
-                  <b>{id === activeCaptainId ? "★ Chef" : "Choisir →"}</b>
+                  <span><small>{index === 0 ? "In the cast" : "Ready to play"}</small><strong>{player?.name ?? "Player"}</strong></span>
+                  <b>{id === activeCaptainId ? "★ Captain" : "Choose →"}</b>
                 </button>
               );
             })}
           </div>
-          {!isActiveCaptain ? <em>Seul le chef de {activeTeam?.name ?? "l’équipe"} peut choisir.</em> : null}
+          {!isActiveCaptain ? <em>Only the captain of {activeTeam?.name ?? "the active team"} can choose.</em> : null}
         </section>
       ) : view.phase.id === "draw" ? (
         <section className={movieMimeStyles.drawStage}>
           <div className={movieMimeStyles.spotlight} />
-          <p>{isActivePlayer ? "Vous êtes à l’affiche" : "Prochain mimeur"}</p>
-          <h1>{activePlayer?.name ?? "Le prochain joueur"}</h1>
+          <p>{isActivePlayer ? "You are in the spotlight" : "Next performer"}</p>
+          <h1>{activePlayer?.name ?? "The next player"}</h1>
           <span>
             {isActivePlayer
-              ? "Découvrez votre film en secret. Votre équipe ne verra jamais la carte."
-              : "Détournez les yeux pendant que le mimeur découvre sa carte."}
+              ? "Reveal your movie privately. Your team will never receive the secret card."
+              : "Look away while the performer studies the secret movie."}
           </span>
           <div className={movieMimeStyles.secretCard}>
-            <small>Film secret</small>
+            <small>Secret movie</small>
             <strong>?</strong>
             <i>🎬</i>
           </div>
           {drawAction ? (
             <button disabled={pending} onClick={() => perform(drawAction.id)}>
-              <span>{pending ? "Ouverture de la bobine…" : "Découvrir mon film"}</span><b>↗</b>
+              <span>{pending ? "Opening the reel…" : "Reveal my movie"}</span><b>↗</b>
             </button>
-          ) : <em>En attente de {activePlayer?.name ?? "la personne active"}…</em>}
+          ) : <em>Waiting for {activePlayer?.name ?? "the performer"}…</em>}
         </section>
       ) : (
         <section className={movieMimeStyles.mimeStage}>
           <div className={movieMimeStyles.mimeHeading}>
             <div>
-              <p>Silence, ça mime !</p>
-              <h1>{isActivePlayer ? "Faites-le deviner." : `${activePlayer?.name ?? "Le mimeur"} est en scène.`}</h1>
+              <p>Lights, camera, mime!</p>
+              <h1>{isActivePlayer ? "Make them guess it." : `${activePlayer?.name ?? "The performer"} is on stage.`}</h1>
             </div>
-            <div className={movieMimeStyles.timer}><i /><span>60</span><small>secondes</small></div>
+            <div className={movieMimeStyles.timer}><i /><span>60</span><small>seconds</small></div>
           </div>
 
           {isActivePlayer && prompt?.prompt ? (
             <div className={movieMimeStyles.revealedCard}>
-              <div><span>Votre film</span><i>{prompt.icon ?? "🎭"}</i></div>
+              <div><span>Your movie</span><i>{prompt.icon ?? "🎭"}</i></div>
               <h2>{prompt.prompt}</h2>
               {prompt.hint ? <p>{prompt.hint}</p> : null}
-              <small>Ne parlez pas · N’écrivez pas · Ne montrez pas l’écran</small>
+              <small>No speaking · No writing · Do not show the screen</small>
             </div>
           ) : (
             <div className={movieMimeStyles.audienceCard}>
               <strong>?</strong>
-              <div><span>Le titre reste secret</span><p>Regardez le mime et proposez vos réponses à voix haute.</p></div>
+              <div><span>The title stays private</span><p>Watch the performance and call out your guesses.</p></div>
             </div>
           )}
 
           <div className={movieMimeStyles.mimeActions}>
-            {successAction ? <button className={movieMimeStyles.success} disabled={pending} onClick={() => perform(successAction.id)}>✓ Film trouvé</button> : null}
-            {passAction ? <button className={movieMimeStyles.pass} disabled={pending} onClick={() => perform(passAction.id)}>Passer le film</button> : null}
-            {!successAction && !passAction ? <span>Seul le mimeur peut valider le résultat.</span> : null}
+            {successAction ? <button className={movieMimeStyles.success} disabled={pending} onClick={() => perform(successAction.id)}>✓ Movie guessed</button> : null}
+            {passAction ? <button className={movieMimeStyles.pass} disabled={pending} onClick={() => perform(passAction.id)}>Pass movie</button> : null}
+            {!successAction && !passAction ? <span>Only the performer can confirm the result.</span> : null}
+          </div>
+        </section>
+      )}
+    </GameSurface>
+  );
+}
+
+function WordTrapStage({ view, pending, sendAction }: {
+  view: ComposedGameView;
+  pending: boolean;
+  sendAction: (action: GameAction) => void;
+}) {
+  const theme = themeForRoom(view.theme);
+  const activePlayer = view.players.find((player) => player.id === view.activePlayerId);
+  const isActivePlayer = view.selfPlayerId === view.activePlayerId;
+  const activeTeamId = view.teams.find((team) => team.playerIds.includes(view.activePlayerId))?.id;
+  const activeTeam = view.teams.find((team) => team.id === activeTeamId);
+  const activeCaptainId = activeTeamId ? view.captainByTeam[activeTeamId] : undefined;
+  const isActiveCaptain = view.selfPlayerId === activeCaptainId;
+  const selectAction = view.availableActions.find((action) => action.id === "select_clue_giver");
+  const drawAction = view.availableActions.find((action) => action.id === "draw_word");
+  const guessedAction = view.availableActions.find((action) => action.id === "word_guessed");
+  const passAction = view.availableActions.find((action) => action.id === "word_passed");
+  const forbiddenAction = view.availableActions.find((action) => action.id === "forbidden_called");
+  const prompt = view.components.find((component) => component.kind === "prompt")?.data as { prompt?: string; hint?: string } | undefined;
+  const forbiddenWords = prompt?.hint?.replace(/^DO NOT SAY:\s*/i, "").split(" · ").filter(Boolean) ?? [];
+  const winnerNames = view.winner?.kind === "teams" ? view.winner.ids.map((id) => view.teams.find((team) => team.id === id)?.name).filter(Boolean) : [];
+
+  function perform(actionId: string, payload?: Extract<GameAction, { type: "COMPOSED_ACTION" }>["payload"]) {
+    sendAction({ type: "COMPOSED_ACTION", actionId, ...(payload ? { payload } : {}) });
+  }
+
+  return (
+    <GameSurface theme={theme} className={movieMimeStyles.stage}>
+      <header className={movieMimeStyles.header}>
+        <div><span>BoardForge Original</span><strong>WordTrap</strong></div>
+        <div className={movieMimeStyles.progress}><small>Card</small><b>{Math.min(view.round, view.totalRounds)}</b><i>/</i><span>{view.totalRounds}</span></div>
+      </header>
+      <div className={movieMimeStyles.scoreboard}>
+        {view.teams.map((team) => <div className={team.id === activeTeamId ? movieMimeStyles.activeTeam : ""} key={team.id}><i style={{ background: team.color }} /><span>{team.name}</span><strong>{view.scores.teams[team.id] ?? 0}</strong></div>)}
+      </div>
+
+      {view.status === "completed" ? (
+        <section className={movieMimeStyles.final}>
+          <span>The trap is closed</span><div className={movieMimeStyles.trophy}>⚡</div>
+          <h1>{winnerNames.join(" & ") || "Perfect tie"}</h1>
+          <p>{winnerNames.length ? "wins the battle of words." : "The teams share the final point."}</p>
+          <a href="/">Back to the collection <b>→</b></a>
+        </section>
+      ) : view.phase.id === "select_clue_giver" ? (
+        <section className={movieMimeStyles.castingStage}>
+          <div className={movieMimeStyles.spotlight} /><p>{activeTeam?.name ?? "The active team"} is up</p>
+          <h1>{isActiveCaptain ? "Choose your clue giver." : `${view.players.find((player) => player.id === activeCaptainId)?.name ?? "The captain"} is choosing.`}</h1>
+          <span>{isActiveCaptain ? "Pick the player who will navigate the forbidden words on the next card." : "The next clue giver will step into the trap in a moment."}</span>
+          <div className={movieMimeStyles.castGrid}>
+            {activeTeam?.playerIds.map((id) => {
+              const player = view.players.find((candidate) => candidate.id === id);
+              return <button disabled={pending || !selectAction} key={id} onClick={() => selectAction && perform(selectAction.id, { targetPlayerId: id })}>
+                <i>{player?.name.slice(0, 1).toUpperCase() ?? "?"}</i><span><small>Ready to play</small><strong>{player?.name ?? "Player"}</strong></span><b>{id === activeCaptainId ? "★ Captain" : "Choose →"}</b>
+              </button>;
+            })}
+          </div>
+          {!isActiveCaptain ? <em>Only the active team captain can choose.</em> : null}
+        </section>
+      ) : view.phase.id === "draw" ? (
+        <section className={movieMimeStyles.drawStage}>
+          <div className={movieMimeStyles.spotlight} /><p>{isActivePlayer ? "You are entering the trap" : "Next clue giver"}</p>
+          <h1>{activePlayer?.name ?? "The next player"}</h1>
+          <span>{isActivePlayer ? "Reveal the card privately. No one else will receive the word or its forbidden clues." : "Look away while the clue giver studies the secret card."}</span>
+          <div className={movieMimeStyles.secretCard}><small>Secret word</small><strong>⚡</strong><i>?</i></div>
+          {drawAction ? <button disabled={pending} onClick={() => perform(drawAction.id)}><span>{pending ? "Opening the trap…" : "Reveal my card"}</span><b>↗</b></button> : <em>Waiting for {activePlayer?.name ?? "the clue giver"}…</em>}
+        </section>
+      ) : (
+        <section className={movieMimeStyles.mimeStage}>
+          <div className={movieMimeStyles.mimeHeading}>
+            <div><p>Choose every word carefully</p><h1>{isActivePlayer ? "Make them guess it." : `${activePlayer?.name ?? "The clue giver"} is live.`}</h1></div>
+            <div className={movieMimeStyles.timer}><i /><span>60</span><small>seconds</small></div>
+          </div>
+          {isActivePlayer && prompt?.prompt ? (
+            <div className={`${movieMimeStyles.revealedCard} ${movieMimeStyles.trapCard}`}>
+              <div><span>Your target word</span><i>⚡</i></div><h2>{prompt.prompt}</h2>
+              <p className={movieMimeStyles.trapLabel}>Do not say</p>
+              <div className={movieMimeStyles.forbiddenList}>{forbiddenWords.map((word) => <b key={word}>{word}</b>)}</div>
+              <small>No rhymes · No translations · No spelling · Do not show the screen</small>
+            </div>
+          ) : (
+            <div className={movieMimeStyles.audienceCard}><strong>?</strong><div><span>The card stays private</span><p>{forbiddenAction ? "Listen closely. Buzz the moment the clue giver says a forbidden word." : "Call out guesses before the timer runs out."}</p></div></div>
+          )}
+          <div className={movieMimeStyles.mimeActions}>
+            {guessedAction ? <button className={movieMimeStyles.success} disabled={pending} onClick={() => perform(guessedAction.id)}>✓ Word guessed</button> : null}
+            {passAction ? <button className={movieMimeStyles.pass} disabled={pending} onClick={() => perform(passAction.id)}>Pass card</button> : null}
+            {forbiddenAction ? <button className={movieMimeStyles.buzzerAction} disabled={pending} onClick={() => perform(forbiddenAction.id)}>⚡ Forbidden word!</button> : null}
+            {!guessedAction && !passAction && !forbiddenAction ? <span>Watch, listen, and help your team.</span> : null}
           </div>
         </section>
       )}
@@ -562,7 +658,7 @@ function ComposedStage({ view, pending, sendAction }: {
 }) {
   const [answer, setAnswer] = useState("");
   const theme = themeForRoom(view.theme);
-  const playerName = (id: string) => view.players.find((player) => player.id === id)?.name ?? "Joueur";
+  const playerName = (id: string) => view.players.find((player) => player.id === id)?.name ?? "Player";
 
   function perform(actionId: string, payload?: Extract<GameAction, { type: "COMPOSED_ACTION" }>["payload"]) {
     sendAction({ type: "COMPOSED_ACTION", actionId, ...(payload ? { payload } : {}) });
@@ -598,7 +694,7 @@ function ComposedStage({ view, pending, sendAction }: {
           }
           if (component.kind === "deck") {
             const data = component.data as { label?: string; remaining?: number; activeCard?: { id: string; title: string; body?: string; icon?: string } };
-            const cards = data.activeCard ? [{ id: data.activeCard.id, label: data.activeCard.title, ...(data.activeCard.body ? { detail: data.activeCard.body } : {}), ...(data.activeCard.icon ? { icon: data.activeCard.icon } : {}) }] : [{ id: "hidden", label: "Carte prête à être piochée", detail: `${data.remaining ?? 0} cartes restantes`, icon: "◆" }];
+            const cards = data.activeCard ? [{ id: data.activeCard.id, label: data.activeCard.title, ...(data.activeCard.body ? { detail: data.activeCard.body } : {}), ...(data.activeCard.icon ? { icon: data.activeCard.icon } : {}) }] : [{ id: "hidden", label: "Card ready to draw", detail: `${data.remaining ?? 0} cards remaining`, icon: "◆" }];
             const action = view.availableActions.find((candidate) => candidate.kind === "draw" && candidate.deckId === component.data.deckId);
             return <CardDeck theme={theme} cards={cards} {...(data.label ? { label: data.label } : {})} {...(action ? { onDraw: () => perform(action.id) } : {})} key={component.id} />;
           }
@@ -610,11 +706,11 @@ function ComposedStage({ view, pending, sendAction }: {
           if (component.kind === "text_input") {
             const data = component.data as { label?: string; placeholder?: string; multiline?: boolean; maxLength?: number };
             const action = view.availableActions.find((candidate) => candidate.kind === "text");
-            return <TextAnswer theme={theme} label={data.label ?? "Votre réponse"} value={answer} onChange={setAnswer} {...(data.placeholder ? { placeholder: data.placeholder } : {})} multiline={data.multiline ?? false} maxLength={data.maxLength ?? 180} submitLabel={action?.label ?? "Valider"} disabled={pending || !action} {...(action ? { onSubmit: () => { perform(action.id, { text: answer }); setAnswer(""); } } : {})} key={component.id} />;
+            return <TextAnswer theme={theme} label={data.label ?? "Your answer"} value={answer} onChange={setAnswer} {...(data.placeholder ? { placeholder: data.placeholder } : {})} multiline={data.multiline ?? false} maxLength={data.maxLength ?? 180} submitLabel={action?.label ?? "Submit"} disabled={pending || !action} {...(action ? { onSubmit: () => { perform(action.id, { text: answer }); setAnswer(""); } } : {})} key={component.id} />;
           }
           if (component.kind === "drawing") {
             const data = component.data as { label?: string };
-            return <LocalDrawing theme={theme} label={data.label ?? "Zone de dessin"} key={component.id} />;
+            return <LocalDrawing theme={theme} label={data.label ?? "Drawing area"} key={component.id} />;
           }
           if (component.kind === "timer") {
             const data = component.data as { seconds?: number; label?: string };
@@ -622,7 +718,7 @@ function ComposedStage({ view, pending, sendAction }: {
           }
           if (component.kind === "turn") {
             const data = component.data as { activePlayerId?: string; activePlayerName?: string };
-            return <TurnIndicator theme={theme} player={data.activePlayerName ?? playerName(data.activePlayerId ?? view.activePlayerId)} instruction={view.selfPlayerId === view.activePlayerId ? "C'est à vous de jouer" : "Préparez-vous pour votre prochain tour"} key={component.id} />;
+            return <TurnIndicator theme={theme} player={data.activePlayerName ?? playerName(data.activePlayerId ?? view.activePlayerId)} instruction={view.selfPlayerId === view.activePlayerId ? "It is your turn" : "Get ready for your next turn"} key={component.id} />;
           }
           if (component.kind === "round") {
             const data = component.data as { current?: number; total?: number; label?: string };
@@ -647,15 +743,15 @@ function ComposedStage({ view, pending, sendAction }: {
           }
           if (component.kind === "challenge") {
             const data = component.data as { title?: string; instruction?: string; difficulty?: "easy" | "medium" | "hard"; rewardLabel?: string; icon?: string };
-            return <ChallengeCard theme={theme} title={data.title ?? "Défi"} instruction={data.instruction ?? "Relevez le défi."} difficulty={data.difficulty ?? "medium"} {...(data.rewardLabel ? { reward: data.rewardLabel } : {})} {...(data.icon ? { icon: data.icon } : {})} key={component.id} />;
+            return <ChallengeCard theme={theme} title={data.title ?? "Challenge"} instruction={data.instruction ?? "Complete the challenge."} difficulty={data.difficulty ?? "medium"} {...(data.rewardLabel ? { reward: data.rewardLabel } : {})} {...(data.icon ? { icon: data.icon } : {})} key={component.id} />;
           }
           if (component.kind === "reveal") {
             const data = component.data as { revealed?: boolean; content?: { title: string; description?: string; icon?: string } };
-            return <RevealPanel theme={theme} revealed={Boolean(data.revealed)} title={data.content?.title ?? "Révélation verrouillée"} {...(data.content?.description ? { description: data.content.description } : {})} {...(data.content?.icon ? { icon: data.content.icon } : {})} concealedText="Révélation verrouillée" key={component.id} />;
+            return <RevealPanel theme={theme} revealed={Boolean(data.revealed)} title={data.content?.title ?? "Reveal locked"} {...(data.content?.description ? { description: data.content.description } : {})} {...(data.content?.icon ? { icon: data.content.icon } : {})} concealedText="Reveal locked" key={component.id} />;
           }
           if (component.kind === "outcome") {
             const data = component.data as { visible?: boolean; title?: string; description?: string };
-            return data.visible ? <OutcomeBanner theme={theme} status="success" title={data.title ?? "Partie terminée"} {...(data.description ? { description: data.description } : {})} {...(view.status === "completed" ? { actions: <a className="composed-new-game" href="/">Créer un autre jeu →</a> } : {})} key={component.id} /> : null;
+            return data.visible ? <OutcomeBanner theme={theme} status="success" title={data.title ?? "Game complete"} {...(data.description ? { description: data.description } : {})} {...(view.status === "completed" ? { actions: <a className="composed-new-game" href="/">Choose another game →</a> } : {})} key={component.id} /> : null;
           }
           if (component.kind === "board") {
             const data = component.data as { definition?: { id: string; name: string; layout: "track" | "grid" | "zones"; spaces: Array<{ id: string; label: string }>; tokens: Array<{ id: string; label: string }> }; tokens?: Record<string, { id: string; definitionId: string; ownerType: "global" | "player" | "team"; ownerId: string | null; spaceId: string }> };
@@ -663,14 +759,14 @@ function ComposedStage({ view, pending, sendAction }: {
             const ownTeamId = view.teams.find((team) => team.playerIds.includes(view.selfPlayerId))?.id;
             const action = view.availableActions.find((candidate) => candidate.kind === "move" && candidate.boardId === data.definition?.id);
             const tokens = Object.values(data.tokens ?? {}).map((token) => ({ id: token.id, label: data.definition?.tokens.find((definition) => definition.id === token.definitionId)?.label ?? token.id, spaceId: token.spaceId, owned: token.ownerType === "global" || token.ownerId === view.selfPlayerId || token.ownerId === ownTeamId }));
-            return <GameBoard theme={theme} title={data.definition.name} layout={data.definition.layout} spaces={data.definition.spaces} tokens={tokens} actionLabel={action?.label ?? "Déplacer"} disabled={pending || !action} {...(action ? { onMove: (tokenId: string, spaceId: string) => perform(action.id, { tokenId, spaceId }) } : {})} key={component.id} />;
+            return <GameBoard theme={theme} title={data.definition.name} layout={data.definition.layout} spaces={data.definition.spaces} tokens={tokens} actionLabel={action?.label ?? "Move"} disabled={pending || !action} {...(action ? { onMove: (tokenId: string, spaceId: string) => perform(action.id, { tokenId, spaceId }) } : {})} key={component.id} />;
           }
           if (component.kind === "card_zone") {
             const data = component.data as { deckId?: string; zone?: "hand" | "draw" | "discard" | "table"; cards?: Array<{ id: string; title: string; body?: string; icon?: string } | string | null> };
             const action = view.availableActions.find((candidate) => candidate.kind === "play_card" && candidate.deckId === data.deckId);
             const cards = (data.cards ?? []).filter((card): card is { id: string; title: string; body?: string; icon?: string } => typeof card === "object" && card !== null && "id" in card);
-            const labels = { hand: "Votre main", draw: "Pioche", discard: "Défausse", table: "Cartes en jeu" } as const;
-            return <CardZone theme={theme} cards={cards} label={labels[data.zone ?? "table"]} actionLabel={action?.label ?? "Jouer la carte"} disabled={pending || !action} {...(action ? { onPlay: (cardId: string) => perform(action.id, { cardId }) } : {})} key={component.id} />;
+            const labels = { hand: "Your hand", draw: "Draw pile", discard: "Discard pile", table: "Cards in play" } as const;
+            return <CardZone theme={theme} cards={cards} label={labels[data.zone ?? "table"]} actionLabel={action?.label ?? "Play card"} disabled={pending || !action} {...(action ? { onPlay: (cardId: string) => perform(action.id, { cardId }) } : {})} key={component.id} />;
           }
           if (component.kind === "resources") {
             const data = component.data as { definitions?: Array<{ id: string; name: string; icon?: string; scope: "global" | "player" | "team"; min: number; max: number }>; global?: Record<string, number>; own?: Record<string, number>; team?: Record<string, number> };
@@ -682,7 +778,7 @@ function ComposedStage({ view, pending, sendAction }: {
             if (!data.definition) return null;
             const action = view.availableActions.find((candidate) => candidate.kind === "randomize" && candidate.randomizerId === data.definition?.id);
             const result = data.definition.kind === "spinner" && typeof data.result === "string" ? data.definition.options.find((option) => option.id === data.result)?.label ?? data.result : data.result;
-            return <RandomizerPanel theme={theme} label={data.definition.label} kind={data.definition.kind} {...(result !== undefined ? { result } : {})} actionLabel={action?.label ?? "Lancer"} disabled={pending || !action} {...(action ? { onTrigger: () => perform(action.id) } : {})} key={component.id} />;
+            return <RandomizerPanel theme={theme} label={data.definition.label} kind={data.definition.kind} {...(result !== undefined ? { result } : {})} actionLabel={action?.label ?? "Roll"} disabled={pending || !action} {...(action ? { onTrigger: () => perform(action.id) } : {})} key={component.id} />;
           }
           if (component.kind === "buzzer") {
             const data = component.data as { label?: string; claimedByPlayerId?: string };
@@ -692,12 +788,12 @@ function ComposedStage({ view, pending, sendAction }: {
           if (component.kind === "ordering") {
             const data = component.data as { items?: Array<{ id: string; label: string }> };
             const action = view.availableActions.find((candidate) => candidate.kind === "order");
-            return <OrderingBoard theme={theme} items={data.items ?? []} actionLabel={action?.label ?? "Valider l’ordre"} disabled={pending || !action} {...(action ? { onSubmit: (orderedIds: string[]) => perform(action.id, { orderedIds }) } : {})} key={component.id} />;
+            return <OrderingBoard theme={theme} items={data.items ?? []} actionLabel={action?.label ?? "Submit order"} disabled={pending || !action} {...(action ? { onSubmit: (orderedIds: string[]) => perform(action.id, { orderedIds }) } : {})} key={component.id} />;
           }
           if (component.kind === "matching") {
             const data = component.data as { items?: Array<{ id: string; label: string }> };
             const action = view.availableActions.find((candidate) => candidate.kind === "match");
-            return <MatchingBoard theme={theme} items={data.items ?? []} actionLabel={action?.label ?? "Valider les associations"} disabled={pending || !action} {...(action ? { onSubmit: (pairs: Array<{ leftId: string; rightId: string }>) => perform(action.id, { pairs }) } : {})} key={component.id} />;
+            return <MatchingBoard theme={theme} items={data.items ?? []} actionLabel={action?.label ?? "Submit matches"} disabled={pending || !action} {...(action ? { onSubmit: (pairs: Array<{ leftId: string; rightId: string }>) => perform(action.id, { pairs }) } : {})} key={component.id} />;
           }
           if (component.kind === "media") {
             const data = component.data as { media?: { kind: "image" | "audio" | "video"; title: string; url: string; alt: string } };
@@ -709,7 +805,7 @@ function ComposedStage({ view, pending, sendAction }: {
 
       {view.status === "playing" && fallbackActions.length ? (
         <div className="composed-actions-panel">
-          <p className="game-eyebrow">Actions disponibles</p>
+          <p className="game-eyebrow">Available actions</p>
           {fallbackActions.map((action) => {
             if (action.kind === "choose" && action.options) {
               const options = action.options.map((option) => ({ id: option.id, label: option.label, ...(option.description ? { description: option.description } : {}), ...(option.icon ? { icon: option.icon } : {}) }));
@@ -725,7 +821,7 @@ function ComposedStage({ view, pending, sendAction }: {
       ) : null}
 
       {view.status === "completed" && !hasVisibleOutcome ? (
-        <OutcomeBanner theme={theme} status="success" title="Partie terminée" description="Le moteur a appliqué toutes les règles de la GameSpec." actions={<a className="composed-new-game" href="/">Créer un autre jeu →</a>} />
+        <OutcomeBanner theme={theme} status="success" title="Game complete" description="The engine applied every validated GameSpec rule." actions={<a className="composed-new-game" href="/">Choose another game →</a>} />
       ) : null}
     </GameSurface>
   );

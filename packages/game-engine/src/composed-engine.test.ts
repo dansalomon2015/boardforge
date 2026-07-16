@@ -135,7 +135,7 @@ const systemsSpec: ComposedGameSpec = {
     { id: "buzz", label: "Buzz", kind: "buzz", actor: "any_player", oncePerPhase: true, effects: [] },
     { id: "order", label: "Ordonner", kind: "order", actor: "active_player", oncePerPhase: true, itemIds: ["early", "middle", "late"], effects: [] },
     { id: "match", label: "Associer", kind: "match", actor: "active_player", oncePerPhase: true, itemIds: ["cat", "dog", "red", "blue"], effects: [] },
-    { id: "play_card", label: "Jouer", kind: "play_card", actor: "active_player", oncePerPhase: true, deckId: "tools", effects: [{ kind: "discard_selected_card", deckId: "tools" }] },
+    { id: "play_card", label: "Jouer", kind: "play_card", actor: "active_player", oncePerPhase: true, deckId: "tools", effects: [{ kind: "discard_selected_card", deckId: "tools", target: "actor" }] },
   ],
   rules: [{ id: "reward_order", trigger: { kind: "after_action", actionId: "order" }, conditionMode: "all", conditions: [{ kind: "last_input_correct", actionId: "order" }], effects: [{ kind: "add_score", target: "actor", amount: 3 }] }],
   phases: [{ id: "play", title: "Play", componentIds: ["board", "hand", "resources", "die", "buzz", "order", "match"], actionIds: ["move", "energize", "roll", "buzz", "order", "match", "play_card"], completionMode: "manual", completionConditions: [], onComplete: [] }],

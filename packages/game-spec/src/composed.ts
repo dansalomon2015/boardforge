@@ -144,7 +144,7 @@ export const effectSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("set_variable"), variableId: idSchema, value: z.union([z.string().max(180), z.number(), z.boolean()]) }).strict(),
   z.object({ kind: z.literal("record_input"), channelId: idSchema }).strict(),
   z.object({ kind: z.literal("draw_cards"), deckId: idSchema, count: z.number().int().min(1).max(12), target: z.enum(["actor", "active_player"]) }).strict(),
-  z.object({ kind: z.literal("discard_selected_card"), deckId: idSchema }).strict(),
+  z.object({ kind: z.literal("discard_selected_card"), deckId: idSchema, target: z.enum(["actor", "active_player"]).default("actor") }).strict(),
   z.object({ kind: z.literal("move_selected_token"), boardId: idSchema }).strict(),
   z.object({ kind: z.literal("reveal"), revealId: idSchema }).strict(),
   z.object({ kind: z.literal("randomize"), randomizerId: idSchema }).strict(),
@@ -160,7 +160,7 @@ export const actionDefinitionSchema = z
     id: idSchema,
     label: shortTextSchema,
     kind: z.enum(["advance", "choose", "text", "draw", "play_card", "move", "resource", "randomize", "buzz", "order", "match", "complete_challenge", "select_player"]),
-    actor: z.enum(["host", "active_player", "any_player", "all_players", "team", "team_captain"]),
+    actor: z.enum(["host", "active_player", "any_player", "all_players", "team", "team_captain", "opponents"]),
     oncePerPhase: z.boolean().default(false),
     optionIds: z.array(idSchema).min(2).max(12).optional(),
     itemIds: z.array(idSchema).min(2).max(24).optional(),
@@ -349,6 +349,7 @@ function semanticIssues(spec: ComposedGameSpec): ComposedValidationIssue[] {
 
   spec.actions.forEach((action, index) => {
     const path = `actions.${index}`;
+    if (["team", "team_captain", "opponents"].includes(action.actor) && spec.setup.mode !== "teams") add("TEAM_ACTOR_REQUIRES_TEAMS", path, `Actor ${action.actor} requires team mode.`);
     if (action.kind === "choose" && (!action.optionIds || action.optionIds.some((id) => !choiceIds.has(id)))) add("ACTION_OPTIONS_INVALID", path, "Choose actions require known optionIds.");
     if ((action.kind === "draw" || action.kind === "play_card") && (!action.deckId || !deckIds.has(action.deckId))) add("ACTION_DECK_INVALID", path, "Card actions require a known deckId.");
     if (action.kind === "move" && (!action.boardId || !boardIds.has(action.boardId))) add("ACTION_BOARD_INVALID", path, "Move actions require a known boardId.");
