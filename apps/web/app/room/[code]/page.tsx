@@ -36,6 +36,7 @@ import {
   type GameThemeName,
   type SketchStroke,
 } from "../../../components/game-ui";
+import movieMimeStyles from "./movie-mime.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -313,6 +314,9 @@ function GameStage({ view, isHost, pending, sendAction }: {
   }
 
   if (view.kind === "composed") {
+    if (view.title === "CinéMimes") {
+      return <MovieMimeStage view={view} pending={pending} sendAction={sendAction} />;
+    }
     return <ComposedStage view={view} pending={pending} sendAction={sendAction} />;
   }
 
@@ -361,6 +365,117 @@ function themeForRoom(theme: ComposedTheme): GameThemeInput {
     shadow: "0 18px 55px rgba(0, 0, 0, .2)",
   };
   return customTheme;
+}
+
+function MovieMimeStage({ view, pending, sendAction }: {
+  view: ComposedGameView;
+  pending: boolean;
+  sendAction: (action: GameAction) => void;
+}) {
+  const theme = themeForRoom(view.theme);
+  const activePlayer = view.players.find((player) => player.id === view.activePlayerId);
+  const isActivePlayer = view.selfPlayerId === view.activePlayerId;
+  const activeTeamId = view.teams.find((team) => team.playerIds.includes(view.activePlayerId))?.id;
+  const drawAction = view.availableActions.find((action) => action.id === "draw_film");
+  const successAction = view.availableActions.find((action) => action.id === "film_guessed");
+  const passAction = view.availableActions.find((action) => action.id === "film_passed");
+  const prompt = view.components.find((component) => component.kind === "prompt")?.data as {
+    prompt?: string;
+    hint?: string;
+    icon?: string;
+  } | undefined;
+  const winnerNames = view.winner?.kind === "teams"
+    ? view.winner.ids.map((id) => view.teams.find((team) => team.id === id)?.name).filter(Boolean)
+    : [];
+
+  function perform(actionId: string) {
+    sendAction({ type: "COMPOSED_ACTION", actionId });
+  }
+
+  return (
+    <GameSurface theme={theme} className={movieMimeStyles.stage}>
+      <header className={movieMimeStyles.header}>
+        <div>
+          <span>BoardForge Original</span>
+          <strong>CinéMimes</strong>
+        </div>
+        <div className={movieMimeStyles.progress}>
+          <small>Film</small><b>{Math.min(view.round, view.totalRounds)}</b><i>/</i><span>{view.totalRounds}</span>
+        </div>
+      </header>
+
+      <div className={movieMimeStyles.scoreboard}>
+        {view.teams.map((team) => (
+          <div className={team.id === activeTeamId ? movieMimeStyles.activeTeam : ""} key={team.id}>
+            <i style={{ background: team.color }} />
+            <span>{team.name}</span>
+            <strong>{view.scores.teams[team.id] ?? 0}</strong>
+          </div>
+        ))}
+      </div>
+
+      {view.status === "completed" ? (
+        <section className={movieMimeStyles.final}>
+          <span>Fin de la séance</span>
+          <div className={movieMimeStyles.trophy}>✦</div>
+          <h1>{winnerNames.join(" & ") || "Égalité parfaite"}</h1>
+          <p>{winnerNames.length ? "remporte le box-office de la soirée." : "Les deux équipes se partagent l’affiche."}</p>
+          <a href="/">Retour à la collection <b>→</b></a>
+        </section>
+      ) : view.phase.id === "draw" ? (
+        <section className={movieMimeStyles.drawStage}>
+          <div className={movieMimeStyles.spotlight} />
+          <p>{isActivePlayer ? "Vous êtes à l’affiche" : "Prochain mimeur"}</p>
+          <h1>{activePlayer?.name ?? "Le prochain joueur"}</h1>
+          <span>
+            {isActivePlayer
+              ? "Découvrez votre film en secret. Votre équipe ne verra jamais la carte."
+              : "Détournez les yeux pendant que le mimeur découvre sa carte."}
+          </span>
+          <div className={movieMimeStyles.secretCard}>
+            <small>Film secret</small>
+            <strong>?</strong>
+            <i>🎬</i>
+          </div>
+          {drawAction ? (
+            <button disabled={pending} onClick={() => perform(drawAction.id)}>
+              <span>{pending ? "Ouverture de la bobine…" : "Découvrir mon film"}</span><b>↗</b>
+            </button>
+          ) : <em>En attente de {activePlayer?.name ?? "la personne active"}…</em>}
+        </section>
+      ) : (
+        <section className={movieMimeStyles.mimeStage}>
+          <div className={movieMimeStyles.mimeHeading}>
+            <div>
+              <p>Silence, ça mime !</p>
+              <h1>{isActivePlayer ? "Faites-le deviner." : `${activePlayer?.name ?? "Le mimeur"} est en scène.`}</h1>
+            </div>
+            <div className={movieMimeStyles.timer}><i /><span>60</span><small>secondes</small></div>
+          </div>
+
+          {isActivePlayer && prompt?.prompt ? (
+            <div className={movieMimeStyles.revealedCard}>
+              <div><span>Votre film</span><i>{prompt.icon ?? "🎭"}</i></div>
+              <h2>{prompt.prompt}</h2>
+              {prompt.hint ? <p>{prompt.hint}</p> : null}
+              <small>Ne parlez pas · N’écrivez pas · Ne montrez pas l’écran</small>
+            </div>
+          ) : (
+            <div className={movieMimeStyles.audienceCard}>
+              <strong>?</strong>
+              <div><span>Le titre reste secret</span><p>Regardez le mime et proposez vos réponses à voix haute.</p></div>
+            </div>
+          )}
+
+          <div className={movieMimeStyles.mimeActions}>
+            {successAction ? <button className={movieMimeStyles.success} disabled={pending} onClick={() => perform(successAction.id)}>✓ Film trouvé</button> : null}
+            {passAction ? <button className={movieMimeStyles.pass} disabled={pending} onClick={() => perform(passAction.id)}>Passer le film</button> : null}
+            {!successAction && !passAction ? <span>Seul le mimeur peut valider le résultat.</span> : null}
+          </div>
+        </section>
+      )}
+    </GameSurface>
+  );
 }
 
 function ComposedStage({ view, pending, sendAction }: {
