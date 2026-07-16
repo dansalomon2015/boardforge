@@ -1,0 +1,56 @@
+.movieRoom { --cinema-ink: #0b0a09; --cinema-paper: #eee6d7; --cinema-gold: #f2c94c; min-height: 100vh; color: #f7f1e7; background: radial-gradient(circle at 50% -8%, rgba(242,201,76,.15), transparent 30%), radial-gradient(circle at 10% 70%, rgba(137,45,67,.16), transparent 28%), #0b0a09; }
+.movieRoom::before { content: ''; position: fixed; inset: 0; pointer-events: none; opacity: .12; background-image: repeating-radial-gradient(circle at 0 0, transparent 0, #fff 1px, transparent 1.7px); background-size: 6px 6px; }
+.movieRoom :global(.room-topbar) { position: relative; z-index: 5; height: 84px; color: #f7f1e7; background: rgba(11,10,9,.76); border-bottom-color: rgba(255,255,255,.13); backdrop-filter: blur(20px); }
+.movieRoom :global(.room-topbar .brand) { color: #f7f1e7; }
+.movieRoom :global(.room-topbar .brand-mark) { color: #0b0a09; background: var(--cinema-gold); border-radius: 50%; transform: none; }
+.movieRoom :global(.room-code) { position: absolute; left: 50%; transform: translateX(-50%); gap: 13px; padding: 7px 8px 7px 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); border-radius: 999px; }
+.movieRoom :global(.room-code span) { color: #8e887f; font-size: 7px; }
+.movieRoom :global(.room-code strong) { color: #f7f1e7; font-size: 17px; }
+.movieRoom :global(.room-code button) { color: #17130e; background: var(--cinema-gold); border: 0; border-radius: 999px; font-size: 8px; text-transform: uppercase; letter-spacing: .5px; }
+.movieRoom :global(.connection) { color: #a29c93; background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.13); }
+.movieRoom :global(.join-panel) { position: relative; width: min(920px,calc(100% - 36px)); min-height: 570px; margin: 7vh auto 70px; overflow: hidden; display: grid; grid-template-columns: 1fr 310px; align-content: center; column-gap: 70px; padding: 70px; color: #1b1712; background: var(--cinema-paper); border: 0; border-radius: 4px 32px 4px 4px; box-shadow: 0 45px 110px rgba(0,0,0,.55); }
+.movieRoom :global(.join-panel)::before { content: '🎬'; position: absolute; right: -35px; top: -48px; width: 330px; height: 330px; display: grid; place-items: center; color: rgba(20,16,12,.05); font-size: 190px; transform: rotate(12deg); }
+.movieRoom :global(.join-panel)::after { content: ''; position: absolute; top: 0; bottom: 0; left: calc(100% - 352px); border-left: 2px dashed rgba(35,29,22,.18); }
+.ticketPunch { position: absolute; left: 24px; top: 24px; padding: 7px 10px; color: #a04431; border: 1px solid #a04431; border-radius: 50%; font-size: 7px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; transform: rotate(-8deg); }
+.movieRoom :global(.join-panel .eyebrow) { color: #9b4431; }
+.movieRoom :global(.join-panel h1) { max-width: 500px; font-size: clamp(52px,7vw,76px); line-height: .93; letter-spacing: -5px; }
+.movieRoom :global(.join-panel > p:not(.eyebrow)) { max-width: 510px; font-size: 15px; }
+.movieRoom :global(.join-panel form) { position: relative; z-index: 2; grid-column: 2; grid-row: 1 / span 4; align-self: center; margin: 0; padding-left: 5px; }
+.movieRoom :global(.join-panel form label) { color: #766e63; font-size: 8px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+.movieRoom :global(.join-panel form input) { min-height: 52px; margin-top: 7px; color: #1b1712; background: rgba(255,255,255,.56); border-color: rgba(27,23,18,.18); }
+.movieRoom :global(.join-panel .primary-button) { color: #111; background: var(--cinema-gold); }
+.joinCode { position: relative; z-index: 2; width: max-content; display: grid; grid-template-columns: auto auto; align-items: baseline; gap: 3px 13px; margin-top: 25px; padding: 13px 16px; color: #f7f1e7; background: #14110e; border-radius: 3px 13px 3px 3px; }
+.joinCode span { color: #8e887f; font-size: 7px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }.joinCode strong { font: 700 23px 'Space Grotesk'; letter-spacing: 4px; }.joinCode small { grid-column: 1/-1; color: #777168; font-size: 7px; }
+.movieRoom :global(.lobby-layout), .movieRoom :global(.game-layout) { position: relative; z-index: 1; width: min(1280px,calc(100% - 48px)); grid-template-columns: minmax(0,1fr) 310px; gap: 16px; margin-top: 32px; }
+.movieRoom :global(.lobby-hero) { position: relative; overflow: hidden; min-height: 690px; padding: 62px; color: #191510; background: var(--cinema-paper); border: 0; border-radius: 4px 32px 4px 4px; box-shadow: 0 35px 90px rgba(0,0,0,.38); }
+.movieRoom :global(.lobby-hero)::after { content: 'CINÉMIMES'; position: absolute; right: -12px; bottom: -23px; color: rgba(25,21,16,.045); font: 700 92px 'Space Grotesk'; letter-spacing: -6px; pointer-events: none; }
+.lobbyEdition { display: flex; justify-content: space-between; margin-bottom: 50px; padding-bottom: 13px; border-bottom: 1px solid rgba(25,21,16,.16); color: #82796e; font-size: 7px; font-weight: 900; letter-spacing: 1.3px; text-transform: uppercase; }
+.movieRoom :global(.lobby-hero .eyebrow) { color: #9b4431; }
+.movieRoom :global(.lobby-hero h1) { max-width: 680px; margin-top: 12px; font-size: clamp(62px,8vw,96px); line-height: .85; letter-spacing: -7px; }
+.movieRoom :global(.lobby-hero > p:not(.eyebrow)) { max-width: 620px; color: #746b60; font-size: 15px; }
+.lobbyFacts { display: flex; gap: 7px; flex-wrap: wrap; margin: 25px 0 32px; }.lobbyFacts span { padding: 8px 11px; color: #51493f; background: rgba(255,255,255,.48); border: 1px solid rgba(25,21,16,.11); border-radius: 999px; font-size: 8px; font-weight: 900; letter-spacing: .3px; text-transform: uppercase; }
+.movieRoom :global(.lobby-progress) { height: 5px; background: rgba(25,21,16,.12); }.movieRoom :global(.lobby-progress span) { background: #9b4431; }
+.movieRoom :global(.lobby-hero small) { color: #8b8277; font-size: 9px; }
+.movieRoom :global(.team-setup) { position: relative; z-index: 1; border-top-color: rgba(25,21,16,.14); }
+.movieRoom :global(.team-setup-heading > span) { color: #6a392f; background: #ead8cb; }
+.movieRoom :global(.team-choice-card) { background: rgba(255,255,255,.48); border-color: rgba(25,21,16,.11); box-shadow: none; }
+.movieRoom :global(.team-choice-card.selected) { background: white; border-color: var(--team-color); box-shadow: 0 12px 32px rgba(36,28,19,.1); }
+.movieRoom :global(.host-start) { position: relative; z-index: 1; color: #14110e; background: var(--cinema-gold); }
+.movieRoom :global(.waiting-card) { position: relative; z-index: 1; color: #746322; background: #f4e7b8; }
+.movieRoom :global(.player-rail) { min-height: 690px; color: #f7f1e7; background: rgba(24,21,18,.92); border: 1px solid rgba(255,255,255,.11); border-radius: 4px 22px 4px 4px; box-shadow: 0 30px 70px rgba(0,0,0,.3); }
+.movieRoom :global(.rail-heading) { color: #8f8980; border-bottom-color: rgba(255,255,255,.1); }.movieRoom :global(.rail-heading b) { color: #17130e; background: var(--cinema-gold); }
+.movieRoom :global(.player-row.self) { background: rgba(242,201,76,.1); }.movieRoom :global(.player-row small) { color: #8f8980; }
+.movieRoom :global(.avatar) { color: #17130e; background: var(--cinema-gold); }
+.movieRoom :global(.rail-footer) { border-top-color: rgba(255,255,255,.1); }.movieRoom :global(.rail-footer span) { color: #8f8980; background: rgba(255,255,255,.06); }
+@media (max-width: 850px) {
+  .movieRoom :global(.join-panel) { grid-template-columns: 1fr; padding: 52px 38px; }.movieRoom :global(.join-panel)::after { display: none; }.movieRoom :global(.join-panel form) { grid-column: 1; grid-row: auto; margin-top: 35px; }
+  .movieRoom :global(.lobby-layout), .movieRoom :global(.game-layout) { grid-template-columns: 1fr; }.movieRoom :global(.player-rail) { min-height: auto; order: -1; }.movieRoom :global(.player-list) { grid-template-columns: repeat(3,1fr); }
+}
+@media (max-width: 560px) {
+  .movieRoom :global(.room-code) { position: static; transform: none; padding-left: 11px; }.movieRoom :global(.room-code button) { display: none; }
+  .movieRoom :global(.connection) { display: none; }
+  .movieRoom :global(.join-panel) { min-height: 570px; margin-top: 20px; padding: 55px 24px 30px; }.movieRoom :global(.join-panel h1) { font-size: 51px; letter-spacing: -4px; }
+  .movieRoom :global(.lobby-layout), .movieRoom :global(.game-layout) { width: calc(100% - 20px); margin-top: 10px; }.movieRoom :global(.lobby-hero) { min-height: auto; padding: 34px 22px 42px; }.movieRoom :global(.lobby-hero h1) { font-size: 62px; letter-spacing: -5px; }
+  .lobbyEdition { margin-bottom: 35px; }.lobbyFacts { margin-bottom: 25px; }
+  .movieRoom :global(.player-list) { grid-template-columns: 1fr 1fr; }
+}

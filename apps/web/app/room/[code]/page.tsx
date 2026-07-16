@@ -37,6 +37,7 @@ import {
   type SketchStroke,
 } from "../../../components/game-ui";
 import movieMimeStyles from "./movie-mime.module.css";
+import roomChromeStyles from "./room-chrome.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -51,6 +52,14 @@ export default function RoomPage() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [roomTitle, setRoomTitle] = useState("");
+
+  useEffect(() => {
+    fetch(`${apiUrl}/api/rooms/${code}`)
+      .then((response) => response.ok ? response.json() as Promise<{ game: { title: string } }> : null)
+      .then((room) => setRoomTitle(room?.game.title ?? ""))
+      .catch(() => {});
+  }, [code]);
 
   useEffect(() => {
     const socket = io(apiUrl, { transports: ["websocket", "polling"] });
@@ -172,33 +181,40 @@ export default function RoomPage() {
   }
 
   const self = view?.players.find((player) => player.id === playerId);
+  const currentTitle = view?.kind === "lobby" ? view.game.title : view?.kind === "composed" ? view.title : roomTitle;
+  const isMovieMime = currentTitle === "CinéMimes";
 
   return (
-    <main className="room-shell">
+    <main className={`room-shell ${isMovieMime ? roomChromeStyles.movieRoom : ""}`}>
       <header className="room-topbar">
         <a className="brand" href="/"><span className="brand-mark">BF</span><span>BoardForge</span></a>
-        <div className="room-code"><span>ROOM</span><strong>{code}</strong><button onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/room/${code}`)}>Copy link</button></div>
-        <span className={`connection ${connected ? "online" : ""}`}><i />{connected ? "Live" : "Reconnecting"}</span>
+        <div className="room-code"><span>SALLE</span><strong>{code}</strong><button onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/room/${code}`)}>Copier l’invitation</button></div>
+        <span className={`connection ${connected ? "online" : ""}`}><i />{connected ? "En direct" : "Reconnexion"}</span>
       </header>
 
       {!view ? (
         <section className="join-panel">
-          <p className="eyebrow">You’re invited</p>
-          <h1>Enter the room</h1>
-          <p>Choose the name your friends will see during the game.</p>
+          {isMovieMime ? <div className={roomChromeStyles.ticketPunch}>Admit one</div> : null}
+          <p className="eyebrow">{isMovieMime ? "Votre séance privée" : "Vous êtes invité"}</p>
+          <h1>{isMovieMime ? "Entrez dans la salle." : "Rejoignez la room"}</h1>
+          <p>{isMovieMime ? "Choisissez le nom qui apparaîtra au générique de cette partie." : "Choisissez le nom que vos amis verront pendant la partie."}</p>
+          {isMovieMime ? <div className={roomChromeStyles.joinCode}><span>Invitation</span><strong>{code}</strong><small>CinéMimes · BoardForge Original</small></div> : null}
           <form onSubmit={join}>
-            <input autoFocus placeholder="Your name" maxLength={24} value={name} onChange={(event) => setName(event.target.value)} />
-            <button className="primary-button" disabled={pending || !name.trim()}>Join room <b>→</b></button>
+            <label htmlFor="player-name">Votre nom de joueur</label>
+            <input id="player-name" autoFocus placeholder="Ex. Camille" maxLength={24} value={name} onChange={(event) => setName(event.target.value)} />
+            <button className="primary-button" disabled={pending || !name.trim()}>Entrer dans la salle <b>→</b></button>
           </form>
         </section>
       ) : view.kind === "lobby" ? (
         <section className="lobby-layout">
           <div className="lobby-hero">
-            <p className="eyebrow">La table se prépare</p>
+            {isMovieMime ? <div className={roomChromeStyles.lobbyEdition}><span>BoardForge Original</span><b>Nº 01</b></div> : null}
+            <p className="eyebrow">{isMovieMime ? "Casting en cours" : "La table se prépare"}</p>
             <h1>{view.game.title}</h1>
             <p>{view.game.description}</p>
+            {isMovieMime ? <div className={roomChromeStyles.lobbyFacts}><span>🎬 Mime cinéma</span><span>⏱ 60 secondes</span><span>✦ Deux équipes</span></div> : null}
             <div className="lobby-progress"><span style={{ width: `${Math.min(100, (view.players.length / view.game.minPlayers) * 100)}%` }} /></div>
-            <small>{view.players.length} joueur(s) présent(s) · minimum {view.game.minPlayers}</small>
+            <small>{view.players.length} joueur(s) au casting · minimum {view.game.minPlayers}</small>
             {view.teamSetup ? <TeamSetup view={view} pending={pending} selectTeam={selectTeam} /> : null}
             {self?.isHost ? (
               <button className="primary-button host-start" disabled={!view.canStart || pending} onClick={startGame}>
@@ -257,17 +273,17 @@ function TeamSetup({ view, pending, selectTeam }: {
 function PlayerRail({ view }: { view: RoomView }) {
   return (
     <aside className="player-rail">
-      <div className="rail-heading"><span>PLAYERS</span><b>{view.players.length}</b></div>
+      <div className="rail-heading"><span>AU GÉNÉRIQUE</span><b>{view.players.length}</b></div>
       <div className="player-list">
         {view.players.map((player, index) => (
           <div className={`player-row ${player.id === view.selfPlayerId ? "self" : ""}`} key={player.id}>
             <span className={`avatar avatar-${index % 4}`}>{player.name.slice(0, 1).toUpperCase()}</span>
-            <div><strong>{player.name}</strong><small>{view.kind === "lobby" && view.teamSetup ? view.teamSetup.teams.find((team) => team.playerIds.includes(player.id))?.name ?? "Choix en attente" : player.isHost ? "Host" : player.id === view.selfPlayerId ? "You" : "Player"}</small></div>
+            <div><strong>{player.name}</strong><small>{view.kind === "lobby" && view.teamSetup ? view.teamSetup.teams.find((team) => team.playerIds.includes(player.id))?.name ?? "Choix en attente" : player.isHost ? "Hôte" : player.id === view.selfPlayerId ? "Vous" : "Joueur"}</small></div>
             <i className={player.connected ? "present" : ""} />
           </div>
         ))}
       </div>
-      <div className="rail-footer"><span>Server authoritative</span><span>Private views</span></div>
+      <div className="rail-footer"><span>État sécurisé</span><span>Cartes privées</span></div>
     </aside>
   );
 }
