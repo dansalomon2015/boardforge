@@ -10,6 +10,8 @@
 .movieRoom :global(.connection) { color: #a29c93; background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.13); }
 .movieRoom :global(.join-panel) { position: relative; width: min(920px,calc(100% - 36px)); min-height: 570px; margin: 7vh auto 70px; overflow: hidden; display: grid; grid-template-columns: 1fr 310px; align-content: center; column-gap: 70px; padding: 70px; color: #1b1712; background: var(--cinema-paper); border: 0; border-radius: 4px 32px 4px 4px; box-shadow: 0 45px 110px rgba(0,0,0,.55); }
 .movieRoom :global(.join-panel)::before { content: '🎬'; position: absolute; right: -35px; top: -48px; width: 330px; height: 330px; display: grid; place-items: center; color: rgba(20,16,12,.05); font-size: 190px; transform: rotate(12deg); }
+.movieRoom[data-original-game='word-trap'] :global(.join-panel)::before { content: '⚡'; }
+.movieRoom[data-original-game='draw-battle'] :global(.join-panel)::before { content: '✎'; }
 .movieRoom :global(.join-panel)::after { content: ''; position: absolute; top: 0; bottom: 0; left: calc(100% - 352px); border-left: 2px dashed rgba(35,29,22,.18); }
 .ticketPunch { position: absolute; left: 24px; top: 24px; padding: 7px 10px; color: #a04431; border: 1px solid #a04431; border-radius: 50%; font-size: 7px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; transform: rotate(-8deg); }
 .movieRoom :global(.join-panel .eyebrow) { color: #9b4431; }
@@ -24,6 +26,8 @@
 .movieRoom :global(.lobby-layout), .movieRoom :global(.game-layout) { position: relative; z-index: 1; width: min(1280px,calc(100% - 48px)); grid-template-columns: minmax(0,1fr) 310px; gap: 16px; margin-top: 32px; }
 .movieRoom :global(.lobby-hero) { position: relative; overflow: hidden; min-height: 690px; padding: 62px; color: #191510; background: var(--cinema-paper); border: 0; border-radius: 4px 32px 4px 4px; box-shadow: 0 35px 90px rgba(0,0,0,.38); }
 .movieRoom :global(.lobby-hero)::after { content: 'CINEMIMES'; position: absolute; right: -12px; bottom: -23px; color: rgba(25,21,16,.045); font: 700 92px 'Space Grotesk'; letter-spacing: -6px; pointer-events: none; }
+.movieRoom[data-original-game='word-trap'] :global(.lobby-hero)::after { content: 'WORDTRAP'; }
+.movieRoom[data-original-game='draw-battle'] :global(.lobby-hero)::after { content: 'DRAWBATTLE'; }
 .lobbyEdition { display: flex; justify-content: space-between; margin-bottom: 50px; padding-bottom: 13px; border-bottom: 1px solid rgba(25,21,16,.16); color: #82796e; font-size: 7px; font-weight: 900; letter-spacing: 1.3px; text-transform: uppercase; }
 .movieRoom :global(.lobby-hero .eyebrow) { color: #9b4431; }
 .movieRoom :global(.lobby-hero h1) { max-width: 680px; margin-top: 12px; font-size: clamp(62px,8vw,96px); line-height: .85; letter-spacing: -7px; }

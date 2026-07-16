@@ -91,7 +91,7 @@ function payloadForAction(view: ComposedGameView, action: ViewAction, persona: V
     const chosen = persona === "chaotic" || persona === "adversarial" ? options.at(-1) : rotate(options, seed)[0];
     return chosen ? { choiceId: chosen.id } : null;
   }
-  if (action.kind === "text") return { text: `Réponse de test ${persona}` };
+  if (action.kind === "text") return { text: `Test answer ${persona}` };
   if (action.kind === "play_card") {
     const zone = view.components.find((component) => component.kind === "card_zone" && component.data.zone === "hand");
     const cardId = arrayValue(zone?.data.cards).map(stringId).find(Boolean);
@@ -130,6 +130,7 @@ function payloadForAction(view: ComposedGameView, action: ViewAction, persona: V
     const selectedId = activeTeam ? rotate(activeTeam.playerIds, seed)[0] : undefined;
     return selectedId ? { targetPlayerId: selectedId } : null;
   }
+  if (action.kind === "sketch") return { stroke: { id: `sim_${numberHash(seed).toString(36)}`, points: [{ x: 20, y: 20 }, { x: 120, y: 90 }] } };
   return {};
 }
 
@@ -233,7 +234,8 @@ export function runComposedPlaytest(
         break;
       }
       let selected: { agent: DeterministicVirtualAgent; action: ComposedGameAction } | null = null;
-      for (const agent of agents) {
+      const orderedAgents = [...agents].sort((left, right) => Number(right.id === state.activePlayerId) - Number(left.id === state.activePlayerId));
+      for (const agent of orderedAgents) {
         const view = projectComposedGameState(state, spec, players, `SIM${simulation}`, agent.id);
         const action = agent.chooseAction({ view, persona: agent.persona, seed, turn: actionCount });
         if (action) {

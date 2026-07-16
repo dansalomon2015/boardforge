@@ -159,14 +159,15 @@ export const actionDefinitionSchema = z
   .object({
     id: idSchema,
     label: shortTextSchema,
-    kind: z.enum(["advance", "choose", "text", "draw", "play_card", "move", "resource", "randomize", "buzz", "order", "match", "complete_challenge", "select_player"]),
-    actor: z.enum(["host", "active_player", "any_player", "all_players", "team", "team_captain", "opponents"]),
+    kind: z.enum(["advance", "choose", "text", "draw", "play_card", "move", "resource", "randomize", "buzz", "order", "match", "complete_challenge", "select_player", "sketch"]),
+    actor: z.enum(["host", "active_player", "any_player", "all_players", "team", "team_captain", "opponents", "guessers"]),
     oncePerPhase: z.boolean().default(false),
     optionIds: z.array(idSchema).min(2).max(12).optional(),
     itemIds: z.array(idSchema).min(2).max(24).optional(),
     deckId: idSchema.optional(),
     boardId: idSchema.optional(),
     randomizerId: idSchema.optional(),
+    answerDeckId: idSchema.optional(),
     effects: z.array(effectSchema).max(12).default([]),
   })
   .strict();
@@ -297,6 +298,7 @@ function semanticIssues(spec: ComposedGameSpec): ComposedValidationIssue[] {
   const componentIds = ids(spec.components);
   const actionIds = ids(spec.actions);
   const deckIds = ids(spec.decks);
+  const deckById = new Map(spec.decks.map((deck) => [deck.id, deck]));
   const boardIds = ids(spec.boards);
   const resourceIds = ids(spec.resources);
   const randomizerIds = ids(spec.randomizers);
@@ -349,13 +351,15 @@ function semanticIssues(spec: ComposedGameSpec): ComposedValidationIssue[] {
 
   spec.actions.forEach((action, index) => {
     const path = `actions.${index}`;
-    if (["team", "team_captain", "opponents"].includes(action.actor) && spec.setup.mode !== "teams") add("TEAM_ACTOR_REQUIRES_TEAMS", path, `Actor ${action.actor} requires team mode.`);
+    if (["team", "team_captain", "opponents", "guessers"].includes(action.actor) && spec.setup.mode !== "teams") add("TEAM_ACTOR_REQUIRES_TEAMS", path, `Actor ${action.actor} requires team mode.`);
     if (action.kind === "choose" && (!action.optionIds || action.optionIds.some((id) => !choiceIds.has(id)))) add("ACTION_OPTIONS_INVALID", path, "Choose actions require known optionIds.");
     if ((action.kind === "draw" || action.kind === "play_card") && (!action.deckId || !deckIds.has(action.deckId))) add("ACTION_DECK_INVALID", path, "Card actions require a known deckId.");
     if (action.kind === "move" && (!action.boardId || !boardIds.has(action.boardId))) add("ACTION_BOARD_INVALID", path, "Move actions require a known boardId.");
     if (action.kind === "randomize" && (!action.randomizerId || !randomizerIds.has(action.randomizerId))) add("ACTION_RANDOMIZER_INVALID", path, "Randomize actions require a known randomizerId.");
     if (action.kind === "order" && (!action.itemIds || action.itemIds.some((id) => !orderingIds.has(id)))) add("ACTION_ORDERING_INVALID", path, "Order actions require known ordering itemIds.");
     if (action.kind === "match" && (!action.itemIds || action.itemIds.some((id) => !matchingIds.has(id)))) add("ACTION_MATCHING_INVALID", path, "Match actions require known matching itemIds.");
+    if (action.answerDeckId && (action.kind !== "text" || !deckIds.has(action.answerDeckId))) add("ACTION_ANSWER_DECK_INVALID", path, "answerDeckId is only valid for text actions and must reference a known deck.");
+    if (action.answerDeckId && deckById.get(action.answerDeckId)?.visibility !== "private") add("ACTION_ANSWER_DECK_PUBLIC", path, "Text answer validation must reference a private deck.");
     action.effects.forEach((effect, effectIndex) => checkEffect(effect, `${path}.effects.${effectIndex}`));
   });
 
@@ -390,6 +394,7 @@ function semanticIssues(spec: ComposedGameSpec): ComposedValidationIssue[] {
       if (action.kind === "order") return phaseComponents.some((component) => component.kind === "ordering" && action.itemIds?.every((id) => component.itemIds.includes(id)));
       if (action.kind === "match") return phaseComponents.some((component) => component.kind === "matching" && action.itemIds?.every((id) => component.itemIds.includes(id)));
       if (action.kind === "select_player") return phaseComponents.some((component) => component.kind === "teams" || component.kind === "players");
+      if (action.kind === "sketch") return phaseComponents.some((component) => component.kind === "drawing");
       return false;
     };
     for (const id of phase.actionIds) {

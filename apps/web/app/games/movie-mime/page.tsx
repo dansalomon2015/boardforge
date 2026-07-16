@@ -149,7 +149,7 @@ export default function MovieMimeSetupPage() {
                     onChange={(event) => updateTeam(team.id, { name: event.target.value })}
                     value={team.name}
                   />
-                  <div className={styles.teamPalette} aria-label={`Couleur de ${team.name}`}>
+                  <div className={styles.teamPalette} aria-label={`${team.name} color`}>
                     {teamColors.map((color) => (
                       <button
                         aria-label={`Choose color ${color}`}

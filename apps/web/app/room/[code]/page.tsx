@@ -201,10 +201,11 @@ export default function RoomPage() {
   const currentTitle = view?.kind === "lobby" ? view.game.title : view?.kind === "composed" ? view.title : roomTitle;
   const isMovieMime = currentTitle === "CinéMimes" || currentTitle === "CineMimes";
   const isWordTrap = currentTitle === "WordTrap";
-  const isOriginal = isMovieMime || isWordTrap;
+  const isDrawBattle = currentTitle === "DrawBattle";
+  const isOriginal = isMovieMime || isWordTrap || isDrawBattle;
 
   return (
-    <main className={`room-shell ${isOriginal ? roomChromeStyles.movieRoom : ""}`}>
+    <main className={`room-shell ${isOriginal ? roomChromeStyles.movieRoom : ""}`} data-original-game={isDrawBattle ? "draw-battle" : isWordTrap ? "word-trap" : isMovieMime ? "cinemimes" : undefined}>
       <header className="room-topbar">
         <a className="brand" href="/"><span className="brand-mark">BF</span><span>BoardForge</span></a>
         <div className="room-code"><span>ROOM</span><strong>{code}</strong><button onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/room/${code}`)}>Copy invite</button></div>
@@ -217,7 +218,7 @@ export default function RoomPage() {
           <p className="eyebrow">{isOriginal ? "Your private game night" : "You are invited"}</p>
           <h1>{isOriginal ? "Step into the room." : "Join the room"}</h1>
           <p>{isOriginal ? "Choose the player name that will appear throughout this game." : "Choose the name your friends will see during the game."}</p>
-          {isOriginal ? <div className={roomChromeStyles.joinCode}><span>Invitation</span><strong>{code}</strong><small>{isWordTrap ? "WordTrap" : "CineMimes"} · BoardForge Original</small></div> : null}
+          {isOriginal ? <div className={roomChromeStyles.joinCode}><span>Invitation</span><strong>{code}</strong><small>{isDrawBattle ? "DrawBattle" : isWordTrap ? "WordTrap" : "CineMimes"} · BoardForge Original</small></div> : null}
           <form onSubmit={join}>
             <label htmlFor="player-name">Your player name</label>
             <input id="player-name" autoFocus placeholder="e.g. Alex" maxLength={24} value={name} onChange={(event) => setName(event.target.value)} />
@@ -227,11 +228,11 @@ export default function RoomPage() {
       ) : view.kind === "lobby" ? (
         <section className="lobby-layout">
           <div className="lobby-hero">
-            {isOriginal ? <div className={roomChromeStyles.lobbyEdition}><span>BoardForge Original</span><b>No. {isWordTrap ? "02" : "01"}</b></div> : null}
-            <p className="eyebrow">{isWordTrap ? "Teams are entering the trap" : isMovieMime ? "Casting in progress" : "The table is getting ready"}</p>
+            {isOriginal ? <div className={roomChromeStyles.lobbyEdition}><span>BoardForge Original</span><b>No. {isDrawBattle ? "03" : isWordTrap ? "02" : "01"}</b></div> : null}
+            <p className="eyebrow">{isDrawBattle ? "The gallery is opening" : isWordTrap ? "Teams are entering the trap" : isMovieMime ? "Casting in progress" : "The table is getting ready"}</p>
             <h1>{view.game.title}</h1>
             <p>{view.game.description}</p>
-            {isOriginal ? <div className={roomChromeStyles.lobbyFacts}><span>{isWordTrap ? "⚡ Forbidden words" : "🎬 Movie charades"}</span><span>⏱ 60 seconds</span><span>✦ {view.teamSetup?.teams.length ?? 2} teams</span></div> : null}
+            {isOriginal ? <div className={roomChromeStyles.lobbyFacts}><span>{isDrawBattle ? "✎ Live drawing" : isWordTrap ? "⚡ Forbidden words" : "🎬 Movie charades"}</span><span>⏱ {isDrawBattle ? "75" : "60"} seconds</span><span>✦ {view.teamSetup?.teams.length ?? 2} teams</span></div> : null}
             <div className="lobby-progress"><span style={{ width: `${Math.min(100, (view.players.length / view.game.minPlayers) * 100)}%` }} /></div>
             <small>{view.players.length} player(s) in the room · minimum {view.game.minPlayers}</small>
             {view.teamSetup ? <TeamSetup view={view} pending={pending} selectTeam={selectTeam} selectCaptain={selectCaptain} /> : null}
@@ -365,6 +366,7 @@ function GameStage({ view, isHost, pending, sendAction }: {
       return <MovieMimeStage view={view} pending={pending} sendAction={sendAction} />;
     }
     if (view.title === "WordTrap") return <WordTrapStage view={view} pending={pending} sendAction={sendAction} />;
+    if (view.title === "DrawBattle") return <DrawBattleStage view={view} pending={pending} sendAction={sendAction} />;
     return <ComposedStage view={view} pending={pending} sendAction={sendAction} />;
   }
 
@@ -651,6 +653,91 @@ function WordTrapStage({ view, pending, sendAction }: {
   );
 }
 
+function DrawBattleStage({ view, pending, sendAction }: {
+  view: ComposedGameView;
+  pending: boolean;
+  sendAction: (action: GameAction) => void;
+}) {
+  const [guess, setGuess] = useState("");
+  const theme = themeForRoom(view.theme);
+  const activePlayer = view.players.find((player) => player.id === view.activePlayerId);
+  const isActivePlayer = view.selfPlayerId === view.activePlayerId;
+  const activeTeamId = view.teams.find((team) => team.playerIds.includes(view.activePlayerId))?.id;
+  const activeTeam = view.teams.find((team) => team.id === activeTeamId);
+  const activeCaptainId = activeTeamId ? view.captainByTeam[activeTeamId] : undefined;
+  const isActiveCaptain = view.selfPlayerId === activeCaptainId;
+  const selectAction = view.availableActions.find((action) => action.id === "select_artist");
+  const drawAction = view.availableActions.find((action) => action.id === "draw_prompt");
+  const sketchAction = view.availableActions.find((action) => action.id === "draw_stroke");
+  const guessAction = view.availableActions.find((action) => action.id === "submit_guess");
+  const passAction = view.availableActions.find((action) => action.id === "pass_prompt");
+  const prompt = view.components.find((component) => component.kind === "prompt")?.data as { prompt?: string; hint?: string } | undefined;
+  const canvas = view.components.find((component) => component.kind === "drawing")?.data as { label?: string; strokes?: SketchStroke[] } | undefined;
+  const strokes = canvas?.strokes ?? [];
+  const winnerNames = view.winner?.kind === "teams" ? view.winner.ids.map((id) => view.teams.find((team) => team.id === id)?.name).filter(Boolean) : [];
+
+  function perform(actionId: string, payload?: Extract<GameAction, { type: "COMPOSED_ACTION" }>["payload"]) {
+    sendAction({ type: "COMPOSED_ACTION", actionId, ...(payload ? { payload } : {}) });
+  }
+
+  function updateCanvas(next: SketchStroke[]) {
+    if (!sketchAction) return;
+    if (next.length === 0 && strokes.length > 0) perform(sketchAction.id, { clear: true });
+    else if (next.length > strokes.length) {
+      const stroke = next.at(-1);
+      if (stroke) perform(sketchAction.id, { stroke });
+    }
+  }
+
+  return (
+    <GameSurface theme={theme} className={`${movieMimeStyles.stage} ${movieMimeStyles.drawBattleStage}`}>
+      <header className={movieMimeStyles.header}>
+        <div><span>BoardForge Original</span><strong>DrawBattle</strong></div>
+        <div className={movieMimeStyles.progress}><small>Canvas</small><b>{Math.min(view.round, view.totalRounds)}</b><i>/</i><span>{view.totalRounds}</span></div>
+      </header>
+      <div className={movieMimeStyles.scoreboard}>
+        {view.teams.map((team) => <div className={team.id === activeTeamId ? movieMimeStyles.activeTeam : ""} key={team.id}><i style={{ background: team.color }} /><span>{team.name}</span><strong>{view.scores.teams[team.id] ?? 0}</strong></div>)}
+      </div>
+
+      {view.status === "completed" ? (
+        <section className={movieMimeStyles.final}><span>The gallery is complete</span><div className={movieMimeStyles.trophy}>✎</div><h1>{winnerNames.join(" & ") || "Perfect tie"}</h1><p>{winnerNames.length ? "wins tonight’s drawing battle." : "The teams share the final frame."}</p><a href="/">Back to the collection <b>→</b></a></section>
+      ) : view.phase.id === "select_artist" ? (
+        <section className={movieMimeStyles.castingStage}>
+          <div className={movieMimeStyles.spotlight} /><p>{activeTeam?.name ?? "The active team"} owns the next canvas</p>
+          <h1>{isActiveCaptain ? "Choose your artist." : `${view.players.find((player) => player.id === activeCaptainId)?.name ?? "The captain"} is choosing.`}</h1>
+          <span>{isActiveCaptain ? "Pick the player who will receive and draw the next secret prompt." : "The next artist will take over the live canvas in a moment."}</span>
+          <div className={movieMimeStyles.castGrid}>{activeTeam?.playerIds.map((id) => {
+            const player = view.players.find((candidate) => candidate.id === id);
+            return <button disabled={pending || !selectAction} key={id} onClick={() => selectAction && perform(selectAction.id, { targetPlayerId: id })}><i>{player?.name.slice(0, 1).toUpperCase() ?? "?"}</i><span><small>Ready to draw</small><strong>{player?.name ?? "Player"}</strong></span><b>{id === activeCaptainId ? "★ Captain" : "Choose →"}</b></button>;
+          })}</div>
+          {!isActiveCaptain ? <em>Only the active team captain can choose.</em> : null}
+        </section>
+      ) : view.phase.id === "draw_prompt" ? (
+        <section className={movieMimeStyles.drawStage}>
+          <div className={movieMimeStyles.spotlight} /><p>{isActivePlayer ? "Your canvas is ready" : "Next artist"}</p><h1>{activePlayer?.name ?? "The next player"}</h1>
+          <span>{isActivePlayer ? "Reveal your prompt privately. The answer never leaves your server-filtered view." : "Look away while the artist discovers the secret prompt."}</span>
+          <div className={movieMimeStyles.secretCard}><small>Secret prompt</small><strong>✎</strong><i>?</i></div>
+          {drawAction ? <button disabled={pending} onClick={() => perform(drawAction.id)}><span>{pending ? "Opening the sketchbook…" : "Reveal my prompt"}</span><b>↗</b></button> : <em>Waiting for {activePlayer?.name ?? "the artist"}…</em>}
+        </section>
+      ) : (
+        <section className={movieMimeStyles.drawingRoom}>
+          <div className={movieMimeStyles.mimeHeading}><div><p>Every line is live</p><h1>{isActivePlayer ? "Draw the secret." : `What is ${activePlayer?.name ?? "the artist"} drawing?`}</h1></div><div className={movieMimeStyles.timer}><i /><span>75</span><small>seconds</small></div></div>
+          <div className={movieMimeStyles.drawingGrid}>
+            <div className={movieMimeStyles.liveCanvas}>
+              <DrawingCanvas theme={theme} strokes={strokes} onChange={updateCanvas} label={canvas?.label ?? "Live canvas"} disabled={pending || !sketchAction} />
+              <div className={movieMimeStyles.canvasStatus}><span><i /> Synchronized canvas</span><b>{strokes.length} stroke{strokes.length === 1 ? "" : "s"}</b></div>
+            </div>
+            <aside className={movieMimeStyles.drawingSidebar}>
+              {isActivePlayer && prompt?.prompt ? <div className={movieMimeStyles.artistPrompt}><small>Your secret prompt</small><h2>{prompt.prompt}</h2><span>{prompt.hint}</span><p>Draw only · No letters · No numbers · No gestures</p></div> : <div className={movieMimeStyles.guessPanel}><small>Open guessing</small><h2>Name the picture.</h2><p>The first exact answer earns one point for the guesser’s team.</p>{guessAction ? <TextAnswer theme={theme} label="Your guess" placeholder="What do you see?" value={guess} onChange={setGuess} submitLabel="Lock guess" disabled={pending} onSubmit={() => { perform(guessAction.id, { text: guess }); setGuess(""); }} /> : <span className={movieMimeStyles.waitingGuess}>The artist cannot submit a guess.</span>}</div>}
+              {passAction ? <button className={movieMimeStyles.pass} disabled={pending} onClick={() => perform(passAction.id)}>Pass this prompt</button> : null}
+            </aside>
+          </div>
+        </section>
+      )}
+    </GameSurface>
+  );
+}
+
 function ComposedStage({ view, pending, sendAction }: {
   view: ComposedGameView;
   pending: boolean;
@@ -674,6 +761,7 @@ function ComposedStage({ view, pending, sendAction }: {
     if (action.kind === "buzz") return component.kind === "buzzer";
     if (action.kind === "order") return component.kind === "ordering";
     if (action.kind === "match") return component.kind === "matching";
+    if (action.kind === "sketch") return component.kind === "drawing";
     return false;
   })).map((action) => action.id));
   const fallbackActions = view.availableActions.filter((action) => !handledActionIds.has(action.id));
@@ -681,7 +769,7 @@ function ComposedStage({ view, pending, sendAction }: {
 
   return (
     <GameSurface theme={theme} className="composed-stage">
-      <div className="stage-meta composed-stage-meta"><span>MANCHE {view.round}/{view.totalRounds}</span><span>{view.phase.title}</span></div>
+      <div className="stage-meta composed-stage-meta"><span>ROUND {view.round}/{view.totalRounds}</span><span>{view.phase.title}</span></div>
       <div className="composed-component-stack">
         {view.components.map((component) => {
           if (component.kind === "header") {
@@ -709,8 +797,16 @@ function ComposedStage({ view, pending, sendAction }: {
             return <TextAnswer theme={theme} label={data.label ?? "Your answer"} value={answer} onChange={setAnswer} {...(data.placeholder ? { placeholder: data.placeholder } : {})} multiline={data.multiline ?? false} maxLength={data.maxLength ?? 180} submitLabel={action?.label ?? "Submit"} disabled={pending || !action} {...(action ? { onSubmit: () => { perform(action.id, { text: answer }); setAnswer(""); } } : {})} key={component.id} />;
           }
           if (component.kind === "drawing") {
-            const data = component.data as { label?: string };
-            return <LocalDrawing theme={theme} label={data.label ?? "Drawing area"} key={component.id} />;
+            const data = component.data as { label?: string; strokes?: SketchStroke[] };
+            const action = view.availableActions.find((candidate) => candidate.kind === "sketch");
+            if (!action) return <DrawingCanvas theme={theme} strokes={data.strokes ?? []} onChange={() => {}} label={data.label ?? "Drawing area"} disabled key={component.id} />;
+            return <DrawingCanvas theme={theme} strokes={data.strokes ?? []} onChange={(next) => {
+              if (!next.length && data.strokes?.length) perform(action.id, { clear: true });
+              else {
+                const stroke = next.at(-1);
+                if (stroke && next.length > (data.strokes?.length ?? 0)) perform(action.id, { stroke });
+              }
+            }} label={data.label ?? "Drawing area"} disabled={pending} key={component.id} />;
           }
           if (component.kind === "timer") {
             const data = component.data as { seconds?: number; label?: string };
@@ -825,11 +921,6 @@ function ComposedStage({ view, pending, sendAction }: {
       ) : null}
     </GameSurface>
   );
-}
-
-function LocalDrawing({ theme, label }: { theme: GameThemeInput; label: string }) {
-  const [strokes, setStrokes] = useState<SketchStroke[]>([]);
-  return <DrawingCanvas theme={theme} label={label} strokes={strokes} onChange={setStrokes} />;
 }
 
 function ActionBlock({ title, text, children }: { title: string; text: string; children: React.ReactNode }) {

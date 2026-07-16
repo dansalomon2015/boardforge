@@ -4,6 +4,9 @@ import {
   composedGameSpecSchema,
   createMovieMimePack,
   createWordTrapPack,
+  createDrawBattlePack,
+  drawBattleCatalog,
+  drawBattleSetupSchema,
   movieCatalog,
   movieMimeSetupSchema,
   wordTrapCatalog,
@@ -18,6 +21,9 @@ import {
   type WordTrapPack,
   type WordTrapSetup,
   type WordTrapSetupInput,
+  type DrawBattlePack,
+  type DrawBattleSetup,
+  type DrawBattleSetupInput,
   type QuizVoteGameSpec,
   type QuizVoteQuestion,
   hiddenRolesGameSpecSchema,
@@ -121,7 +127,7 @@ export const composedGameReviewSchema = z
 export type ComposedGameReview = z.infer<typeof composedGameReviewSchema>;
 
 export type LlmUsageTelemetry = {
-  operation: "movie_mime_selection" | "word_trap_selection" | "composed_generation" | "composed_review" | "composed_critique" | "composed_patch";
+  operation: "movie_mime_selection" | "word_trap_selection" | "draw_battle_selection" | "composed_generation" | "composed_review" | "composed_critique" | "composed_patch";
   provider: string;
   model: string;
   responseId: string;
@@ -137,6 +143,7 @@ export interface LlmProvider {
   readonly name: string;
   generateMovieMimePack(setup: MovieMimeSetupInput): Promise<MimeFilmPack>;
   generateWordTrapPack(setup: WordTrapSetupInput): Promise<WordTrapPack>;
+  generateDrawBattlePack(setup: DrawBattleSetupInput): Promise<DrawBattlePack>;
   generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec>;
   reviewComposedGameSpec(
     spec: ComposedGameSpec,
@@ -685,6 +692,20 @@ export class FakeLlmProvider implements LlmProvider {
     return createWordTrapPack(setup, ranked.slice(0, setup.cardCount).map(({ card }) => card.id), "ai");
   }
 
+  async generateDrawBattlePack(setupInput: DrawBattleSetupInput): Promise<DrawBattlePack> {
+    const setup = drawBattleSetupSchema.parse(setupInput);
+    const preferences = normalizedPrompt(setup.preferences ?? "a varied drawing mix").toLowerCase();
+    const preferenceWords = new Set(preferences.split(/[^a-z0-9]+/).filter((word) => word.length >= 3));
+    const ranked = drawBattleCatalog
+      .map((prompt) => {
+        const searchable = [prompt.prompt, prompt.category, prompt.difficulty].join(" ").toLowerCase();
+        const matches = [...preferenceWords].filter((word) => searchable.includes(word)).length;
+        return { prompt, score: matches * 1_000 + hashText(`${preferences}:${prompt.id}`) % 100 };
+      })
+      .sort((left, right) => right.score - left.score || left.prompt.id.localeCompare(right.prompt.id));
+    return createDrawBattlePack(setup, ranked.slice(0, setup.promptCount).map(({ prompt }) => prompt.id), "ai");
+  }
+
   async generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec> {
     const normalized = normalizedPrompt(prompt) || "Un jeu de soirée convivial";
     const hash = hashText(normalized);
@@ -1014,6 +1035,43 @@ export class OpenAiLlmProvider implements LlmProvider {
     } catch (error) {
       const repaired = await this.selectWordTrapCandidate(setup, error instanceof Error ? error.message : "The previous selection was invalid.");
       return createWordTrapPack(setup, repaired.cardIds, "ai");
+    }
+  }
+
+  private async selectDrawBattleCandidate(
+    setup: DrawBattleSetup,
+    repairContext?: string,
+  ): Promise<{ promptIds: string[] }> {
+    const selectionSchema = z.object({ promptIds: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/).max(48)).min(6).max(30) }).strict();
+    const startedAt = Date.now();
+    const response = await this.client.responses.parse({
+      model: this.reviewModel,
+      input: [
+        { role: "system", content: [
+          "You curate a live drawing party deck from an audited catalog.",
+          "Return only catalog IDs. Never invent, rename or repeat a prompt.",
+          "Select exactly the requested count.",
+          "Honor the requested topic while balancing categories, difficulty, recognizability and drawability.",
+          "Keep the selection welcoming and visually varied.",
+        ].join("\n") },
+        { role: "user", content: JSON.stringify({ requestedCount: setup.promptCount, preferences: setup.preferences, catalog: drawBattleCatalog, ...(repairContext ? { repairContext } : {}) }) },
+      ],
+      prompt_cache_key: "boardforge:draw-battle-selection:v1",
+      text: { format: zodTextFormat(selectionSchema, "draw_battle_selection") },
+      max_output_tokens: 1_200,
+    });
+    this.recordTelemetry("draw_battle_selection", this.reviewModel, startedAt, response);
+    return requireParsedOutput(response.output_parsed, "DrawBattle selection");
+  }
+
+  async generateDrawBattlePack(setupInput: DrawBattleSetupInput): Promise<DrawBattlePack> {
+    const setup = drawBattleSetupSchema.parse(setupInput);
+    const first = await this.selectDrawBattleCandidate(setup);
+    try {
+      return createDrawBattlePack(setup, first.promptIds, "ai");
+    } catch (error) {
+      const repaired = await this.selectDrawBattleCandidate(setup, error instanceof Error ? error.message : "The previous selection was invalid.");
+      return createDrawBattlePack(setup, repaired.promptIds, "ai");
     }
   }
 

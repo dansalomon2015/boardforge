@@ -12,11 +12,15 @@ import {
   createRandomMovieMimePack,
   createRandomWordTrapPack,
   createWordTrapSpec,
+  createDrawBattleSpec,
+  createRandomDrawBattlePack,
   defaultMovieMimeSpec,
   defaultWordTrapSpec,
+  defaultDrawBattleSpec,
   demoGameSpecs,
   movieMimeSetupSchema,
   wordTrapSetupSchema,
+  drawBattleSetupSchema,
   partyPulseSpec,
   spaceHeistSpec,
   systemsLabSpec,
@@ -100,7 +104,7 @@ type Room = {
 };
 
 const rooms = new Map<string, Room>();
-const availableDemoSpecs: BoardGameSpec[] = [...demoGameSpecs, cinemaCharadesSpec, defaultMovieMimeSpec, defaultWordTrapSpec, systemsLabSpec];
+const availableDemoSpecs: BoardGameSpec[] = [...demoGameSpecs, cinemaCharadesSpec, defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, systemsLabSpec];
 const llm = createLlmProvider({
   provider: config.llmProvider,
   apiKey: config.openAiApiKey,
@@ -512,7 +516,7 @@ app.get("/health", async () => ({
 }));
 
 app.get("/api/games", async () => ({
-  games: [defaultMovieMimeSpec, defaultWordTrapSpec].map((spec) => ({ id: spec.id, ...summary(spec) })),
+  games: [defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec].map((spec) => ({ id: spec.id, ...summary(spec) })),
   provider: llm.name,
 }));
 
@@ -634,6 +638,59 @@ app.post("/api/word-trap/blueprints", async (request, reply) => {
     });
   } catch (error) {
     app.log.warn({ message: error instanceof Error ? error.message : "Unknown WordTrap selection error" }, "WordTrap preparation failed");
+    return reply.code(502).send({ error: compilationErrorMessage(error), provider: llm.name });
+  }
+});
+
+const drawBattleBodySchema = z.object({
+  themeId: composedThemeIdSchema.default("arcade"),
+  promptCount: z.number().int().min(6).max(30).default(18),
+  teams: z.array(z.object({
+    name: z.string().trim().min(2).max(24),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  }).strict()).min(2).max(4).optional(),
+  preferences: z.string().trim().max(240).optional(),
+}).strict();
+
+app.post("/api/draw-battle/blueprints", async (request, reply) => {
+  const parsed = drawBattleBodySchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ error: "Invalid DrawBattle setup.", issues: parsed.error.issues });
+  const setupResult = drawBattleSetupSchema.safeParse({
+    themeId: parsed.data.themeId,
+    promptCount: parsed.data.promptCount,
+    ...(parsed.data.teams ? { teams: parsed.data.teams } : {}),
+    ...(parsed.data.preferences ? { preferences: parsed.data.preferences } : {}),
+  });
+  if (!setupResult.success) return reply.code(400).send({ error: "Invalid DrawBattle setup.", issues: setupResult.error.issues });
+  const setup = setupResult.data;
+
+  try {
+    const pack = setup.preferences
+      ? await llm.generateDrawBattlePack(setup)
+      : createRandomDrawBattlePack(setup, crypto.randomUUID());
+    const spec = createDrawBattleSpec(pack);
+    const blueprintId = `${spec.id}-${crypto.randomUUID().slice(0, 8)}`;
+    await blueprintStore.saveBlueprint({
+      id: blueprintId,
+      spec,
+      status: "playtesting",
+      provider: setup.preferences ? llm.name : "catalog-random",
+      ...(setup.preferences ? { prompt: setup.preferences } : {}),
+    });
+    const playtest = runComposedPlaytest(spec, { simulations: 24, seed: `release:${blueprintId}` });
+    const releaseStatus = playtest.status === "passed" ? "release_ready" : "needs_review";
+    await blueprintStore.savePlaytest(blueprintId, releaseStatus, playtest);
+    return reply.code(201).send({
+      blueprintId,
+      releaseStatus,
+      source: pack.source,
+      themeId: pack.themeId,
+      promptCount: pack.prompts.length,
+      game: summary(spec),
+      playtest: { status: playtest.status, simulations: playtest.simulations, completedSimulations: playtest.completedSimulations },
+    });
+  } catch (error) {
+    app.log.warn({ message: error instanceof Error ? error.message : "Unknown DrawBattle selection error" }, "DrawBattle preparation failed");
     return reply.code(502).send({ error: compilationErrorMessage(error), provider: llm.name });
   }
 });
@@ -1042,6 +1099,11 @@ const actionSchema = z.discriminatedUnion("type", [
       orderedIds: z.array(z.string().max(48)).max(24).optional(),
       pairs: z.array(z.object({ leftId: z.string().max(48), rightId: z.string().max(48) }).strict()).max(12).optional(),
       targetPlayerId: z.string().uuid().optional(),
+      stroke: z.object({
+        id: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/),
+        points: z.array(z.object({ x: z.number().min(0).max(600), y: z.number().min(0).max(340) }).strict()).min(2).max(160),
+      }).strict().optional(),
+      clear: z.boolean().optional(),
     }).strict().optional(),
   }).strict(),
 ]);

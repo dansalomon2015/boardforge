@@ -94,7 +94,7 @@ describe("composed deterministic engine", () => {
     const state = initializeComposedGame(cinemaCharadesSpec, players, "selected-teams", selection);
     expect(state.teamByPlayer).toEqual(selection);
     expect(state.teams.find((team) => team.id === "projecteurs")?.playerIds).toEqual(["p1", "p4"]);
-    expect(() => initializeComposedGame(cinemaCharadesSpec, players, "missing-team", { p1: "projecteurs" })).toThrow("Chaque joueur doit choisir");
+    expect(() => initializeComposedGame(cinemaCharadesSpec, players, "missing-team", { p1: "projecteurs" })).toThrow("Every player must choose");
   });
 });
 

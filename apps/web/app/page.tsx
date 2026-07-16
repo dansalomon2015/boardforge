@@ -49,7 +49,7 @@ export default function HomePage() {
           </div>
           <div className={styles.proof}>
             <span><b>24/24</b> playtests</span>
-            <span><b>110</b> audited cards</span>
+            <span><b>170</b> audited cards</span>
             <span><b>20</b> art directions</span>
           </div>
         </div>
@@ -87,7 +87,7 @@ export default function HomePage() {
         <div className={styles.catalogHeading}>
           <div>
             <p className={styles.eyebrow}><span /> The BoardForge collection</p>
-            <h2>Two real games.<br />No compromises.</h2>
+            <h2>Three real games.<br />No compromises.</h2>
           </div>
           <p>Every title has its own tuned rule loop, art direction, private information model, and multiplayer experience.</p>
         </div>
@@ -118,6 +118,18 @@ export default function HomePage() {
           <div className={styles.gameInfo}>
             <p>Team game · Forbidden words</p><h3>WordTrap</h3>
             <span>Give brilliant clues, avoid five dangerous words, and beat the opposing team’s buzzer.</span>
+            <div><b>Build my edition</b><strong>→</strong></div>
+          </div>
+        </Link>
+        <Link className={`${styles.gameCard} ${styles.drawBattleCard}`} href="/games/draw-battle">
+          <div className={`${styles.gameArtwork} ${styles.drawBattleArtwork}`}>
+            <span className={styles.gameNumber}>No. 03</span>
+            <div className={styles.canvasPaper}><i /><i /><i /><strong>?</strong><small>LIVE CANVAS</small></div>
+            <div className={styles.drawPencil}>✎</div>
+          </div>
+          <div className={styles.gameInfo}>
+            <p>Team game · Live drawing</p><h3>DrawBattle</h3>
+            <span>Draw a secret prompt on a synchronized canvas while every other player races to name it.</span>
             <div><b>Build my edition</b><strong>→</strong></div>
           </div>
         </Link>

@@ -18,6 +18,8 @@ export type ComposedActionPayload = {
   orderedIds?: string[] | undefined;
   pairs?: Array<{ leftId: string; rightId: string }> | undefined;
   targetPlayerId?: string | undefined;
+  stroke?: { id: string; points: Array<{ x: number; y: number }> } | undefined;
+  clear?: boolean | undefined;
 };
 
 export type ComposedGameAction = {
@@ -76,6 +78,7 @@ export type ComposedGameState = {
   randomResults: Record<string, string | number>;
   buzzes: Record<string, string>;
   itemOrders: Record<string, string[]>;
+  sketches: Record<string, Array<{ id: string; points: Array<{ x: number; y: number }> }>>;
   actions: ComposedActionRecord[];
   acceptedIdempotencyKeys: string[];
   winner: { kind: "players" | "teams" | "none"; ids: string[] } | null;
@@ -143,26 +146,26 @@ export function validateComposedTeamSelection(
   teamByPlayer: Record<string, string>,
 ): ComposedTeamSelectionValidation {
   if (!canStartComposedGame(spec, playerIds.length)) {
-    return { ok: false, reason: `La partie ne peut pas démarrer avec ${playerIds.length} joueur(s).` };
+    return { ok: false, reason: `The game cannot start with ${playerIds.length} player(s).` };
   }
   if (spec.setup.mode !== "teams") return { ok: true };
   const policy = spec.setup.teamPolicy;
-  if (!policy) return { ok: false, reason: "La configuration des équipes est absente." };
+  if (!policy) return { ok: false, reason: "The team configuration is missing." };
   const knownTeamIds = new Set(policy.teams.map((team) => team.id));
   for (const playerId of playerIds) {
     const teamId = teamByPlayer[playerId];
-    if (!teamId) return { ok: false, reason: "Chaque joueur doit choisir une équipe." };
-    if (!knownTeamIds.has(teamId)) return { ok: false, reason: "Une équipe sélectionnée n’existe pas dans ce jeu." };
+    if (!teamId) return { ok: false, reason: "Every player must choose a team." };
+    if (!knownTeamIds.has(teamId)) return { ok: false, reason: "A selected team does not exist in this game." };
   }
   const sizes = policy.teams.map((team) => playerIds.filter((playerId) => teamByPlayer[playerId] === team.id).length);
   if (sizes.some((size) => size < policy.minMembersPerTeam)) {
-    return { ok: false, reason: `Chaque équipe doit accueillir au moins ${policy.minMembersPerTeam} joueur(s).` };
+    return { ok: false, reason: `Every team needs at least ${policy.minMembersPerTeam} player(s).` };
   }
   if (policy.maxMembersPerTeam && sizes.some((size) => size > policy.maxMembersPerTeam!)) {
-    return { ok: false, reason: `Une équipe ne peut pas dépasser ${policy.maxMembersPerTeam} joueur(s).` };
+    return { ok: false, reason: `A team cannot exceed ${policy.maxMembersPerTeam} player(s).` };
   }
   if (!policy.allowUnevenTeams && Math.max(...sizes) !== Math.min(...sizes)) {
-    return { ok: false, reason: "Ce jeu exige des équipes de même taille." };
+    return { ok: false, reason: "This game requires equally sized teams." };
   }
   return { ok: true };
 }
@@ -333,6 +336,7 @@ export function initializeComposedGame(
     randomResults: {},
     buzzes: {},
     itemOrders,
+    sketches: {},
     actions: [],
     acceptedIdempotencyKeys: [],
     winner: null,
@@ -363,6 +367,7 @@ function isActorAllowed(state: ComposedGameState, action: ActionDefinition, acto
     const activeTeamId = state.teamByPlayer[state.activePlayerId];
     return Boolean(actorTeamId && activeTeamId && actorTeamId !== activeTeamId);
   }
+  if (action.actor === "guessers") return actorId !== state.activePlayerId && Boolean(state.teamByPlayer[actorId]);
   if (action.actor === "team") return Boolean(state.teamByPlayer[actorId]) && state.teamByPlayer[actorId] === state.teamByPlayer[state.activePlayerId];
   return state.playerOrder.includes(actorId);
 }
@@ -374,7 +379,12 @@ function validatePayload(state: ComposedGameState, spec: ComposedGameSpec, actio
   }
   if (action.kind === "text") {
     if (!payload.text?.trim() || payload.text.length > 600) throw new ComposedGameRuleError("Text actions require a non-empty response of at most 600 characters.");
-    return null;
+    if (!action.answerDeckId) return null;
+    const cardId = state.activeCards[state.activePlayerId]?.[action.answerDeckId];
+    const answer = cardDefinition(spec, action.answerDeckId, cardId)?.title;
+    if (!answer) throw new ComposedGameRuleError("No secret answer is available for this text action.");
+    const normalize = (value: string) => value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    return normalize(payload.text) === normalize(answer);
   }
   if (action.kind === "play_card") {
     if (!action.deckId || !payload.cardId || !state.decks[action.deckId]?.handsByPlayer[actorId]?.includes(payload.cardId)) throw new ComposedGameRuleError("The selected card is not in the actor's hand.");
@@ -413,6 +423,17 @@ function validatePayload(state: ComposedGameState, spec: ComposedGameSpec, actio
     return null;
   }
   if (action.kind === "buzz" && state.buzzes[state.phaseId]) throw new ComposedGameRuleError("The buzzer has already been claimed in this phase.");
+  if (action.kind === "sketch") {
+    if (payload.clear === true && !payload.stroke) return null;
+    const stroke = payload.stroke;
+    if (!stroke || !/^[A-Za-z0-9_-]{1,80}$/.test(stroke.id) || stroke.points.length < 2 || stroke.points.length > 160) {
+      throw new ComposedGameRuleError("Sketch actions require one bounded stroke or a clear command.");
+    }
+    if (stroke.points.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y) || point.x < 0 || point.x > 600 || point.y < 0 || point.y > 340)) {
+      throw new ComposedGameRuleError("Sketch points must stay inside the drawing canvas.");
+    }
+    return null;
+  }
   return action.kind === "complete_challenge" ? true : null;
 }
 
@@ -527,7 +548,11 @@ function applyEffect(state: ComposedGameState, spec: ComposedGameSpec, effect: E
       const index = state.playerOrder.indexOf(state.activePlayerId);
       state.activePlayerId = state.playerOrder[(index + 1) % state.playerOrder.length] ?? state.activePlayerId;
     }
-  } else if (effect.kind === "advance_phase") advancePhase(state, spec);
+  } else if (effect.kind === "advance_phase") {
+    const sketchKey = `${state.phaseId}:${state.phaseVisit}`;
+    advancePhase(state, spec);
+    if (state.sketches?.[sketchKey]) delete state.sketches[sketchKey];
+  }
   else if (effect.kind === "advance_round") state.round += 1;
   else if (effect.kind === "end_game") {
     state.status = "completed";
@@ -581,8 +606,19 @@ export function reduceComposedGame(state: ComposedGameState, actionInput: Compos
   const next = structuredClone(state);
   const payload = actionInput.payload ?? {};
   const correct = validatePayload(next, spec, action, actorId, payload);
+  if (action.kind === "sketch") {
+    next.sketches ??= {};
+    const key = `${next.phaseId}:${next.phaseVisit}`;
+    const current = next.sketches[key] ?? [];
+    if (payload.clear) next.sketches[key] = [];
+    else if (payload.stroke) {
+      if (current.length >= 120) throw new ComposedGameRuleError("This canvas has reached its stroke limit.");
+      if (current.some((stroke) => stroke.id === payload.stroke?.id)) throw new ComposedGameRuleError("This stroke was already submitted.");
+      next.sketches[key] = [...current, payload.stroke];
+    }
+  }
   if (action.kind === "buzz") next.buzzes[next.phaseId] = actorId;
-  next.actions.push({ sequence: next.actions.length + 1, phaseId: next.phaseId, phaseVisit: next.phaseVisit, round: next.round, actionId: action.id, actorId, payload, correct });
+  next.actions.push({ sequence: next.actions.length + 1, phaseId: next.phaseId, phaseVisit: next.phaseVisit, round: next.round, actionId: action.id, actorId, payload: action.kind === "sketch" ? {} : payload, correct });
   next.acceptedIdempotencyKeys.push(actionInput.idempotencyKey);
   if (next.acceptedIdempotencyKeys.length > 500) next.acceptedIdempotencyKeys.shift();
 
@@ -633,7 +669,7 @@ function componentView(component: ComposedComponent, state: ComposedGameState, s
   }
   if (component.kind === "choices") return { ...base, data: { title: component.title, columns: component.columns, choices: spec.choices.filter((choice) => component.optionIds.includes(choice.id)).map(({ correct: _correct, ...choice }) => choice) } };
   if (component.kind === "text_input") return { ...base, data: { label: component.label, placeholder: component.placeholder, multiline: component.multiline, maxLength: component.maxLength } };
-  if (component.kind === "drawing") return { ...base, data: { label: component.label } };
+  if (component.kind === "drawing") return { ...base, data: { label: component.label, strokes: state.sketches?.[`${state.phaseId}:${state.phaseVisit}`] ?? [] } };
   if (component.kind === "timer") return { ...base, data: { seconds: component.seconds, label: component.label } };
   if (component.kind === "turn") return { ...base, data: { activePlayerId: state.activePlayerId, activePlayerName: players.find((player) => player.id === state.activePlayerId)?.name ?? "" } };
   if (component.kind === "round") return { ...base, data: { current: Math.min(state.round, spec.setup.rounds), total: spec.setup.rounds, label: component.label } };

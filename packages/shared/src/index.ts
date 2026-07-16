@@ -126,7 +126,7 @@ export type ComposedGameView = {
   availableActions: Array<{
     id: string;
     label: string;
-    kind: "advance" | "choose" | "text" | "draw" | "play_card" | "move" | "resource" | "randomize" | "buzz" | "order" | "match" | "complete_challenge" | "select_player";
+    kind: "advance" | "choose" | "text" | "draw" | "play_card" | "move" | "resource" | "randomize" | "buzz" | "order" | "match" | "complete_challenge" | "select_player" | "sketch";
     options?: Array<{ id: string; label: string; description?: string | undefined; icon?: string | undefined }> | undefined;
     deckId?: string | undefined;
     boardId?: string | undefined;
@@ -147,6 +147,8 @@ export type ComposedActionPayload = {
   orderedIds?: string[] | undefined;
   pairs?: Array<{ leftId: string; rightId: string }> | undefined;
   targetPlayerId?: string | undefined;
+  stroke?: { id: string; points: Array<{ x: number; y: number }> } | undefined;
+  clear?: boolean | undefined;
 };
 
 export type GameAction =
