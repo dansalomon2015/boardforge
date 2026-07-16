@@ -30,7 +30,7 @@ describe("movie mime game", () => {
       .toThrow("Unknown movie catalog id");
   });
 
-  it("compiles a film pack into the fixed two-phase game", () => {
+  it("compiles a film pack into the fixed captain-led game loop", () => {
     const pack = createRandomMovieMimePack(
       { themeId: "cosmic", filmCount: 10, preferences: "science-fiction familiale" },
       "cosmic-night",
@@ -40,8 +40,25 @@ describe("movie mime game", () => {
     expect(spec.setup.rounds).toBe(10);
     expect(spec.decks[0]?.cards).toHaveLength(10);
     expect(spec.phases.map((phase) => phase.actionIds)).toEqual([
+      ["select_mimer"],
       ["draw_film"],
       ["film_guessed", "film_passed"],
     ]);
+  });
+
+  it("preserves two to four named teams in the compiled GameSpec", () => {
+    const pack = createRandomMovieMimePack({
+      themeId: "retro",
+      filmCount: 6,
+      teams: [
+        { name: "Les Bobines", color: "#6c42f5" },
+        { name: "Les Cascades", color: "#ff6b4a" },
+        { name: "Les Oscars", color: "#22a699" },
+      ],
+    }, "three-teams");
+    const spec = createMovieMimeSpec(pack);
+    expect(spec.setup.mode).toBe("teams");
+    expect(spec.setup.teamPolicy?.teams.map((team) => team.name)).toEqual(["Les Bobines", "Les Cascades", "Les Oscars"]);
+    expect(spec.minPlayers).toBe(3);
   });
 });

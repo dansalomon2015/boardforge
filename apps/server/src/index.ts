@@ -88,6 +88,7 @@ type Room = {
   socketByPlayer: Map<string, string>;
   reconnectTokenHashes: Map<string, string>;
   lobbyTeamByPlayer: Map<string, string>;
+  lobbyCaptainByTeam: Map<string, string>;
   seed: string | null;
   eventSequence: number;
   operationQueue: Promise<void>;
@@ -412,6 +413,7 @@ function persistedRoom(room: Room, state: Room["state"] = room.state): Omit<Room
     players: publicPlayers(room),
     reconnectTokenHashes: Object.fromEntries(room.reconnectTokenHashes),
     lobbyTeamByPlayer: Object.fromEntries(room.lobbyTeamByPlayer),
+    lobbyCaptainByTeam: Object.fromEntries(room.lobbyCaptainByTeam),
     seed: room.seed,
     checkpoint: state,
     checkpointChecksum: state ? stateChecksum(state) : null,
@@ -433,12 +435,21 @@ function viewFor(room: Room, playerId: string): RoomView {
     const composedStart = room.spec.template === "composed"
       ? validateComposedTeamSelection(room.spec, playerIds, selectedTeams)
       : null;
-    const canStart = composedStart
-      ? composedStart.ok
-      : players.length >= room.spec.minPlayers && players.length <= room.spec.maxPlayers;
     const teamPolicy = room.spec.template === "composed" && room.spec.setup.mode === "teams"
       ? room.spec.setup.teamPolicy
       : undefined;
+    const requiresCaptains = room.spec.template === "composed"
+      && room.spec.actions.some((action) => action.actor === "team_captain");
+    const missingCaptainTeam = requiresCaptains
+      ? teamPolicy?.teams.find((team) => {
+          const captainId = room.lobbyCaptainByTeam.get(team.id);
+          return !captainId || selectedTeams[captainId] !== team.id;
+        })
+      : undefined;
+    const teamSelectionReady = composedStart
+      ? composedStart.ok
+      : players.length >= room.spec.minPlayers && players.length <= room.spec.maxPlayers;
+    const canStart = teamSelectionReady && !missingCaptainTeam;
     const view: LobbyView = {
       kind: "lobby",
       code: room.code,
@@ -449,6 +460,8 @@ function viewFor(room: Room, playerId: string): RoomView {
       ...(!canStart ? {
         startBlockReason: composedStart && !composedStart.ok
           ? composedStart.reason
+          : missingCaptainTeam
+            ? `Choisissez un chef pour ${missingCaptainTeam.name}.`
           : `${Math.max(0, room.spec.minPlayers - players.length)} joueur(s) supplémentaire(s) requis.`,
       } : {}),
       ...(teamPolicy ? {
@@ -456,6 +469,7 @@ function viewFor(room: Room, playerId: string): RoomView {
           teams: teamPolicy.teams.map((team) => ({
             ...team,
             playerIds: players.filter((player) => selectedTeams[player.id] === team.id).map((player) => player.id),
+            ...(room.lobbyCaptainByTeam.get(team.id) ? { captainPlayerId: room.lobbyCaptainByTeam.get(team.id) } : {}),
             ...(teamPolicy.maxMembersPerTeam ? { maxMembers: teamPolicy.maxMembersPerTeam } : {}),
           })),
           ...(selectedTeams[playerId] ? { selfTeamId: selectedTeams[playerId] } : {}),
@@ -502,6 +516,10 @@ const movieMimeBodySchema = z
   .object({
     themeId: composedThemeIdSchema.default("noir"),
     filmCount: z.number().int().min(6).max(40).default(20),
+    teams: z.array(z.object({
+      name: z.string().trim().min(2).max(24),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    }).strict()).min(2).max(4).optional(),
     preferences: z.string().trim().max(240).optional(),
   })
   .strict();
@@ -511,11 +529,16 @@ app.post("/api/movie-mime/blueprints", async (request, reply) => {
   if (!parsed.success) {
     return reply.code(400).send({ error: "Invalid movie mime setup.", issues: parsed.error.issues });
   }
-  const setup = movieMimeSetupSchema.parse({
+  const setupResult = movieMimeSetupSchema.safeParse({
     themeId: parsed.data.themeId,
     filmCount: parsed.data.filmCount,
+    ...(parsed.data.teams ? { teams: parsed.data.teams } : {}),
     ...(parsed.data.preferences ? { preferences: parsed.data.preferences } : {}),
   });
+  if (!setupResult.success) {
+    return reply.code(400).send({ error: "Invalid movie mime setup.", issues: setupResult.error.issues });
+  }
+  const setup = setupResult.data;
 
   try {
     const pack = setup.preferences
@@ -915,6 +938,7 @@ app.post("/api/rooms", async (request, reply) => {
     socketByPlayer: new Map(),
     reconnectTokenHashes: new Map(),
     lobbyTeamByPlayer: new Map(),
+    lobbyCaptainByTeam: new Map(),
     seed: null,
     eventSequence: 0,
     operationQueue: Promise.resolve(),
@@ -960,6 +984,7 @@ const actionSchema = z.discriminatedUnion("type", [
       spaceId: z.string().max(48).optional(),
       orderedIds: z.array(z.string().max(48)).max(24).optional(),
       pairs: z.array(z.object({ leftId: z.string().max(48), rightId: z.string().max(48) }).strict()).max(12).optional(),
+      targetPlayerId: z.string().uuid().optional(),
     }).strict().optional(),
   }).strict(),
 ]);
@@ -1003,6 +1028,15 @@ const teamSelectionSchema = z
   })
   .strict();
 
+const captainSelectionSchema = z
+  .object({
+    code: z.string().trim().length(6).transform((value) => value.toUpperCase()),
+    playerId: z.string().uuid(),
+    teamId: z.string().regex(/^[a-z][a-z0-9_]*$/).max(48),
+    captainPlayerId: z.string().uuid(),
+  })
+  .strict();
+
 function socketError(error: unknown): string {
   if (error instanceof GameRuleError || error instanceof ComposedGameRuleError) return error.message;
   app.log.error(error);
@@ -1033,6 +1067,7 @@ async function restorePersistedRooms(): Promise<void> {
       const players = persistedPlayersSchema.parse(record.players).map((player) => ({ ...player, connected: false }));
       const reconnectTokenHashes = persistedStringMapSchema.parse(record.reconnectTokenHashes);
       const lobbyTeamByPlayer = persistedStringMapSchema.parse(record.lobbyTeamByPlayer);
+      const lobbyCaptainByTeam = persistedStringMapSchema.parse(record.lobbyCaptainByTeam);
       const events = record.events.map((event) => persistedEventSchema.parse(event));
       if (!record.seed && events.length) throw new Error("A lobby room cannot contain game events.");
       const state = record.seed
@@ -1041,6 +1076,7 @@ async function restorePersistedRooms(): Promise<void> {
             players,
             seed: record.seed,
             teamByPlayer: lobbyTeamByPlayer,
+            captainByTeam: lobbyCaptainByTeam,
             events: events.map((event) => ({
               sequence: event.sequence,
               actorId: event.actorId,
@@ -1066,6 +1102,7 @@ async function restorePersistedRooms(): Promise<void> {
         socketByPlayer: new Map(),
         reconnectTokenHashes: new Map(Object.entries(reconnectTokenHashes)),
         lobbyTeamByPlayer: new Map(Object.entries(lobbyTeamByPlayer)),
+        lobbyCaptainByTeam: new Map(Object.entries(lobbyCaptainByTeam)),
         seed: record.seed,
         eventSequence: events.length,
         operationQueue: Promise.resolve(),
@@ -1166,6 +1203,41 @@ io.on("connection", (socket: Socket) => {
           throw new GameRuleError("This team is full.");
         }
         room.lobbyTeamByPlayer.set(parsed.playerId, parsed.teamId);
+        if (currentTeamId && currentTeamId !== parsed.teamId && room.lobbyCaptainByTeam.get(currentTeamId) === parsed.playerId) {
+          room.lobbyCaptainByTeam.delete(currentTeamId);
+        }
+        await blueprintStore.saveRoom(persistedRoom(room));
+        emitRoom(room);
+        acknowledge(ack, { ok: true, data: { view: viewFor(room, parsed.playerId) as LobbyView } });
+      } catch (error) {
+        acknowledge(ack, { ok: false, error: socketError(error) });
+      }
+    },
+  );
+
+  socket.on(
+    "room:captain:select",
+    async (payload: unknown, ack?: (response: SocketAck<{ view: LobbyView }>) => void) => {
+      try {
+        const parsed = captainSelectionSchema.parse(payload);
+        const room = rooms.get(parsed.code);
+        if (!room) throw new GameRuleError("Room not found.");
+        if (room.state) throw new GameRuleError("Captains are locked after the game starts.");
+        assertSocketOwnsPlayer(socket, room, parsed.code, parsed.playerId);
+        if (!room.players.get(parsed.playerId)?.isHost) throw new GameRuleError("Only the host can choose team captains.");
+        if (room.spec.template !== "composed" || room.spec.setup.mode !== "teams" || !room.spec.setup.teamPolicy) {
+          throw new GameRuleError("This game does not use teams.");
+        }
+        if (!room.spec.actions.some((action) => action.actor === "team_captain")) {
+          throw new GameRuleError("This game does not use team captains.");
+        }
+        if (!room.spec.setup.teamPolicy.teams.some((team) => team.id === parsed.teamId)) {
+          throw new GameRuleError("Unknown team.");
+        }
+        if (!room.players.has(parsed.captainPlayerId) || room.lobbyTeamByPlayer.get(parsed.captainPlayerId) !== parsed.teamId) {
+          throw new GameRuleError("The captain must belong to the selected team.");
+        }
+        room.lobbyCaptainByTeam.set(parsed.teamId, parsed.captainPlayerId);
         await blueprintStore.saveRoom(persistedRoom(room));
         emitRoom(room);
         acknowledge(ack, { ok: true, data: { view: viewFor(room, parsed.playerId) as LobbyView } });
@@ -1186,9 +1258,21 @@ io.on("connection", (socket: Socket) => {
         const player = room.players.get(payload.playerId);
         if (!player?.isHost) throw new GameRuleError("Only the host can start the game.");
         if (room.state) throw new GameRuleError("The game has already started.");
+        const lobbyView = viewFor(room, payload.playerId);
+        if (lobbyView.kind !== "lobby" || !lobbyView.canStart) {
+          throw new GameRuleError(lobbyView.kind === "lobby"
+            ? lobbyView.startBlockReason ?? "The room is not ready."
+            : "The game has already started.");
+        }
         const seed = `${room.code}-seed`;
         const nextState = room.spec.template === "composed"
-          ? initializeComposedGame(room.spec, publicPlayers(room), seed, Object.fromEntries(room.lobbyTeamByPlayer))
+          ? initializeComposedGame(
+              room.spec,
+              publicPlayers(room),
+              seed,
+              Object.fromEntries(room.lobbyTeamByPlayer),
+              Object.fromEntries(room.lobbyCaptainByTeam),
+            )
           : initializeGame(room.spec, publicPlayers(room), seed);
         await blueprintStore.saveRoom({ ...persistedRoom(room, nextState), seed });
         room.seed = seed;

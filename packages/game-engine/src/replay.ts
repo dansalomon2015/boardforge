@@ -57,11 +57,12 @@ export function replayGame(options: {
   players: PublicPlayer[];
   seed: string;
   teamByPlayer?: Record<string, string> | undefined;
+  captainByTeam?: Record<string, string> | undefined;
   events: ReplayEntry[];
 }): GameState | ComposedGameState {
   const ordered = [...options.events].sort((left, right) => left.sequence - right.sequence);
   let state: GameState | ComposedGameState = options.spec.template === "composed"
-    ? initializeComposedGame(options.spec, options.players, options.seed, options.teamByPlayer ?? {})
+    ? initializeComposedGame(options.spec, options.players, options.seed, options.teamByPlayer ?? {}, options.captainByTeam ?? {})
     : initializeGame(options.spec, options.players, options.seed);
 
   for (let index = 0; index < ordered.length; index += 1) {

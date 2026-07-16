@@ -11,6 +11,7 @@ import {
   type HiddenRolesGameSpec,
   type MimeFilmPack,
   type MovieMimeSetup,
+  type MovieMimeSetupInput,
   type QuizVoteGameSpec,
   type QuizVoteQuestion,
   hiddenRolesGameSpecSchema,
@@ -128,7 +129,7 @@ export type LlmUsageTelemetry = {
 
 export interface LlmProvider {
   readonly name: string;
-  generateMovieMimePack(setup: MovieMimeSetup): Promise<MimeFilmPack>;
+  generateMovieMimePack(setup: MovieMimeSetupInput): Promise<MimeFilmPack>;
   generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec>;
   reviewComposedGameSpec(
     spec: ComposedGameSpec,
@@ -628,7 +629,7 @@ function generateQuizVoteSpec(brief: GameBrief, hash: number): QuizVoteGameSpec 
 export class FakeLlmProvider implements LlmProvider {
   readonly name = "procedural-local";
 
-  async generateMovieMimePack(setupInput: MovieMimeSetup): Promise<MimeFilmPack> {
+  async generateMovieMimePack(setupInput: MovieMimeSetupInput): Promise<MimeFilmPack> {
     const setup = movieMimeSetupSchema.parse(setupInput);
     const preferences = normalizedPrompt(setup.preferences ?? "sélection variée");
     const preferenceWords = new Set(preferences.toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter((word) => word.length >= 4));
@@ -936,7 +937,7 @@ export class OpenAiLlmProvider implements LlmProvider {
     return requireParsedOutput(response.output_parsed, "movie mime selection");
   }
 
-  async generateMovieMimePack(setupInput: MovieMimeSetup): Promise<MimeFilmPack> {
+  async generateMovieMimePack(setupInput: MovieMimeSetupInput): Promise<MimeFilmPack> {
     const setup = movieMimeSetupSchema.parse(setupInput);
     const first = await this.selectMovieMimeCandidate(setup);
     try {

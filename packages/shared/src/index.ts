@@ -26,7 +26,7 @@ export type LobbyView = {
   canStart: boolean;
   startBlockReason?: string | undefined;
   teamSetup?: {
-    teams: Array<{ id: string; name: string; color: string; playerIds: string[]; maxMembers?: number | undefined }>;
+    teams: Array<{ id: string; name: string; color: string; playerIds: string[]; maxMembers?: number | undefined; captainPlayerId?: string | undefined }>;
     selfTeamId?: string | undefined;
     allowUnevenTeams: boolean;
   } | undefined;
@@ -120,12 +120,13 @@ export type ComposedGameView = {
   selfPlayerId: string;
   activePlayerId: string;
   teams: Array<{ id: string; name: string; color: string; playerIds: string[] }>;
+  captainByTeam: Record<string, string>;
   scores: { global: number; players: Record<string, number>; teams: Record<string, number> };
   components: ResolvedGameComponent[];
   availableActions: Array<{
     id: string;
     label: string;
-    kind: "advance" | "choose" | "text" | "draw" | "play_card" | "move" | "resource" | "randomize" | "buzz" | "order" | "match" | "complete_challenge";
+    kind: "advance" | "choose" | "text" | "draw" | "play_card" | "move" | "resource" | "randomize" | "buzz" | "order" | "match" | "complete_challenge" | "select_player";
     options?: Array<{ id: string; label: string; description?: string | undefined; icon?: string | undefined }> | undefined;
     deckId?: string | undefined;
     boardId?: string | undefined;
@@ -145,6 +146,7 @@ export type ComposedActionPayload = {
   spaceId?: string | undefined;
   orderedIds?: string[] | undefined;
   pairs?: Array<{ leftId: string; rightId: string }> | undefined;
+  targetPlayerId?: string | undefined;
 };
 
 export type GameAction =

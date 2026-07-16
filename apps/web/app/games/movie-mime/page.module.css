@@ -20,6 +20,20 @@
 .themeGrid button.selectedTheme { background: white; border-color: #211d18; box-shadow: 0 10px 32px rgba(53,43,32,.09); }
 .themeGrid button > span { display: flex; gap: 3px; }.themeGrid button > span i { width: 14px; height: 14px; border-radius: 50%; }.themeGrid button > span i:nth-child(1) { background: var(--swatch-a); }.themeGrid button > span i:nth-child(2) { background: var(--swatch-b); }.themeGrid button > span i:nth-child(3) { background: var(--swatch-c); }
 .themeGrid button > b { font-size: 20px; }.themeGrid button strong { grid-column: 1/-1; margin-top: 11px; font: 700 13px 'Space Grotesk'; }.themeGrid button small { grid-column: 1/-1; color: #847c72; font-size: 9px; line-height: 1.4; }
+.teamEditor { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 15px; }
+.teamDraft { position: relative; min-width: 0; padding: 16px; background: rgba(255,255,255,.58); border: 1px solid rgba(33,29,24,.11); border-radius: 15px; box-shadow: inset 3px 0 0 var(--team-color); }
+.teamNumber { display: flex; align-items: center; gap: 7px; color: #8b8379; font-size: 8px; font-weight: 900; letter-spacing: .8px; text-transform: uppercase; }
+.teamNumber i { width: 8px; height: 8px; background: var(--team-color); border-radius: 50%; box-shadow: 0 0 0 4px color-mix(in srgb,var(--team-color) 15%,transparent); }
+.teamDraft input { width: 100%; margin: 13px 0 14px; padding: 0 0 9px; color: #211d18; background: transparent; border: 0; border-bottom: 1px solid rgba(33,29,24,.17); outline: none; font: 700 17px 'Space Grotesk'; }
+.teamDraft input:focus { border-color: var(--team-color); }
+.teamPalette { display: flex; gap: 7px; }
+.teamPalette button { width: 19px; height: 19px; padding: 0; border: 3px solid transparent; border-radius: 50%; box-shadow: 0 0 0 1px rgba(33,29,24,.12); }
+.teamPalette button.selectedColor { border-color: white; box-shadow: 0 0 0 2px #211d18; }
+.removeTeam { position: absolute; right: 14px; bottom: 15px; padding: 4px 0; color: #9b4431; background: none; border: 0; font-size: 8px; font-weight: 900; }
+.addTeam { min-height: 112px; display: grid; grid-template-columns: auto 1fr; align-content: center; align-items: center; gap: 2px 10px; padding: 16px; color: #756e64; background: transparent; border: 1px dashed rgba(33,29,24,.25); border-radius: 15px; text-align: left; }
+.addTeam:hover { color: #211d18; background: rgba(255,255,255,.42); border-color: #9b4431; }
+.addTeam b { grid-row: 1/3; font: 300 27px 'Space Grotesk'; }.addTeam span { font-size: 10px; font-weight: 900; }.addTeam small { font-size: 8px; }
+.captainNote { display: flex; gap: 8px; margin: 11px 2px 0; color: #827a70; font-size: 9px; line-height: 1.45; }.captainNote span { color: #9b4431; }
 .countGrid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-top: 15px; }
 .countGrid button { min-height: 105px; display: grid; place-content: center; color: #211d18; background: rgba(255,255,255,.5); border: 1px solid transparent; border-radius: 13px; }
 .countGrid button.selectedCount { color: white; background: #211d18; }
@@ -59,6 +73,7 @@
   .titleBlock h1 { font-size: 52px; letter-spacing: -4px; }
   .gamePreview { min-height: 420px; padding: 21px; }.previewCenter h2 { font-size: 62px; }
   .themeGrid { grid-template-columns: 1fr 1fr; }.themeGrid button { min-height: 132px; }
+  .teamEditor { grid-template-columns: 1fr; }
   .countGrid { grid-template-columns: 1fr 1fr; }
   .fieldset legend { grid-template-columns: 30px 1fr; }.fieldset legend small { grid-column: 2; margin-top: 4px; }
 }

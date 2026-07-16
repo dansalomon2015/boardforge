@@ -153,6 +153,23 @@ export default function RoomPage() {
     );
   }
 
+  function selectCaptain(teamId: string, captainPlayerId: string) {
+    setPending(true);
+    setError("");
+    socketRef.current?.emit(
+      "room:captain:select",
+      { code, playerId, teamId, captainPlayerId },
+      (response: SocketAck<{ view: Extract<RoomView, { kind: "lobby" }> }>) => {
+        setPending(false);
+        if (!response.ok) {
+          setError(response.error);
+          return;
+        }
+        setView(response.data.view);
+      },
+    );
+  }
+
   function sendAction(action: GameAction) {
     if (!viewRef.current || viewRef.current.kind === "lobby") return;
     setPending(true);
@@ -212,10 +229,10 @@ export default function RoomPage() {
             <p className="eyebrow">{isMovieMime ? "Casting en cours" : "La table se prépare"}</p>
             <h1>{view.game.title}</h1>
             <p>{view.game.description}</p>
-            {isMovieMime ? <div className={roomChromeStyles.lobbyFacts}><span>🎬 Mime cinéma</span><span>⏱ 60 secondes</span><span>✦ Deux équipes</span></div> : null}
+            {isMovieMime ? <div className={roomChromeStyles.lobbyFacts}><span>🎬 Mime cinéma</span><span>⏱ 60 secondes</span><span>✦ {view.teamSetup?.teams.length ?? 2} équipes</span></div> : null}
             <div className="lobby-progress"><span style={{ width: `${Math.min(100, (view.players.length / view.game.minPlayers) * 100)}%` }} /></div>
             <small>{view.players.length} joueur(s) au casting · minimum {view.game.minPlayers}</small>
-            {view.teamSetup ? <TeamSetup view={view} pending={pending} selectTeam={selectTeam} /> : null}
+            {view.teamSetup ? <TeamSetup view={view} pending={pending} selectTeam={selectTeam} selectCaptain={selectCaptain} /> : null}
             {self?.isHost ? (
               <button className="primary-button host-start" disabled={!view.canStart || pending} onClick={startGame}>
                 {view.canStart ? "Lancer la partie" : view.startBlockReason ?? "La table n’est pas encore prête"} <b>→</b>
@@ -236,13 +253,15 @@ export default function RoomPage() {
   );
 }
 
-function TeamSetup({ view, pending, selectTeam }: {
+function TeamSetup({ view, pending, selectTeam, selectCaptain }: {
   view: Extract<RoomView, { kind: "lobby" }>;
   pending: boolean;
   selectTeam: (teamId: string) => void;
+  selectCaptain: (teamId: string, captainPlayerId: string) => void;
 }) {
   if (!view.teamSetup) return null;
   const playerName = (id: string) => view.players.find((player) => player.id === id)?.name ?? "Joueur";
+  const isHost = Boolean(view.players.find((player) => player.id === view.selfPlayerId)?.isHost);
   return (
     <section className="team-setup" aria-labelledby="team-setup-title">
       <div className="team-setup-heading">
@@ -253,12 +272,22 @@ function TeamSetup({ view, pending, selectTeam }: {
         {view.teamSetup.teams.map((team) => {
           const selected = view.teamSetup?.selfTeamId === team.id;
           const full = Boolean(team.maxMembers && team.playerIds.length >= team.maxMembers);
+          const captainName = team.captainPlayerId ? playerName(team.captainPlayerId) : null;
           return (
             <article className={`team-choice-card ${selected ? "selected" : ""}`} style={{ "--team-color": team.color } as CSSProperties} key={team.id}>
               <div className="team-choice-title"><i /><strong>{team.name}</strong><small>{team.playerIds.length}{team.maxMembers ? `/${team.maxMembers}` : ""}</small></div>
               <div className="team-member-pills">
-                {team.playerIds.length ? team.playerIds.map((id) => <span key={id}>{playerName(id)}</span>) : <em>Équipe disponible</em>}
+                {team.playerIds.length ? team.playerIds.map((id) => <span className={id === team.captainPlayerId ? "captain" : ""} key={id}>{id === team.captainPlayerId ? "★ " : ""}{playerName(id)}</span>) : <em>Équipe disponible</em>}
               </div>
+              {isHost && team.playerIds.length ? (
+                <label className="captain-select">
+                  <span>Chef d’équipe</span>
+                  <select disabled={pending} onChange={(event) => event.target.value && selectCaptain(team.id, event.target.value)} value={team.captainPlayerId ?? ""}>
+                    <option value="">À choisir…</option>
+                    {team.playerIds.map((id) => <option key={id} value={id}>{playerName(id)}</option>)}
+                  </select>
+                </label>
+              ) : captainName ? <div className="captain-display"><span>★ Chef</span><strong>{captainName}</strong></div> : null}
               <button disabled={pending || selected || full} onClick={() => selectTeam(team.id)}>
                 {selected ? "Votre équipe ✓" : full ? "Équipe complète" : "Rejoindre"}
               </button>
@@ -392,6 +421,10 @@ function MovieMimeStage({ view, pending, sendAction }: {
   const activePlayer = view.players.find((player) => player.id === view.activePlayerId);
   const isActivePlayer = view.selfPlayerId === view.activePlayerId;
   const activeTeamId = view.teams.find((team) => team.playerIds.includes(view.activePlayerId))?.id;
+  const activeTeam = view.teams.find((team) => team.id === activeTeamId);
+  const activeCaptainId = activeTeamId ? view.captainByTeam[activeTeamId] : undefined;
+  const isActiveCaptain = view.selfPlayerId === activeCaptainId;
+  const selectMimerAction = view.availableActions.find((action) => action.id === "select_mimer");
   const drawAction = view.availableActions.find((action) => action.id === "draw_film");
   const successAction = view.availableActions.find((action) => action.id === "film_guessed");
   const passAction = view.availableActions.find((action) => action.id === "film_passed");
@@ -404,8 +437,8 @@ function MovieMimeStage({ view, pending, sendAction }: {
     ? view.winner.ids.map((id) => view.teams.find((team) => team.id === id)?.name).filter(Boolean)
     : [];
 
-  function perform(actionId: string) {
-    sendAction({ type: "COMPOSED_ACTION", actionId });
+  function perform(actionId: string, payload?: Extract<GameAction, { type: "COMPOSED_ACTION" }>["payload"]) {
+    sendAction({ type: "COMPOSED_ACTION", actionId, ...(payload ? { payload } : {}) });
   }
 
   return (
@@ -435,8 +468,36 @@ function MovieMimeStage({ view, pending, sendAction }: {
           <span>Fin de la séance</span>
           <div className={movieMimeStyles.trophy}>✦</div>
           <h1>{winnerNames.join(" & ") || "Égalité parfaite"}</h1>
-          <p>{winnerNames.length ? "remporte le box-office de la soirée." : "Les deux équipes se partagent l’affiche."}</p>
+          <p>{winnerNames.length ? "remporte le box-office de la soirée." : "Les équipes se partagent l’affiche."}</p>
           <a href="/">Retour à la collection <b>→</b></a>
+        </section>
+      ) : view.phase.id === "select_mimer" ? (
+        <section className={movieMimeStyles.castingStage}>
+          <div className={movieMimeStyles.spotlight} />
+          <p>Au tour de {activeTeam?.name ?? "l’équipe active"}</p>
+          <h1>{isActiveCaptain ? "Choisissez votre mimeur." : `${view.players.find((player) => player.id === activeCaptainId)?.name ?? "Le chef"} fait son choix.`}</h1>
+          <span>
+            {isActiveCaptain
+              ? "Vous êtes chef d’équipe pour cette partie. Confiez la prochaine carte à l’un de vos joueurs."
+              : "Le prochain mimeur sera appelé sur scène dans un instant."}
+          </span>
+          <div className={movieMimeStyles.castGrid}>
+            {activeTeam?.playerIds.map((id, index) => {
+              const player = view.players.find((candidate) => candidate.id === id);
+              return (
+                <button
+                  disabled={pending || !selectMimerAction}
+                  key={id}
+                  onClick={() => selectMimerAction && perform(selectMimerAction.id, { targetPlayerId: id })}
+                >
+                  <i>{player?.name.slice(0, 1).toUpperCase() ?? "?"}</i>
+                  <span><small>{index === 0 ? "Au casting" : "Prêt à jouer"}</small><strong>{player?.name ?? "Joueur"}</strong></span>
+                  <b>{id === activeCaptainId ? "★ Chef" : "Choisir →"}</b>
+                </button>
+              );
+            })}
+          </div>
+          {!isActiveCaptain ? <em>Seul le chef de {activeTeam?.name ?? "l’équipe"} peut choisir.</em> : null}
         </section>
       ) : view.phase.id === "draw" ? (
         <section className={movieMimeStyles.drawStage}>

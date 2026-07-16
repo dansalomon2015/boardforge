@@ -42,6 +42,23 @@ export const movieMimeSetupSchema = z
     themeId: composedThemeIdSchema.default("noir"),
     filmCount: z.number().int().min(6).max(40).default(20),
     preferences: z.string().trim().min(3).max(240).optional(),
+    teams: z
+      .array(z.object({
+        name: z.string().trim().min(2).max(24),
+        color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+      }).strict())
+      .min(2)
+      .max(4)
+      .default([
+        { name: "Les Projecteurs", color: "#6c42f5" },
+        { name: "Les Clapboards", color: "#ff6b4a" },
+      ]),
+  })
+  .superRefine((setup, context) => {
+    const names = setup.teams.map((team) => team.name.toLocaleLowerCase("fr"));
+    if (new Set(names).size !== names.length) {
+      context.addIssue({ code: "custom", path: ["teams"], message: "Team names must be unique." });
+    }
   })
   .strict();
 
@@ -52,13 +69,19 @@ export const mimeFilmPackSchema = z
     source: z.enum(["random", "ai"]),
     themeId: composedThemeIdSchema,
     preferences: z.string().trim().min(3).max(240).optional(),
+    teams: z.array(z.object({
+      id: z.string().regex(/^[a-z][a-z0-9_]*$/).max(48),
+      name: z.string().trim().min(2).max(24),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    }).strict()).min(2).max(4),
     films: z.array(movieCatalogEntrySchema).min(6).max(40),
   })
   .strict();
 
 export type MovieGenre = z.infer<typeof movieGenreSchema>;
 export type MovieCatalogEntry = z.infer<typeof movieCatalogEntrySchema>;
-export type MovieMimeSetup = z.infer<typeof movieMimeSetupSchema>;
+export type MovieMimeSetupInput = z.input<typeof movieMimeSetupSchema>;
+export type MovieMimeSetup = z.output<typeof movieMimeSetupSchema>;
 export type MimeFilmPack = z.infer<typeof mimeFilmPackSchema>;
 
 export const movieCatalog: readonly MovieCatalogEntry[] = [
@@ -179,7 +202,7 @@ function deterministicShuffle<T>(values: readonly T[], seed: string): T[] {
 }
 
 export function createMovieMimePack(
-  setupInput: MovieMimeSetup,
+  setupInput: MovieMimeSetupInput,
   filmIds: readonly string[],
   source: MimeFilmPack["source"],
 ): MimeFilmPack {
@@ -200,12 +223,13 @@ export function createMovieMimePack(
     source,
     themeId: setup.themeId,
     ...(setup.preferences ? { preferences: setup.preferences } : {}),
+    teams: setup.teams.map((team, index) => ({ id: `team_${index + 1}`, ...team })),
     films,
   });
 }
 
 export function createRandomMovieMimePack(
-  setupInput: MovieMimeSetup,
+  setupInput: MovieMimeSetupInput,
   seed: string,
 ): MimeFilmPack {
   const setup = movieMimeSetupSchema.parse(setupInput);
@@ -217,7 +241,7 @@ export function createMovieMimeSpec(packInput: MimeFilmPack): ComposedGameSpec {
   const pack = mimeFilmPackSchema.parse(packInput);
   const rounds = pack.films.length;
   const theme: ComposedTheme = pack.themeId;
-  const suffix = numberHash(`${pack.themeId}:${pack.films.map((film) => film.id).join(":")}`).toString(36);
+  const suffix = numberHash(`captain-loop-v1:${pack.themeId}:${pack.films.map((film) => film.id).join(":")}`).toString(36);
   const spec: ComposedGameSpec = {
     schemaVersion: 2,
     id: `movie_mime_${suffix}`.slice(0, 48),
@@ -225,18 +249,15 @@ export function createMovieMimeSpec(packInput: MimeFilmPack): ComposedGameSpec {
     title: "CinéMimes",
     description: pack.preferences
       ? `Une partie de mime personnalisée autour de ${pack.preferences}.`
-      : "Deux équipes font deviner des films en les mimant, sans parler ni écrire.",
+      : "Des équipes font deviner des films en les mimant, sans parler ni écrire.",
     theme,
-    minPlayers: 2,
+    minPlayers: pack.teams.length,
     maxPlayers: 12,
     suggestedDurationMinutes: Math.max(8, Math.ceil(rounds * 1.2)),
     setup: {
       mode: "teams",
       teamPolicy: {
-        teams: [
-          { id: "projecteurs", name: "Les Projecteurs", color: "#6c42f5" },
-          { id: "clapboards", name: "Les Clapboards", color: "#ff6b4a" },
-        ],
+        teams: pack.teams,
         minMembersPerTeam: 1,
         maxMembersPerTeam: 6,
         allocation: "balanced",
@@ -244,7 +265,7 @@ export function createMovieMimeSpec(packInput: MimeFilmPack): ComposedGameSpec {
         rotateActivePlayer: true,
       },
       rounds,
-      startingPhaseId: "draw",
+      startingPhaseId: "select_mimer",
       startingPlayer: "random",
     },
     variables: [],
@@ -283,17 +304,19 @@ export function createMovieMimeSpec(packInput: MimeFilmPack): ComposedGameSpec {
       { id: "outcome", kind: "outcome", audience: "public", title: { kind: "literal", value: "Fin de la séance !" }, description: { kind: "literal", value: "L’équipe avec le plus de films trouvés remporte la partie." } },
     ],
     actions: [
+      { id: "select_mimer", label: "Choisir le mimeur", kind: "select_player", actor: "team_captain", oncePerPhase: true, effects: [{ kind: "set_active_player", mode: "selected" }, { kind: "advance_phase" }] },
       { id: "draw_film", label: "Découvrir mon film", kind: "draw", actor: "active_player", oncePerPhase: true, deckId: "films", effects: [{ kind: "draw_cards", deckId: "films", count: 1, target: "actor" }, { kind: "advance_phase" }] },
-      { id: "film_guessed", label: "Film trouvé", kind: "complete_challenge", actor: "active_player", oncePerPhase: true, effects: [{ kind: "add_score", target: "actor_team", amount: 1 }, { kind: "discard_selected_card", deckId: "films" }, { kind: "advance_round", resetPhaseActions: true }, { kind: "set_active_player", mode: "next" }, { kind: "advance_phase" }] },
-      { id: "film_passed", label: "Passer", kind: "advance", actor: "active_player", oncePerPhase: true, effects: [{ kind: "discard_selected_card", deckId: "films" }, { kind: "advance_round", resetPhaseActions: true }, { kind: "set_active_player", mode: "next" }, { kind: "advance_phase" }] },
+      { id: "film_guessed", label: "Film trouvé", kind: "complete_challenge", actor: "active_player", oncePerPhase: true, effects: [{ kind: "add_score", target: "actor_team", amount: 1 }, { kind: "discard_selected_card", deckId: "films" }, { kind: "advance_round", resetPhaseActions: true }, { kind: "set_active_player", mode: "next_team_captain" }, { kind: "advance_phase" }] },
+      { id: "film_passed", label: "Passer", kind: "advance", actor: "active_player", oncePerPhase: true, effects: [{ kind: "discard_selected_card", deckId: "films" }, { kind: "advance_round", resetPhaseActions: true }, { kind: "set_active_player", mode: "next_team_captain" }, { kind: "advance_phase" }] },
     ],
     rules: [
       { id: "end_after_success", trigger: { kind: "after_action", actionId: "film_guessed" }, conditionMode: "all", conditions: [{ kind: "round_at_least", round: rounds + 1 }], effects: [{ kind: "end_game", winnerBy: "highest_score" }] },
       { id: "end_after_pass", trigger: { kind: "after_action", actionId: "film_passed" }, conditionMode: "all", conditions: [{ kind: "round_at_least", round: rounds + 1 }], effects: [{ kind: "end_game", winnerBy: "highest_score" }] },
     ],
     phases: [
+      { id: "select_mimer", title: "Le capitaine choisit", componentIds: ["game_header", "round", "turn", "teams", "scores"], actionIds: ["select_mimer"], nextPhaseId: "draw", completionMode: "manual", completionConditions: [], onComplete: [] },
       { id: "draw", title: "Le prochain film", componentIds: ["game_header", "round", "turn", "teams", "scores", "film_deck"], actionIds: ["draw_film"], nextPhaseId: "mime", completionMode: "manual", completionConditions: [], onComplete: [] },
-      { id: "mime", title: "Silence, ça mime !", componentIds: ["game_header", "round", "turn", "teams", "scores", "mime_timer", "film_prompt"], actionIds: ["film_guessed", "film_passed"], nextPhaseId: "draw", completionMode: "manual", completionConditions: [], onComplete: [] },
+      { id: "mime", title: "Silence, ça mime !", componentIds: ["game_header", "round", "turn", "teams", "scores", "mime_timer", "film_prompt"], actionIds: ["film_guessed", "film_passed"], nextPhaseId: "select_mimer", completionMode: "manual", completionConditions: [], onComplete: [] },
     ],
   };
   const validation = validateComposedGameSpec(spec);

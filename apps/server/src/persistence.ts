@@ -95,6 +95,7 @@ export type RoomSessionRecord = {
   players: PublicPlayer[];
   reconnectTokenHashes: Record<string, string>;
   lobbyTeamByPlayer: Record<string, string>;
+  lobbyCaptainByTeam: Record<string, string>;
   seed: string | null;
   checkpoint: unknown | null;
   checkpointChecksum: string | null;
@@ -382,6 +383,7 @@ type RoomSessionRow = {
   players: PublicPlayer[];
   reconnect_token_hashes: Record<string, string>;
   lobby_team_by_player: Record<string, string>;
+  lobby_captain_by_team: Record<string, string>;
   seed: string | null;
   checkpoint: unknown | null;
   checkpoint_checksum: string | null;
@@ -458,6 +460,7 @@ class PostgresBlueprintStore implements BlueprintStore {
       "0004_game_critiques.sql",
       "0005_review_suggestions.sql",
       "0006_compilation_jobs.sql",
+      "0007_room_captains.sql",
     ]) {
       const migration = await readFile(new URL(`../migrations/${filename}`, import.meta.url), "utf8");
       await this.pool.query(migration);
@@ -785,7 +788,7 @@ class PostgresBlueprintStore implements BlueprintStore {
 
   async loadRooms(): Promise<RoomSessionRecord[]> {
     const sessions = await this.pool.query<RoomSessionRow>(
-      `SELECT code, blueprint_id, players, reconnect_token_hashes, lobby_team_by_player,
+      `SELECT code, blueprint_id, players, reconnect_token_hashes, lobby_team_by_player, lobby_captain_by_team,
               seed, checkpoint, checkpoint_checksum, checkpoint_revision
        FROM room_sessions
        ORDER BY created_at`,
@@ -808,6 +811,7 @@ class PostgresBlueprintStore implements BlueprintStore {
       players: row.players,
       reconnectTokenHashes: row.reconnect_token_hashes,
       lobbyTeamByPlayer: row.lobby_team_by_player,
+      lobbyCaptainByTeam: row.lobby_captain_by_team,
       seed: row.seed,
       checkpoint: row.checkpoint,
       checkpointChecksum: row.checkpoint_checksum,
@@ -819,13 +823,14 @@ class PostgresBlueprintStore implements BlueprintStore {
   async saveRoom(record: Omit<RoomSessionRecord, "events">): Promise<void> {
     await this.pool.query(
       `INSERT INTO room_sessions (
-         code, blueprint_id, players, reconnect_token_hashes, lobby_team_by_player,
+         code, blueprint_id, players, reconnect_token_hashes, lobby_team_by_player, lobby_captain_by_team,
          seed, checkpoint, checkpoint_checksum, checkpoint_revision
-       ) VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7::jsonb, $8, $9)
+       ) VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8::jsonb, $9, $10)
        ON CONFLICT (code) DO UPDATE SET
          players = EXCLUDED.players,
          reconnect_token_hashes = EXCLUDED.reconnect_token_hashes,
          lobby_team_by_player = EXCLUDED.lobby_team_by_player,
+         lobby_captain_by_team = EXCLUDED.lobby_captain_by_team,
          seed = EXCLUDED.seed,
          checkpoint = EXCLUDED.checkpoint,
          checkpoint_checksum = EXCLUDED.checkpoint_checksum,
@@ -837,6 +842,7 @@ class PostgresBlueprintStore implements BlueprintStore {
         JSON.stringify(record.players),
         JSON.stringify(record.reconnectTokenHashes),
         JSON.stringify(record.lobbyTeamByPlayer),
+        JSON.stringify(record.lobbyCaptainByTeam),
         record.seed,
         record.checkpoint === null ? null : JSON.stringify(record.checkpoint),
         record.checkpointChecksum,
@@ -871,10 +877,11 @@ class PostgresBlueprintStore implements BlueprintStore {
            players = $2::jsonb,
            reconnect_token_hashes = $3::jsonb,
            lobby_team_by_player = $4::jsonb,
-           seed = $5,
-           checkpoint = $6::jsonb,
-           checkpoint_checksum = $7,
-           checkpoint_revision = $8,
+           lobby_captain_by_team = $5::jsonb,
+           seed = $6,
+           checkpoint = $7::jsonb,
+           checkpoint_checksum = $8,
+           checkpoint_revision = $9,
            updated_at = now()
          WHERE code = $1`,
         [
@@ -882,6 +889,7 @@ class PostgresBlueprintStore implements BlueprintStore {
           JSON.stringify(record.players),
           JSON.stringify(record.reconnectTokenHashes),
           JSON.stringify(record.lobbyTeamByPlayer),
+          JSON.stringify(record.lobbyCaptainByTeam),
           record.seed,
           record.checkpoint === null ? null : JSON.stringify(record.checkpoint),
           record.checkpointChecksum,

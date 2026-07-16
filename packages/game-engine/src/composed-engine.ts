@@ -17,6 +17,7 @@ export type ComposedActionPayload = {
   spaceId?: string | undefined;
   orderedIds?: string[] | undefined;
   pairs?: Array<{ leftId: string; rightId: string }> | undefined;
+  targetPlayerId?: string | undefined;
 };
 
 export type ComposedGameAction = {
@@ -64,6 +65,7 @@ export type ComposedGameState = {
   activePlayerId: string;
   teams: ComposedTeamState[];
   teamByPlayer: Record<string, string>;
+  captainByTeam?: Record<string, string> | undefined;
   scores: { global: number; players: Record<string, number>; teams: Record<string, number> };
   resources: { global: Record<string, number>; players: Record<string, Record<string, number>>; teams: Record<string, Record<string, number>> };
   variables: Record<string, string | number | boolean>;
@@ -100,6 +102,7 @@ export type ComposedGameView = {
   selfPlayerId: string;
   activePlayerId: string;
   teams: ComposedTeamState[];
+  captainByTeam: Record<string, string>;
   scores: ComposedGameState["scores"];
   components: ResolvedComponentView[];
   availableActions: Array<{
@@ -277,14 +280,30 @@ export function initializeComposedGame(
   players: PublicPlayer[],
   seed: string,
   selectedTeamByPlayer?: Record<string, string>,
+  selectedCaptainByTeam?: Record<string, string>,
 ): ComposedGameState {
   const validation = validateComposedGameSpec(spec);
   if (!validation.ok) throw new ComposedGameRuleError(`Invalid ComposedGameSpec: ${validation.issues[0]?.message ?? "unknown validation error"}`);
   if (!canStartComposedGame(spec, players.length)) throw new ComposedGameRuleError(`This game cannot start with ${players.length} players under its team policy.`);
   const { teams, teamByPlayer } = createTeams(spec, players, seed, selectedTeamByPlayer);
   const randomizedOrder = seededShuffle(players.map((player) => player.id), `${seed}:starting-player`);
-  const activePlayerId = spec.setup.startingPlayer === "random" ? randomizedOrder[0] : players[0]?.id;
-  if (!activePlayerId) throw new ComposedGameRuleError("At least one player is required.");
+  const initialPlayerId = spec.setup.startingPlayer === "random" ? randomizedOrder[0] : players[0]?.id;
+  if (!initialPlayerId) throw new ComposedGameRuleError("At least one player is required.");
+  const usesCaptains = spec.actions.some((action) => action.actor === "team_captain");
+  const captainByTeam = usesCaptains
+    ? Object.fromEntries(teams.map((team) => {
+        const captainId = selectedCaptainByTeam?.[team.id] ?? team.playerIds[0];
+        if (!captainId || !team.playerIds.includes(captainId)) {
+          throw new ComposedGameRuleError(`Captain for team ${team.id} must belong to that team.`);
+        }
+        return [team.id, captainId];
+      }))
+    : {};
+  const initialTeamId = teamByPlayer[initialPlayerId];
+  const startingPhase = spec.phases.find((phase) => phase.id === spec.setup.startingPhaseId);
+  const startsWithCaptain = startingPhase?.actionIds.some((actionId) =>
+    spec.actions.find((action) => action.id === actionId)?.actor === "team_captain") ?? false;
+  const activePlayerId = startsWithCaptain && initialTeamId ? captainByTeam[initialTeamId]! : initialPlayerId;
   const itemOrders = Object.fromEntries(spec.components.flatMap((component) =>
     component.kind === "ordering" || component.kind === "matching"
       ? [[component.id, seededShuffle(component.itemIds, `${seed}:items:${component.id}`)] as const]
@@ -303,6 +322,7 @@ export function initializeComposedGame(
     activePlayerId,
     teams,
     teamByPlayer,
+    ...(usesCaptains ? { captainByTeam } : {}),
     scores: { global: 0, players: Object.fromEntries(players.map((player) => [player.id, 0])), teams: Object.fromEntries(teams.map((team) => [team.id, 0])) },
     resources: initializeResources(spec, players, teams),
     variables: Object.fromEntries(spec.variables.map((variable) => [variable.id, variable.initialValue])),
@@ -334,6 +354,10 @@ function actionFor(spec: ComposedGameSpec, actionId: string): ActionDefinition {
 function isActorAllowed(state: ComposedGameState, action: ActionDefinition, actorId: string, isHost: boolean): boolean {
   if (action.actor === "host") return isHost;
   if (action.actor === "active_player") return actorId === state.activePlayerId;
+  if (action.actor === "team_captain") {
+    const activeTeamId = state.teamByPlayer[state.activePlayerId];
+    return Boolean(activeTeamId && state.captainByTeam?.[activeTeamId] === actorId);
+  }
   if (action.actor === "team") return Boolean(state.teamByPlayer[actorId]) && state.teamByPlayer[actorId] === state.teamByPlayer[state.activePlayerId];
   return state.playerOrder.includes(actorId);
 }
@@ -375,6 +399,13 @@ function validatePayload(state: ComposedGameState, spec: ComposedGameSpec, actio
       const right = spec.matchingItems.find((item) => item.id === pair.rightId);
       return Boolean(left && right && left.pairId === right.pairId);
     });
+  }
+  if (action.kind === "select_player") {
+    const actorTeamId = state.teamByPlayer[actorId];
+    if (!payload.targetPlayerId || !actorTeamId || state.teamByPlayer[payload.targetPlayerId] !== actorTeamId) {
+      throw new ComposedGameRuleError("Captains must select a mime player from their own team.");
+    }
+    return null;
   }
   if (action.kind === "buzz" && state.buzzes[state.phaseId]) throw new ComposedGameRuleError("The buzzer has already been claimed in this phase.");
   return action.kind === "complete_challenge" ? true : null;
@@ -474,7 +505,19 @@ function applyEffect(state: ComposedGameState, spec: ComposedGameSpec, effect: E
     state.randomCounter += 1;
   } else if (effect.kind === "set_active_player") {
     if (effect.mode === "actor") state.activePlayerId = actorId;
-    else {
+    else if (effect.mode === "selected") {
+      if (!payload.targetPlayerId || !state.playerOrder.includes(payload.targetPlayerId)) {
+        throw new ComposedGameRuleError("No valid mime player was selected.");
+      }
+      state.activePlayerId = payload.targetPlayerId;
+    } else if (effect.mode === "next_team_captain") {
+      const currentTeamId = state.teamByPlayer[state.activePlayerId];
+      const teamIndex = state.teams.findIndex((team) => team.id === currentTeamId);
+      const nextTeam = state.teams[(teamIndex + 1) % state.teams.length];
+      const nextCaptain = nextTeam ? state.captainByTeam?.[nextTeam.id] : undefined;
+      if (!nextCaptain) throw new ComposedGameRuleError("The next team has no captain.");
+      state.activePlayerId = nextCaptain;
+    } else {
       const index = state.playerOrder.indexOf(state.activePlayerId);
       state.activePlayerId = state.playerOrder[(index + 1) % state.playerOrder.length] ?? state.activePlayerId;
     }
@@ -628,5 +671,5 @@ export function projectComposedGameState(state: ComposedGameState, spec: Compose
       ...(action.randomizerId ? { randomizerId: action.randomizerId } : {}),
       ...(action.itemIds ? { itemIds: action.itemIds } : {}),
     }));
-  return { kind: "composed", code, title: spec.title, description: spec.description, theme: spec.theme, status: state.status, revision: state.revision, round: Math.min(state.round, spec.setup.rounds), totalRounds: spec.setup.rounds, phase: { id: phase.id, title: phase.title }, players, selfPlayerId: playerId, activePlayerId: state.activePlayerId, teams: state.teams, scores: state.scores, components, availableActions, winner: state.winner };
+  return { kind: "composed", code, title: spec.title, description: spec.description, theme: spec.theme, status: state.status, revision: state.revision, round: Math.min(state.round, spec.setup.rounds), totalRounds: spec.setup.rounds, phase: { id: phase.id, title: phase.title }, players, selfPlayerId: playerId, activePlayerId: state.activePlayerId, teams: state.teams, captainByTeam: state.captainByTeam ?? {}, scores: state.scores, components, availableActions, winner: state.winner };
 }

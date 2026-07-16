@@ -149,7 +149,7 @@ export const effectSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("reveal"), revealId: idSchema }).strict(),
   z.object({ kind: z.literal("randomize"), randomizerId: idSchema }).strict(),
   z.object({ kind: z.literal("shuffle_deck"), deckId: idSchema }).strict(),
-  z.object({ kind: z.literal("set_active_player"), mode: z.enum(["next", "actor"]) }).strict(),
+  z.object({ kind: z.literal("set_active_player"), mode: z.enum(["next", "actor", "selected", "next_team_captain"]) }).strict(),
   z.object({ kind: z.literal("advance_phase") }).strict(),
   z.object({ kind: z.literal("advance_round"), resetPhaseActions: z.boolean().default(true) }).strict(),
   z.object({ kind: z.literal("end_game"), winnerBy: z.enum(["highest_score", "actor", "actor_team", "none"]) }).strict(),
@@ -159,8 +159,8 @@ export const actionDefinitionSchema = z
   .object({
     id: idSchema,
     label: shortTextSchema,
-    kind: z.enum(["advance", "choose", "text", "draw", "play_card", "move", "resource", "randomize", "buzz", "order", "match", "complete_challenge"]),
-    actor: z.enum(["host", "active_player", "any_player", "all_players", "team"]),
+    kind: z.enum(["advance", "choose", "text", "draw", "play_card", "move", "resource", "randomize", "buzz", "order", "match", "complete_challenge", "select_player"]),
+    actor: z.enum(["host", "active_player", "any_player", "all_players", "team", "team_captain"]),
     oncePerPhase: z.boolean().default(false),
     optionIds: z.array(idSchema).min(2).max(12).optional(),
     itemIds: z.array(idSchema).min(2).max(24).optional(),
@@ -388,6 +388,7 @@ function semanticIssues(spec: ComposedGameSpec): ComposedValidationIssue[] {
       if (action.kind === "buzz") return phaseComponents.some((component) => component.kind === "buzzer");
       if (action.kind === "order") return phaseComponents.some((component) => component.kind === "ordering" && action.itemIds?.every((id) => component.itemIds.includes(id)));
       if (action.kind === "match") return phaseComponents.some((component) => component.kind === "matching" && action.itemIds?.every((id) => component.itemIds.includes(id)));
+      if (action.kind === "select_player") return phaseComponents.some((component) => component.kind === "teams" || component.kind === "players");
       return false;
     };
     for (const id of phase.actionIds) {

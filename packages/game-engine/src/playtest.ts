@@ -125,6 +125,11 @@ function payloadForAction(view: ComposedGameView, action: ViewAction, persona: V
     }
     return pairs.length * 2 === ids.length ? { pairs } : null;
   }
+  if (action.kind === "select_player") {
+    const activeTeam = view.teams.find((team) => team.playerIds.includes(view.activePlayerId));
+    const selectedId = activeTeam ? rotate(activeTeam.playerIds, seed)[0] : undefined;
+    return selectedId ? { targetPlayerId: selectedId } : null;
+  }
   return {};
 }
 

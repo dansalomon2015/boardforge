@@ -93,6 +93,7 @@ describe("MemoryBlueprintStore", () => {
       players: [],
       reconnectTokenHashes: {},
       lobbyTeamByPlayer: {},
+      lobbyCaptainByTeam: {},
       seed: "ABC234-seed",
       checkpoint: { revision: 2 },
       checkpointChecksum: "checksum",
