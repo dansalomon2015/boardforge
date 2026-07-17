@@ -21,10 +21,22 @@ describe("deterministic room replay", () => {
     let state = initializeGame(partyPulseSpec, players, "legacy-replay");
     const events: ReplayEntry[] = [];
     for (const [index, player] of players.entries()) {
-      const action = { type: "SUBMIT_ANSWER" as const, optionId: partyPulseSpec.questions[0]!.type === "trivia" ? partyPulseSpec.questions[0]!.options[0]!.id : "unused" };
+      const action = {
+        type: "SUBMIT_ANSWER" as const,
+        optionId:
+          partyPulseSpec.questions[0]!.type === "trivia" ? partyPulseSpec.questions[0]!.options[0]!.id : "unused",
+      };
       const expectedRevision = state.revision;
       state = reduceGame(state, action, player.id, player.isHost, partyPulseSpec);
-      events.push({ sequence: index + 1, actorId: player.id, isHost: player.isHost, expectedRevision, resultingRevision: state.revision, idempotencyKey: `legacy-${index + 1}`, action });
+      events.push({
+        sequence: index + 1,
+        actorId: player.id,
+        isHost: player.isHost,
+        expectedRevision,
+        resultingRevision: state.revision,
+        idempotencyKey: `legacy-${index + 1}`,
+        action,
+      });
     }
     const replayed = replayGame({ spec: partyPulseSpec, players, seed: "legacy-replay", events });
     expect(stateChecksum(replayed)).toBe(stateChecksum(state));
@@ -36,27 +48,53 @@ describe("deterministic room replay", () => {
     const action = { type: "COMPOSED_ACTION" as const, actionId: "draw_film" };
     const actor = players.find((player) => player.id === state.activePlayerId)!;
     const expectedRevision = state.revision;
-    state = reduceComposedGame(state, { ...action, idempotencyKey: "replay-key-001" }, actor.id, actor.isHost, cinemaCharadesSpec);
-    const events: ReplayEntry[] = [{ sequence: 1, actorId: actor.id, isHost: actor.isHost, expectedRevision, resultingRevision: state.revision, idempotencyKey: "replay-key-001", action }];
-    const replayed = replayGame({ spec: cinemaCharadesSpec, players, seed: "composed-replay", teamByPlayer: teams, events });
+    state = reduceComposedGame(
+      state,
+      { ...action, idempotencyKey: "replay-key-001" },
+      actor.id,
+      actor.isHost,
+      cinemaCharadesSpec,
+    );
+    const events: ReplayEntry[] = [
+      {
+        sequence: 1,
+        actorId: actor.id,
+        isHost: actor.isHost,
+        expectedRevision,
+        resultingRevision: state.revision,
+        idempotencyKey: "replay-key-001",
+        action,
+      },
+    ];
+    const replayed = replayGame({
+      spec: cinemaCharadesSpec,
+      players,
+      seed: "composed-replay",
+      teamByPlayer: teams,
+      events,
+    });
     expect(stateChecksum(replayed)).toBe(stateChecksum(state));
   });
 
   it("rejects a stale or discontinuous event stream", () => {
-    expect(() => replayGame({
-      spec: cinemaCharadesSpec,
-      players,
-      seed: "bad-replay",
-      teamByPlayer: { [players[0]!.id]: "projecteurs", [players[1]!.id]: "clapboards" },
-      events: [{
-        sequence: 2,
-        actorId: players[0]!.id,
-        isHost: true,
-        expectedRevision: 99,
-        resultingRevision: 100,
-        idempotencyKey: "bad-replay-001",
-        action: { type: "COMPOSED_ACTION", actionId: "draw_film" },
-      }],
-    })).toThrow("sequence");
+    expect(() =>
+      replayGame({
+        spec: cinemaCharadesSpec,
+        players,
+        seed: "bad-replay",
+        teamByPlayer: { [players[0]!.id]: "projecteurs", [players[1]!.id]: "clapboards" },
+        events: [
+          {
+            sequence: 2,
+            actorId: players[0]!.id,
+            isHost: true,
+            expectedRevision: 99,
+            resultingRevision: 100,
+            idempotencyKey: "bad-replay-001",
+            action: { type: "COMPOSED_ACTION", actionId: "draw_film" },
+          },
+        ],
+      }),
+    ).toThrow("sequence");
   });
 });

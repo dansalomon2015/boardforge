@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { createWordDuelSpec } from "@boardforge/game-spec";
 import type { PublicPlayer } from "@boardforge/shared";
-import { canStartComposedGame, initializeComposedGame, projectComposedGameState, reduceComposedGame, type ComposedGameState } from "./composed-engine";
+import {
+  canStartComposedGame,
+  initializeComposedGame,
+  projectComposedGameState,
+  reduceComposedGame,
+  type ComposedGameState,
+} from "./composed-engine";
 import { runComposedPlaytest } from "./playtest";
 
 const players: PublicPlayer[] = [
@@ -11,7 +17,18 @@ const players: PublicPlayer[] = [
 const spec = createWordDuelSpec({ themeId: "minimal", difficulty: "classic" });
 
 function act(state: ComposedGameState, actorId: string, actionId: string, sequence: number, text: string) {
-  return reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId, idempotencyKey: `duel-${sequence.toString().padStart(4, "0")}`, payload: { text } }, actorId, actorId === "p1", spec);
+  return reduceComposedGame(
+    state,
+    {
+      type: "COMPOSED_ACTION",
+      actionId,
+      idempotencyKey: `duel-${sequence.toString().padStart(4, "0")}`,
+      payload: { text },
+    },
+    actorId,
+    actorId === "p1",
+    spec,
+  );
 }
 
 describe("WordDuel release gate", () => {
@@ -31,7 +48,8 @@ describe("WordDuel release gate", () => {
     const firstView = projectComposedGameState(state, spec, players, "WORDS1", firstActor);
     const board = firstView.components.find((component) => component.kind === "word_duel");
     expect(board?.data.opponentMask).toContain(correctLetter);
-    expect((board?.data.keyboard as Array<{ letter: string; state: string }>).find((key) => key.letter === correctLetter)?.state).toBe("correct");
+    const keyboard = board?.data.keyboard as Array<{ letter: string; state: string }> | undefined;
+    expect(keyboard?.find((key) => key.letter === correctLetter)?.state).toBe("correct");
     expect(state.activePlayerId).toBe(firstOpponent);
 
     const secondOpponentWord = state.wordDuels.duel_board!.secretWordsByPlayer[firstActor]!;

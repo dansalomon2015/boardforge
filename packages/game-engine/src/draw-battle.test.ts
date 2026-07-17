@@ -19,24 +19,128 @@ describe("DrawBattle release gate", () => {
     let state = initializeComposedGame(spec, players, "draw-battle", teams, captains);
     const captainId = state.activePlayerId;
     const artistId = state.teams.find((team) => team.id === state.teamByPlayer[captainId])!.playerIds.at(-1)!;
-    state = reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "select_artist", payload: { targetPlayerId: artistId }, idempotencyKey: "choose-artist-01" }, captainId, captainId === "p1", spec);
-    state = reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "draw_prompt", idempotencyKey: "draw-prompt-001" }, artistId, artistId === "p1", spec);
+    state = reduceComposedGame(
+      state,
+      {
+        type: "COMPOSED_ACTION",
+        actionId: "select_artist",
+        payload: { targetPlayerId: artistId },
+        idempotencyKey: "choose-artist-01",
+      },
+      captainId,
+      captainId === "p1",
+      spec,
+    );
+    state = reduceComposedGame(
+      state,
+      { type: "COMPOSED_ACTION", actionId: "draw_prompt", idempotencyKey: "draw-prompt-001" },
+      artistId,
+      artistId === "p1",
+      spec,
+    );
 
     const cardId = state.activeCards[artistId]!.prompts!;
     const secret = spec.decks[0]!.cards.find((card) => card.id === cardId)!;
     const guesserId = players.find((player) => player.id !== artistId)!.id;
-    expect(JSON.stringify(projectComposedGameState(state, spec, players, "DRAW01", guesserId))).not.toContain(secret.title);
-    expect(() => reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "submit_guess", payload: { text: secret.title }, idempotencyKey: "artist-cannot-guess" }, artistId, false, spec)).toThrow("cannot perform");
-    expect(() => reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "draw_stroke", payload: { stroke: { id: "outside", points: [{ x: 10, y: 20 }, { x: 700, y: 90 }] } }, idempotencyKey: "outside-canvas-1" }, artistId, false, spec)).toThrow("inside the drawing canvas");
+    expect(JSON.stringify(projectComposedGameState(state, spec, players, "DRAW01", guesserId))).not.toContain(
+      secret.title,
+    );
+    expect(() =>
+      reduceComposedGame(
+        state,
+        {
+          type: "COMPOSED_ACTION",
+          actionId: "submit_guess",
+          payload: { text: secret.title },
+          idempotencyKey: "artist-cannot-guess",
+        },
+        artistId,
+        false,
+        spec,
+      ),
+    ).toThrow("cannot perform");
+    expect(() =>
+      reduceComposedGame(
+        state,
+        {
+          type: "COMPOSED_ACTION",
+          actionId: "draw_stroke",
+          payload: {
+            stroke: {
+              id: "outside",
+              points: [
+                { x: 10, y: 20 },
+                { x: 700, y: 90 },
+              ],
+            },
+          },
+          idempotencyKey: "outside-canvas-1",
+        },
+        artistId,
+        false,
+        spec,
+      ),
+    ).toThrow("inside the drawing canvas");
 
-    state = reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "draw_stroke", payload: { stroke: { id: "stroke_1", points: [{ x: 10, y: 20 }, { x: 130, y: 90 }] } }, idempotencyKey: "stroke-event-001" }, artistId, artistId === "p1", spec);
-    const guesserCanvas = projectComposedGameState(state, spec, players, "DRAW01", guesserId).components.find((component) => component.kind === "drawing");
-    expect(guesserCanvas?.data.strokes).toEqual([{ id: "stroke_1", points: [{ x: 10, y: 20 }, { x: 130, y: 90 }] }]);
+    state = reduceComposedGame(
+      state,
+      {
+        type: "COMPOSED_ACTION",
+        actionId: "draw_stroke",
+        payload: {
+          stroke: {
+            id: "stroke_1",
+            points: [
+              { x: 10, y: 20 },
+              { x: 130, y: 90 },
+            ],
+          },
+        },
+        idempotencyKey: "stroke-event-001",
+      },
+      artistId,
+      artistId === "p1",
+      spec,
+    );
+    const guesserCanvas = projectComposedGameState(state, spec, players, "DRAW01", guesserId).components.find(
+      (component) => component.kind === "drawing",
+    );
+    expect(guesserCanvas?.data.strokes).toEqual([
+      {
+        id: "stroke_1",
+        points: [
+          { x: 10, y: 20 },
+          { x: 130, y: 90 },
+        ],
+      },
+    ]);
 
-    state = reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "submit_guess", payload: { text: "Wrong answer" }, idempotencyKey: "wrong-guess-001" }, guesserId, false, spec);
+    state = reduceComposedGame(
+      state,
+      {
+        type: "COMPOSED_ACTION",
+        actionId: "submit_guess",
+        payload: { text: "Wrong answer" },
+        idempotencyKey: "wrong-guess-001",
+      },
+      guesserId,
+      false,
+      spec,
+    );
     expect(state.phaseId).toBe("drawing");
     const scoringTeam = state.teamByPlayer[guesserId]!;
-    state = reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "submit_guess", payload: { text: secret.title.toUpperCase() }, idempotencyKey: "right-guess-001" }, guesserId, false, spec);
+    state = reduceComposedGame(
+      state,
+      {
+        type: "COMPOSED_ACTION",
+        actionId: "submit_guess",
+        payload: { text: secret.title.toUpperCase() },
+        idempotencyKey: "right-guess-001",
+      },
+      guesserId,
+      false,
+      spec,
+    );
     expect(state.scores.teams[scoringTeam]).toBe(1);
     expect(state.phaseId).toBe("select_artist");
   });

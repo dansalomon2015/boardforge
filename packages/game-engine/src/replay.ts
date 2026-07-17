@@ -1,15 +1,7 @@
 import type { BoardGameSpec } from "@boardforge/game-spec";
 import type { GameAction, PublicPlayer } from "@boardforge/shared";
-import {
-  initializeComposedGame,
-  reduceComposedGame,
-  type ComposedGameState,
-} from "./composed-engine.js";
-import {
-  initializeGame,
-  reduceGame,
-  type GameState,
-} from "./index.js";
+import { initializeComposedGame, reduceComposedGame, type ComposedGameState } from "./composed-engine.js";
+import { initializeGame, reduceGame, type GameState } from "./index.js";
 
 export type ReplayEntry = {
   sequence: number;
@@ -61,18 +53,29 @@ export function replayGame(options: {
   events: ReplayEntry[];
 }): GameState | ComposedGameState {
   const ordered = [...options.events].sort((left, right) => left.sequence - right.sequence);
-  let state: GameState | ComposedGameState = options.spec.template === "composed"
-    ? initializeComposedGame(options.spec, options.players, options.seed, options.teamByPlayer ?? {}, options.captainByTeam ?? {})
-    : initializeGame(options.spec, options.players, options.seed);
+  let state: GameState | ComposedGameState =
+    options.spec.template === "composed"
+      ? initializeComposedGame(
+          options.spec,
+          options.players,
+          options.seed,
+          options.teamByPlayer ?? {},
+          options.captainByTeam ?? {},
+        )
+      : initializeGame(options.spec, options.players, options.seed);
 
   for (let index = 0; index < ordered.length; index += 1) {
     const event = ordered[index]!;
-    if (event.sequence !== index + 1) throw new ReplayError(`Missing or duplicate event sequence at ${event.sequence}.`);
+    if (event.sequence !== index + 1)
+      throw new ReplayError(`Missing or duplicate event sequence at ${event.sequence}.`);
     if (state.revision !== event.expectedRevision) {
-      throw new ReplayError(`Event ${event.sequence} expected revision ${event.expectedRevision}, found ${state.revision}.`);
+      throw new ReplayError(
+        `Event ${event.sequence} expected revision ${event.expectedRevision}, found ${state.revision}.`,
+      );
     }
     if (state.template === "composed" && options.spec.template === "composed") {
-      if (event.action.type !== "COMPOSED_ACTION") throw new ReplayError(`Event ${event.sequence} has the wrong action template.`);
+      if (event.action.type !== "COMPOSED_ACTION")
+        throw new ReplayError(`Event ${event.sequence} has the wrong action template.`);
       state = reduceComposedGame(
         state,
         { ...event.action, idempotencyKey: event.idempotencyKey },
@@ -81,13 +84,16 @@ export function replayGame(options: {
         options.spec,
       );
     } else if (state.template !== "composed" && options.spec.template !== "composed") {
-      if (event.action.type === "COMPOSED_ACTION") throw new ReplayError(`Event ${event.sequence} has the wrong action template.`);
+      if (event.action.type === "COMPOSED_ACTION")
+        throw new ReplayError(`Event ${event.sequence} has the wrong action template.`);
       state = reduceGame(state, event.action, event.actorId, event.isHost, options.spec);
     } else {
       throw new ReplayError("State and GameSpec templates do not match during replay.");
     }
     if (state.revision !== event.resultingRevision) {
-      throw new ReplayError(`Event ${event.sequence} produced revision ${state.revision}, expected ${event.resultingRevision}.`);
+      throw new ReplayError(
+        `Event ${event.sequence} produced revision ${state.revision}, expected ${event.resultingRevision}.`,
+      );
     }
   }
   return state;

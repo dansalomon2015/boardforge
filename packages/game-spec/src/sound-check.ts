@@ -1,45 +1,71 @@
 import { z } from "zod";
-import {
-  composedThemeIdSchema,
-  validateComposedGameSpec,
-  type ComposedGameSpec,
-  type ComposedTheme,
-} from "./composed";
+import { composedThemeIdSchema, validateComposedGameSpec, type ComposedGameSpec, type ComposedTheme } from "./composed";
 
-export const soundCheckPromptSchema = z.object({
-  id: z.string().regex(/^[a-z][a-z0-9_]*$/).max(48),
-  answer: z.string().trim().min(2).max(48),
-  category: z.enum(["animals", "machines", "household", "people", "nature", "situations", "music", "transport"]),
-  difficulty: z.enum(["easy", "medium", "hard"]),
-}).strict();
+export const soundCheckPromptSchema = z
+  .object({
+    id: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]*$/)
+      .max(48),
+    answer: z.string().trim().min(2).max(48),
+    category: z.enum(["animals", "machines", "household", "people", "nature", "situations", "music", "transport"]),
+    difficulty: z.enum(["easy", "medium", "hard"]),
+  })
+  .strict();
 
-const teamSchema = z.object({
-  name: z.string().trim().min(2).max(24),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-}).strict();
+const teamSchema = z
+  .object({
+    name: z.string().trim().min(2).max(24),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  })
+  .strict();
 
-export const soundCheckSetupSchema = z.object({
-  themeId: composedThemeIdSchema.default("retro"),
-  promptCount: z.number().int().min(6).max(30).default(18),
-  preferences: z.string().trim().min(3).max(240).optional(),
-  teams: z.array(teamSchema).min(2).max(4).default([
-    { name: "The Echoes", color: "#7357ff" },
-    { name: "The Frequencies", color: "#ff6b4a" },
-  ]),
-}).superRefine((setup, context) => {
-  const names = setup.teams.map((team) => team.name.toLowerCase());
-  if (new Set(names).size !== names.length) context.addIssue({ code: "custom", path: ["teams"], message: "Team names must be unique." });
-}).strict();
+export const soundCheckSetupSchema = z
+  .object({
+    themeId: composedThemeIdSchema.default("retro"),
+    promptCount: z.number().int().min(6).max(30).default(18),
+    preferences: z.string().trim().min(3).max(240).optional(),
+    teams: z
+      .array(teamSchema)
+      .min(2)
+      .max(4)
+      .default([
+        { name: "The Echoes", color: "#7357ff" },
+        { name: "The Frequencies", color: "#ff6b4a" },
+      ]),
+  })
+  .superRefine((setup, context) => {
+    const names = setup.teams.map((team) => team.name.toLowerCase());
+    if (new Set(names).size !== names.length)
+      context.addIssue({ code: "custom", path: ["teams"], message: "Team names must be unique." });
+  })
+  .strict();
 
-export const soundCheckPackSchema = z.object({
-  schemaVersion: z.literal(1),
-  game: z.literal("sound_check"),
-  source: z.enum(["random", "ai"]),
-  themeId: composedThemeIdSchema,
-  preferences: z.string().trim().min(3).max(240).optional(),
-  teams: z.array(z.object({ id: z.string().regex(/^[a-z][a-z0-9_]*$/).max(48), name: z.string().trim().min(2).max(24), color: z.string().regex(/^#[0-9a-fA-F]{6}$/) }).strict()).min(2).max(4),
-  prompts: z.array(soundCheckPromptSchema).min(6).max(30),
-}).strict();
+export const soundCheckPackSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    game: z.literal("sound_check"),
+    source: z.enum(["random", "ai"]),
+    themeId: composedThemeIdSchema,
+    preferences: z.string().trim().min(3).max(240).optional(),
+    teams: z
+      .array(
+        z
+          .object({
+            id: z
+              .string()
+              .regex(/^[a-z][a-z0-9_]*$/)
+              .max(48),
+            name: z.string().trim().min(2).max(24),
+            color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(4),
+    prompts: z.array(soundCheckPromptSchema).min(6).max(30),
+  })
+  .strict();
 
 export type SoundCheckPrompt = z.infer<typeof soundCheckPromptSchema>;
 export type SoundCheckSetupInput = z.input<typeof soundCheckSetupSchema>;
@@ -115,7 +141,10 @@ export const soundCheckCatalog: readonly SoundCheckPrompt[] = [
 
 function numberHash(value: string): number {
   let hash = 2_166_136_261;
-  for (const character of value) { hash ^= character.charCodeAt(0); hash = Math.imul(hash, 16_777_619); }
+  for (const character of value) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16_777_619);
+  }
   return hash >>> 0;
 }
 
@@ -130,9 +159,14 @@ function deterministicShuffle<T>(values: readonly T[], seed: string): T[] {
   return shuffled;
 }
 
-export function createSoundCheckPack(setupInput: SoundCheckSetupInput, promptIds: readonly string[], source: SoundCheckPack["source"]): SoundCheckPack {
+export function createSoundCheckPack(
+  setupInput: SoundCheckSetupInput,
+  promptIds: readonly string[],
+  source: SoundCheckPack["source"],
+): SoundCheckPack {
   const setup = soundCheckSetupSchema.parse(setupInput);
-  if (promptIds.length !== setup.promptCount) throw new Error(`SoundCheck requires exactly ${setup.promptCount} prompts.`);
+  if (promptIds.length !== setup.promptCount)
+    throw new Error(`SoundCheck requires exactly ${setup.promptCount} prompts.`);
   if (new Set(promptIds).size !== promptIds.length) throw new Error("SoundCheck cannot contain duplicate prompts.");
   const byId = new Map(soundCheckCatalog.map((prompt) => [prompt.id, prompt]));
   const prompts = promptIds.map((id) => {
@@ -140,19 +174,35 @@ export function createSoundCheckPack(setupInput: SoundCheckSetupInput, promptIds
     if (!prompt) throw new Error(`Unknown SoundCheck prompt id: ${id}`);
     return prompt;
   });
-  return soundCheckPackSchema.parse({ schemaVersion: 1, game: "sound_check", source, themeId: setup.themeId, ...(setup.preferences ? { preferences: setup.preferences } : {}), teams: setup.teams.map((team, index) => ({ id: `team_${index + 1}`, ...team })), prompts });
+  return soundCheckPackSchema.parse({
+    schemaVersion: 1,
+    game: "sound_check",
+    source,
+    themeId: setup.themeId,
+    ...(setup.preferences ? { preferences: setup.preferences } : {}),
+    teams: setup.teams.map((team, index) => ({ id: `team_${index + 1}`, ...team })),
+    prompts,
+  });
 }
 
 export function createRandomSoundCheckPack(setupInput: SoundCheckSetupInput, seed: string): SoundCheckPack {
   const setup = soundCheckSetupSchema.parse(setupInput);
-  return createSoundCheckPack(setup, deterministicShuffle(soundCheckCatalog, seed).slice(0, setup.promptCount).map((prompt) => prompt.id), "random");
+  return createSoundCheckPack(
+    setup,
+    deterministicShuffle(soundCheckCatalog, seed)
+      .slice(0, setup.promptCount)
+      .map((prompt) => prompt.id),
+    "random",
+  );
 }
 
 export function createSoundCheckSpec(packInput: SoundCheckPack): ComposedGameSpec {
   const pack = soundCheckPackSchema.parse(packInput);
   const rounds = pack.prompts.length;
   const theme: ComposedTheme = pack.themeId;
-  const suffix = numberHash(`sound-check-v1:${pack.themeId}:${pack.prompts.map((prompt) => prompt.id).join(":")}`).toString(36);
+  const suffix = numberHash(
+    `sound-check-v1:${pack.themeId}:${pack.prompts.map((prompt) => prompt.id).join(":")}`,
+  ).toString(36);
   const resolveEffects = [
     { kind: "discard_selected_card" as const, deckId: "sounds", target: "active_player" as const },
     { kind: "advance_round" as const, resetPhaseActions: true },
@@ -164,47 +214,200 @@ export function createSoundCheckSpec(packInput: SoundCheckPack): ComposedGameSpe
     id: `sound_check_${suffix}`.slice(0, 48),
     template: "composed",
     title: "SoundCheck",
-    description: pack.preferences ? `A voice-only sound showdown tailored around ${pack.preferences}.` : "Imitate the secret sound with your voice while every other player races to identify it.",
+    description: pack.preferences
+      ? `A voice-only sound showdown tailored around ${pack.preferences}.`
+      : "Imitate the secret sound with your voice while every other player races to identify it.",
     theme,
     minPlayers: pack.teams.length,
     maxPlayers: 12,
     suggestedDurationMinutes: Math.max(10, Math.ceil(rounds * 1.1)),
-    setup: { mode: "teams", teamPolicy: { teams: pack.teams, minMembersPerTeam: 1, maxMembersPerTeam: 6, allocation: "balanced", allowUnevenTeams: true, rotateActivePlayer: true }, rounds, startingPhaseId: "select_performer", startingPlayer: "random" },
-    variables: [], choices: [], clues: [], reveals: [], orderingItems: [], matchingItems: [], boards: [], resources: [], randomizers: [], media: [],
-    decks: [{ id: "sounds", name: "Sound prompts", visibility: "private", shuffle: true, initialHandSize: 0, cards: pack.prompts.map((prompt) => ({ id: prompt.id, title: prompt.answer, body: `${prompt.category} · ${prompt.difficulty}`, icon: "◖", tags: [prompt.category, prompt.difficulty] })) }],
+    setup: {
+      mode: "teams",
+      teamPolicy: {
+        teams: pack.teams,
+        minMembersPerTeam: 1,
+        maxMembersPerTeam: 6,
+        allocation: "balanced",
+        allowUnevenTeams: true,
+        rotateActivePlayer: true,
+      },
+      rounds,
+      startingPhaseId: "select_performer",
+      startingPlayer: "random",
+    },
+    variables: [],
+    choices: [],
+    clues: [],
+    reveals: [],
+    orderingItems: [],
+    matchingItems: [],
+    boards: [],
+    resources: [],
+    randomizers: [],
+    media: [],
+    decks: [
+      {
+        id: "sounds",
+        name: "Sound prompts",
+        visibility: "private",
+        shuffle: true,
+        initialHandSize: 0,
+        cards: pack.prompts.map((prompt) => ({
+          id: prompt.id,
+          title: prompt.answer,
+          body: `${prompt.category} · ${prompt.difficulty}`,
+          icon: "◖",
+          tags: [prompt.category, prompt.difficulty],
+        })),
+      },
+    ],
     components: [
-      { id: "game_header", kind: "header", audience: "public", eyebrow: "BoardForge Original", title: { kind: "literal", value: "SoundCheck" }, description: { kind: "literal", value: "One voice. One secret sound. The whole room is listening." }, icon: "◖" },
+      {
+        id: "game_header",
+        kind: "header",
+        audience: "public",
+        eyebrow: "BoardForge Original",
+        title: { kind: "literal", value: "SoundCheck" },
+        description: { kind: "literal", value: "One voice. One secret sound. The whole room is listening." },
+        icon: "◖",
+      },
       { id: "sound_deck", kind: "deck", audience: "active_player", deckId: "sounds", label: "Secret sound" },
-      { id: "secret_sound", kind: "prompt", audience: "active_player", category: "Imitate this sound", prompt: { kind: "active_card", deckId: "sounds", field: "title" }, hint: { kind: "active_card", deckId: "sounds", field: "body" }, icon: "◖" },
-      { id: "guess_input", kind: "text_input", audience: "public", label: "Name the sound", placeholder: "Type your guess…", multiline: false, maxLength: 48 },
+      {
+        id: "secret_sound",
+        kind: "prompt",
+        audience: "active_player",
+        category: "Imitate this sound",
+        prompt: { kind: "active_card", deckId: "sounds", field: "title" },
+        hint: { kind: "active_card", deckId: "sounds", field: "body" },
+        icon: "◖",
+      },
+      {
+        id: "guess_input",
+        kind: "text_input",
+        audience: "public",
+        label: "Name the sound",
+        placeholder: "Type your guess…",
+        multiline: false,
+        maxLength: 48,
+      },
       { id: "sound_timer", kind: "timer", audience: "public", seconds: 60, label: "Performance time" },
       { id: "turn", kind: "turn", audience: "public" },
       { id: "round", kind: "round", audience: "public", label: "Track" },
       { id: "teams", kind: "teams", audience: "public" },
       { id: "scores", kind: "scores", audience: "public", title: "Team score" },
-      { id: "outcome", kind: "outcome", audience: "public", title: { kind: "literal", value: "Final mix" }, description: { kind: "literal", value: "The team with the most correct guesses wins SoundCheck." } },
+      {
+        id: "outcome",
+        kind: "outcome",
+        audience: "public",
+        title: { kind: "literal", value: "Final mix" },
+        description: { kind: "literal", value: "The team with the most correct guesses wins SoundCheck." },
+      },
     ],
     actions: [
-      { id: "select_performer", label: "Choose the performer", kind: "select_player", actor: "team_captain", oncePerPhase: true, effects: [{ kind: "set_active_player", mode: "selected" }, { kind: "advance_phase" }] },
-      { id: "draw_sound", label: "Reveal my sound", kind: "draw", actor: "active_player", oncePerPhase: true, deckId: "sounds", effects: [{ kind: "draw_cards", deckId: "sounds", count: 1, target: "actor" }, { kind: "advance_phase" }] },
-      { id: "pass_sound", label: "Pass sound", kind: "advance", actor: "active_player", oncePerPhase: true, effects: resolveEffects },
-      { id: "submit_guess", label: "Submit guess", kind: "text", actor: "guessers", oncePerPhase: false, answerDeckId: "sounds", effects: [] },
+      {
+        id: "select_performer",
+        label: "Choose the performer",
+        kind: "select_player",
+        actor: "team_captain",
+        oncePerPhase: true,
+        effects: [{ kind: "set_active_player", mode: "selected" }, { kind: "advance_phase" }],
+      },
+      {
+        id: "draw_sound",
+        label: "Reveal my sound",
+        kind: "draw",
+        actor: "active_player",
+        oncePerPhase: true,
+        deckId: "sounds",
+        effects: [{ kind: "draw_cards", deckId: "sounds", count: 1, target: "actor" }, { kind: "advance_phase" }],
+      },
+      {
+        id: "pass_sound",
+        label: "Pass sound",
+        kind: "advance",
+        actor: "active_player",
+        oncePerPhase: true,
+        effects: resolveEffects,
+      },
+      {
+        id: "submit_guess",
+        label: "Submit guess",
+        kind: "text",
+        actor: "guessers",
+        oncePerPhase: false,
+        answerDeckId: "sounds",
+        effects: [],
+      },
     ],
     rules: [
-      { id: "resolve_correct_guess", trigger: { kind: "after_action", actionId: "submit_guess" }, conditionMode: "all", conditions: [{ kind: "last_input_correct", actionId: "submit_guess" }], effects: [{ kind: "add_score", target: "actor_team", amount: 1 }, ...resolveEffects] },
-      { id: "end_after_guess", trigger: { kind: "after_action", actionId: "submit_guess" }, conditionMode: "all", conditions: [{ kind: "last_input_correct", actionId: "submit_guess" }, { kind: "round_at_least", round: rounds + 1 }], effects: [{ kind: "end_game", winnerBy: "highest_score" }] },
-      { id: "end_after_pass", trigger: { kind: "after_action", actionId: "pass_sound" }, conditionMode: "all", conditions: [{ kind: "round_at_least", round: rounds + 1 }], effects: [{ kind: "end_game", winnerBy: "highest_score" }] },
+      {
+        id: "resolve_correct_guess",
+        trigger: { kind: "after_action", actionId: "submit_guess" },
+        conditionMode: "all",
+        conditions: [{ kind: "last_input_correct", actionId: "submit_guess" }],
+        effects: [{ kind: "add_score", target: "actor_team", amount: 1 }, ...resolveEffects],
+      },
+      {
+        id: "end_after_guess",
+        trigger: { kind: "after_action", actionId: "submit_guess" },
+        conditionMode: "all",
+        conditions: [
+          { kind: "last_input_correct", actionId: "submit_guess" },
+          { kind: "round_at_least", round: rounds + 1 },
+        ],
+        effects: [{ kind: "end_game", winnerBy: "highest_score" }],
+      },
+      {
+        id: "end_after_pass",
+        trigger: { kind: "after_action", actionId: "pass_sound" },
+        conditionMode: "all",
+        conditions: [{ kind: "round_at_least", round: rounds + 1 }],
+        effects: [{ kind: "end_game", winnerBy: "highest_score" }],
+      },
     ],
     phases: [
-      { id: "select_performer", title: "The captain chooses", componentIds: ["game_header", "round", "turn", "teams", "scores"], actionIds: ["select_performer"], nextPhaseId: "draw_sound", completionMode: "manual", completionConditions: [], onComplete: [] },
-      { id: "draw_sound", title: "Secret sound", componentIds: ["game_header", "round", "turn", "teams", "scores", "sound_deck"], actionIds: ["draw_sound"], nextPhaseId: "performing", completionMode: "manual", completionConditions: [], onComplete: [] },
-      { id: "performing", title: "Live performance", componentIds: ["game_header", "round", "turn", "teams", "scores", "sound_timer", "secret_sound", "guess_input"], actionIds: ["pass_sound", "submit_guess"], nextPhaseId: "select_performer", completionMode: "manual", completionConditions: [], onComplete: [] },
+      {
+        id: "select_performer",
+        title: "The captain chooses",
+        componentIds: ["game_header", "round", "turn", "teams", "scores"],
+        actionIds: ["select_performer"],
+        nextPhaseId: "draw_sound",
+        completionMode: "manual",
+        completionConditions: [],
+        onComplete: [],
+      },
+      {
+        id: "draw_sound",
+        title: "Secret sound",
+        componentIds: ["game_header", "round", "turn", "teams", "scores", "sound_deck"],
+        actionIds: ["draw_sound"],
+        nextPhaseId: "performing",
+        completionMode: "manual",
+        completionConditions: [],
+        onComplete: [],
+      },
+      {
+        id: "performing",
+        title: "Live performance",
+        componentIds: ["game_header", "round", "turn", "teams", "scores", "sound_timer", "secret_sound", "guess_input"],
+        actionIds: ["pass_sound", "submit_guess"],
+        nextPhaseId: "select_performer",
+        completionMode: "manual",
+        completionConditions: [],
+        onComplete: [],
+      },
     ],
   };
   const validation = validateComposedGameSpec(spec);
-  if (!validation.ok) throw new Error(`Invalid SoundCheck GameSpec: ${validation.issues.map((issue) => `${issue.code}:${issue.path}`).join(", ")}`);
+  if (!validation.ok)
+    throw new Error(
+      `Invalid SoundCheck GameSpec: ${validation.issues.map((issue) => `${issue.code}:${issue.path}`).join(", ")}`,
+    );
   return validation.spec;
 }
 
-export const defaultSoundCheckPack = createRandomSoundCheckPack({ themeId: "retro", promptCount: 18 }, "boardforge-default-sound-check");
+export const defaultSoundCheckPack = createRandomSoundCheckPack(
+  { themeId: "retro", promptCount: 18 },
+  "boardforge-default-sound-check",
+);
 export const defaultSoundCheckSpec = createSoundCheckSpec(defaultSoundCheckPack);

@@ -25,11 +25,20 @@ export type LobbyView = {
   selfPlayerId: string;
   canStart: boolean;
   startBlockReason?: string | undefined;
-  teamSetup?: {
-    teams: Array<{ id: string; name: string; color: string; playerIds: string[]; maxMembers?: number | undefined; captainPlayerId?: string | undefined }>;
-    selfTeamId?: string | undefined;
-    allowUnevenTeams: boolean;
-  } | undefined;
+  teamSetup?:
+    | {
+        teams: Array<{
+          id: string;
+          name: string;
+          color: string;
+          playerIds: string[];
+          maxMembers?: number | undefined;
+          captainPlayerId?: string | undefined;
+        }>;
+        selfTeamId?: string | undefined;
+        allowUnevenTeams: boolean;
+      }
+    | undefined;
 };
 
 export type HiddenRolesView = {
@@ -86,22 +95,73 @@ export type QuizVoteView = {
 };
 
 export type ComposedTheme =
-  | "arcade" | "tropical" | "mystery" | "cosmic" | "western" | "medieval" | "cyberpunk" | "enchanted"
-  | "pirate" | "spooky" | "retro" | "disco" | "noir" | "candy" | "nature" | "ocean" | "laboratory"
-  | "royal" | "cozy" | "minimal"
+  | "arcade"
+  | "tropical"
+  | "mystery"
+  | "cosmic"
+  | "western"
+  | "medieval"
+  | "cyberpunk"
+  | "enchanted"
+  | "pirate"
+  | "spooky"
+  | "retro"
+  | "disco"
+  | "noir"
+  | "candy"
+  | "nature"
+  | "ocean"
+  | "laboratory"
+  | "royal"
+  | "cozy"
+  | "minimal"
   | {
       id: "custom";
       name: string;
       radius: "soft" | "round" | "sharp";
       colors: {
-        background: string; surface: string; surfaceAlt: string; text: string; muted: string;
-        primary: string; secondary: string; accent: string; border: string;
+        background: string;
+        surface: string;
+        surfaceAlt: string;
+        text: string;
+        muted: string;
+        primary: string;
+        secondary: string;
+        accent: string;
+        border: string;
       };
     };
 
 export type ResolvedGameComponent = {
   id: string;
-  kind: "header" | "prompt" | "deck" | "choices" | "text_input" | "drawing" | "timer" | "turn" | "round" | "teams" | "players" | "scores" | "clues" | "challenge" | "reveal" | "outcome" | "board" | "card_zone" | "resources" | "randomizer" | "buzzer" | "ordering" | "matching" | "media" | "story" | "word_duel" | "second_sense";
+  kind:
+    | "header"
+    | "prompt"
+    | "deck"
+    | "choices"
+    | "text_input"
+    | "drawing"
+    | "timer"
+    | "turn"
+    | "round"
+    | "teams"
+    | "players"
+    | "scores"
+    | "clues"
+    | "challenge"
+    | "reveal"
+    | "outcome"
+    | "board"
+    | "card_zone"
+    | "resources"
+    | "randomizer"
+    | "buzzer"
+    | "ordering"
+    | "matching"
+    | "media"
+    | "story"
+    | "word_duel"
+    | "second_sense";
   data: Record<string, unknown>;
 };
 
@@ -126,8 +186,30 @@ export type ComposedGameView = {
   availableActions: Array<{
     id: string;
     label: string;
-    kind: "advance" | "choose" | "text" | "draw" | "play_card" | "move" | "resource" | "randomize" | "buzz" | "order" | "match" | "complete_challenge" | "select_player" | "sketch" | "secret_word" | "letter_guess" | "word_guess" | "timing_start" | "timing_stop" | "timing_advance";
-    options?: Array<{ id: string; label: string; description?: string | undefined; icon?: string | undefined }> | undefined;
+    kind:
+      | "advance"
+      | "choose"
+      | "text"
+      | "draw"
+      | "play_card"
+      | "move"
+      | "resource"
+      | "randomize"
+      | "buzz"
+      | "order"
+      | "match"
+      | "complete_challenge"
+      | "select_player"
+      | "sketch"
+      | "secret_word"
+      | "letter_guess"
+      | "word_guess"
+      | "timing_start"
+      | "timing_stop"
+      | "timing_advance";
+    options?:
+      | Array<{ id: string; label: string; description?: string | undefined; icon?: string | undefined }>
+      | undefined;
     deckId?: string | undefined;
     boardId?: string | undefined;
     randomizerId?: string | undefined;
@@ -181,6 +263,4 @@ export type JoinRoomResult = {
   view: RoomView;
 };
 
-export type SocketAck<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+export type SocketAck<T> = { ok: true; data: T } | { ok: false; error: string };

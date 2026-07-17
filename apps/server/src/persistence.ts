@@ -9,10 +9,7 @@ import {
   type ComposedBalancePatch,
 } from "@boardforge/game-spec";
 import type { ComposedPlaytestReport } from "@boardforge/game-engine";
-import {
-  composedGameCritiqueSchema,
-  type ComposedGameCritique,
-} from "@boardforge/llm";
+import { composedGameCritiqueSchema, type ComposedGameCritique } from "@boardforge/llm";
 import type { GameAction, PublicPlayer } from "@boardforge/shared";
 
 export type BlueprintStatus = "draft" | "validating" | "playtesting" | "release_ready" | "needs_review";
@@ -28,7 +25,7 @@ export type BlueprintRecord = {
   suggestedPatch?: ComposedBalancePatch | undefined;
 };
 
-export type BalancePatchStatus = "proposed" | "accepted" | "rejected";
+type BalancePatchStatus = "proposed" | "accepted" | "rejected";
 
 export type BalancePatchRecord = {
   id: string;
@@ -97,7 +94,9 @@ function parseSpec(input: unknown): BoardGameSpec {
   const template = typeof input === "object" && input !== null && "template" in input ? input.template : undefined;
   const validation = template === "composed" ? validateComposedGameSpec(input) : validateGameSpec(input);
   if (!validation.ok) {
-    throw new Error(`Refusing invalid persisted GameSpec: ${validation.issues.map((issue) => `${issue.code}:${issue.path}`).join(", ")}`);
+    throw new Error(
+      `Refusing invalid persisted GameSpec: ${validation.issues.map((issue) => `${issue.code}:${issue.path}`).join(", ")}`,
+    );
   }
   return validation.spec;
 }
@@ -158,17 +157,18 @@ export class MemoryBlueprintStore implements BlueprintStore {
   ): Promise<void> {
     const existing = this.records.get(id);
     if (!existing) throw new Error(`Unknown blueprint: ${id}`);
-    if (existing.spec.template !== "composed") throw new Error("Only composed blueprints support structured critiques.");
+    if (existing.spec.template !== "composed")
+      throw new Error("Only composed blueprints support structured critiques.");
     const critique = parseCritique(input);
-    if (critique.sourceSpecId !== existing.spec.id) throw new Error("Critique sourceSpecId does not match the blueprint GameSpec.");
+    if (critique.sourceSpecId !== existing.spec.id)
+      throw new Error("Critique sourceSpecId does not match the blueprint GameSpec.");
     const suggestedPatch = suggestedPatchInput ? parseBalancePatch(suggestedPatchInput) : undefined;
     if (suggestedPatch && suggestedPatch.sourceSpecId !== existing.spec.id) {
       throw new Error("Suggested patch sourceSpecId does not match the blueprint GameSpec.");
     }
     if (
-      existing.critique
-      && (!isDeepStrictEqual(existing.critique, critique)
-        || !isDeepStrictEqual(existing.suggestedPatch, suggestedPatch))
+      existing.critique &&
+      (!isDeepStrictEqual(existing.critique, critique) || !isDeepStrictEqual(existing.suggestedPatch, suggestedPatch))
     ) {
       throw new Error(`Game review for ${id} is immutable.`);
     }
@@ -391,7 +391,9 @@ class PostgresBlueprintStore implements BlueprintStore {
       [record.id, JSON.stringify(spec), record.status, record.provider, record.prompt ?? null],
     );
     if (inserted.rowCount === 0) {
-      const existing = await this.pool.query<{ spec: unknown }>("SELECT spec FROM blueprint_revisions WHERE id = $1", [record.id]);
+      const existing = await this.pool.query<{ spec: unknown }>("SELECT spec FROM blueprint_revisions WHERE id = $1", [
+        record.id,
+      ]);
       if (!existing.rows[0] || !isDeepStrictEqual(parseSpec(existing.rows[0].spec), spec)) {
         throw new Error(`Blueprint revision ${record.id} is immutable.`);
       }
@@ -434,9 +436,11 @@ class PostgresBlueprintStore implements BlueprintStore {
   ): Promise<void> {
     const blueprint = await this.get(id);
     if (!blueprint) throw new Error(`Unknown blueprint: ${id}`);
-    if (blueprint.spec.template !== "composed") throw new Error("Only composed blueprints support structured critiques.");
+    if (blueprint.spec.template !== "composed")
+      throw new Error("Only composed blueprints support structured critiques.");
     const critique = parseCritique(input);
-    if (critique.sourceSpecId !== blueprint.spec.id) throw new Error("Critique sourceSpecId does not match the blueprint GameSpec.");
+    if (critique.sourceSpecId !== blueprint.spec.id)
+      throw new Error("Critique sourceSpecId does not match the blueprint GameSpec.");
     const suggestedPatch = suggestedPatchInput ? parseBalancePatch(suggestedPatchInput) : undefined;
     if (suggestedPatch && suggestedPatch.sourceSpecId !== blueprint.spec.id) {
       throw new Error("Suggested patch sourceSpecId does not match the blueprint GameSpec.");
@@ -456,9 +460,9 @@ class PostgresBlueprintStore implements BlueprintStore {
       const row = existing.rows[0];
       const existingPatch = row?.suggested_patch ? parseBalancePatch(row.suggested_patch) : undefined;
       if (
-        !row
-        || !isDeepStrictEqual(parseCritique(row.critique), critique)
-        || !isDeepStrictEqual(existingPatch, suggestedPatch)
+        !row ||
+        !isDeepStrictEqual(parseCritique(row.critique), critique) ||
+        !isDeepStrictEqual(existingPatch, suggestedPatch)
       ) {
         throw new Error(`Game review for ${id} is immutable.`);
       }
@@ -510,7 +514,8 @@ class PostgresBlueprintStore implements BlueprintStore {
     );
     if (inserted.rowCount === 0) {
       const existing = await this.getBalancePatch(record.id);
-      if (!existing || !isDeepStrictEqual(existing, record)) throw new Error(`Balance patch ${record.id} is immutable.`);
+      if (!existing || !isDeepStrictEqual(existing, record))
+        throw new Error(`Balance patch ${record.id} is immutable.`);
     }
   }
 
@@ -544,10 +549,9 @@ class PostgresBlueprintStore implements BlueprintStore {
       if (derivedRow.status !== "validating" || critique?.verdict !== "release_ready") {
         throw new Error("The derived blueprint has not passed its structured critique gate.");
       }
-      await client.query(
-        "UPDATE balance_patches SET status = 'accepted', decided_at = now() WHERE id = $1::uuid",
-        [id],
-      );
+      await client.query("UPDATE balance_patches SET status = 'accepted', decided_at = now() WHERE id = $1::uuid", [
+        id,
+      ]);
       const updated = await client.query(
         "UPDATE blueprint_revisions SET status = 'release_ready', updated_at = now() WHERE id = $1",
         [row.derived_blueprint_id],
@@ -578,10 +582,9 @@ class PostgresBlueprintStore implements BlueprintStore {
       const row = selected.rows[0];
       if (!row) throw new Error(`Unknown balance patch: ${id}`);
       if (row.status !== "proposed") throw new Error(`Balance patch ${id} is already ${row.status}.`);
-      await client.query(
-        "UPDATE balance_patches SET status = 'rejected', decided_at = now() WHERE id = $1::uuid",
-        [id],
-      );
+      await client.query("UPDATE balance_patches SET status = 'rejected', decided_at = now() WHERE id = $1::uuid", [
+        id,
+      ]);
       const updated = await client.query(
         "UPDATE blueprint_revisions SET status = 'needs_review', updated_at = now() WHERE id = $1",
         [row.derived_blueprint_id],

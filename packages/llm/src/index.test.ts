@@ -12,9 +12,7 @@ const provider = new FakeLlmProvider();
 describe("bounded AI content provider", () => {
   it("selects providers explicitly without making a network request", () => {
     expect(createLlmProvider({ provider: "fake", apiKey: undefined, model: undefined }).name).toBe("procedural-local");
-    expect(createLlmProvider({ provider: "openai", apiKey: "test-key", model: "gpt-5.6" }).name).toBe(
-      "openai:gpt-5.6",
-    );
+    expect(createLlmProvider({ provider: "openai", apiKey: "test-key", model: "gpt-5.6" }).name).toBe("openai:gpt-5.6");
     expect(() => createLlmProvider({ provider: "openai", apiKey: undefined, model: "gpt-5.6" })).toThrow(
       "OPENAI_API_KEY",
     );
@@ -34,7 +32,11 @@ describe("bounded AI content provider", () => {
   });
 
   it("selects a bounded WordTrap pack from the audited catalog", async () => {
-    const pack = await provider.generateWordTrapPack({ themeId: "disco", cardCount: 8, preferences: "food and travel" });
+    const pack = await provider.generateWordTrapPack({
+      themeId: "disco",
+      cardCount: 8,
+      preferences: "food and travel",
+    });
     expect(pack.source).toBe("ai");
     expect(pack.cards).toHaveLength(8);
     expect(new Set(pack.cards.map((card) => card.id)).size).toBe(8);
@@ -42,7 +44,11 @@ describe("bounded AI content provider", () => {
   });
 
   it("selects a bounded DrawBattle pack from the audited catalog", async () => {
-    const pack = await provider.generateDrawBattlePack({ themeId: "arcade", promptCount: 8, preferences: "animals and fantasy" });
+    const pack = await provider.generateDrawBattlePack({
+      themeId: "arcade",
+      promptCount: 8,
+      preferences: "animals and fantasy",
+    });
     expect(pack.source).toBe("ai");
     expect(pack.prompts).toHaveLength(8);
     expect(new Set(pack.prompts.map((prompt) => prompt.id)).size).toBe(8);
@@ -50,7 +56,11 @@ describe("bounded AI content provider", () => {
   });
 
   it("selects a bounded SoundCheck pack from the audited catalog", async () => {
-    const pack = await provider.generateSoundCheckPack({ themeId: "retro", promptCount: 8, preferences: "animals and music" });
+    const pack = await provider.generateSoundCheckPack({
+      themeId: "retro",
+      promptCount: 8,
+      preferences: "animals and music",
+    });
     expect(pack.source).toBe("ai");
     expect(pack.prompts).toHaveLength(8);
     expect(new Set(pack.prompts.map((prompt) => prompt.id)).size).toBe(8);
@@ -58,7 +68,12 @@ describe("bounded AI content provider", () => {
   });
 
   it("generates a strictly bounded StoryChain content pack", async () => {
-    const pack = await provider.generateStoryChainPack({ themeId: "cozy", mood: "mystery", length: "full", preferences: "a missing birthday cake at a grand hotel" });
+    const pack = await provider.generateStoryChainPack({
+      themeId: "cozy",
+      mood: "mystery",
+      length: "full",
+      preferences: "a missing birthday cake at a grand hotel",
+    });
     expect(pack.source).toBe("ai");
     expect(pack.twists).toHaveLength(12);
     expect(new Set(pack.twists.map((twist) => twist.requiredWord.toLowerCase())).size).toBe(12);
@@ -78,9 +93,7 @@ describe("bounded AI content provider", () => {
     expect(critique.verdict).toBe("release_ready");
     expect(composedBalancePatchSchema.safeParse(patch).success).toBe(true);
     expect(patch.sourceSpecId).toBe(cinemaCharadesSpec.id);
-    expect(patch.changes).toEqual([
-      { kind: "set_timer_seconds", componentId: "mime_timer", seconds: 55 },
-    ]);
+    expect(patch.changes).toEqual([{ kind: "set_timer_seconds", componentId: "mime_timer", seconds: 55 }]);
     expect(composedAdjustableParameters(cinemaCharadesSpec)).toContainEqual({
       kind: "timer",
       componentId: "mime_timer",

@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  createRandomStoryChainPack,
-  createStoryChainPack,
-  createStoryChainSpec,
-  storyRounds,
-} from "./story-chain";
+import { createRandomStoryChainPack, createStoryChainPack, createStoryChainSpec, storyRounds } from "./story-chain";
 
 describe("StoryChain game", () => {
   it("creates deterministic, bounded packs for every story length", () => {
@@ -20,7 +15,17 @@ describe("StoryChain game", () => {
   it("rejects repeated constraints and compiles a cooperative spec", () => {
     const setup = { themeId: "mystery" as const, mood: "spooky" as const, length: "quick" as const };
     const random = createRandomStoryChainPack(setup, "compile");
-    expect(() => createStoryChainPack(setup, { title: random.title, opening: random.opening, twists: random.twists.map((twist) => ({ ...twist, requiredWord: "echo" })) }, "ai")).toThrow("repeat");
+    expect(() =>
+      createStoryChainPack(
+        setup,
+        {
+          title: random.title,
+          opening: random.opening,
+          twists: random.twists.map((twist) => ({ ...twist, requiredWord: "echo" })),
+        },
+        "ai",
+      ),
+    ).toThrow("repeat");
     const spec = createStoryChainSpec(random);
     expect(spec.setup.mode).toBe("cooperative");
     expect(spec.minPlayers).toBe(2);
@@ -30,7 +35,9 @@ describe("StoryChain game", () => {
   it("rejects a secret word that is already visible in the premise", () => {
     const setup = { themeId: "cozy" as const, mood: "family" as const, length: "quick" as const };
     const random = createRandomStoryChainPack(setup, "public-premise");
-    const exposed = random.twists.map((twist, index) => index === 0 ? { ...twist, requiredWord: "birthday" } : twist);
-    expect(() => createStoryChainPack(setup, { title: "The Birthday Surprise", opening: random.opening, twists: exposed }, "ai")).toThrow("already visible");
+    const exposed = random.twists.map((twist, index) => (index === 0 ? { ...twist, requiredWord: "birthday" } : twist));
+    expect(() =>
+      createStoryChainPack(setup, { title: "The Birthday Surprise", opening: random.opening, twists: exposed }, "ai"),
+    ).toThrow("already visible");
   });
 });

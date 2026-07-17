@@ -9,15 +9,21 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @boardforge/server --filter @boardforge/web dev",
     "build": "pnpm -r build",
+    "format": "biome format . --write",
+    "format:check": "biome format .",
     "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r lint",
+    "lint": "biome lint . && pnpm -r lint",
+    "deadcode": "knip",
+    "coverage": "vitest run --coverage --passWithNoTests",
     "test": "pnpm -r test",
     "smoke:multiplayer": "pnpm --dir apps/web exec node scripts/multiplayer-smoke.mjs",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm deadcode && pnpm build"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.4",
     "@types/node": "latest",
-    "tsx": "latest",
+    "@vitest/coverage-v8": "^4.1.10",
+    "knip": "^6.27.0",
     "typescript": "5.9.3",
     "vitest": "latest"
   }

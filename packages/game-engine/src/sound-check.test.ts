@@ -19,19 +19,73 @@ describe("SoundCheck release gate", () => {
     let state = initializeComposedGame(spec, players, "sound-check", teams, captains);
     const captainId = state.activePlayerId;
     const performerId = state.teams.find((team) => team.id === state.teamByPlayer[captainId])!.playerIds.at(-1)!;
-    state = reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "select_performer", payload: { targetPlayerId: performerId }, idempotencyKey: "choose-performer-01" }, captainId, captainId === "p1", spec);
-    state = reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "draw_sound", idempotencyKey: "draw-sound-001" }, performerId, performerId === "p1", spec);
+    state = reduceComposedGame(
+      state,
+      {
+        type: "COMPOSED_ACTION",
+        actionId: "select_performer",
+        payload: { targetPlayerId: performerId },
+        idempotencyKey: "choose-performer-01",
+      },
+      captainId,
+      captainId === "p1",
+      spec,
+    );
+    state = reduceComposedGame(
+      state,
+      { type: "COMPOSED_ACTION", actionId: "draw_sound", idempotencyKey: "draw-sound-001" },
+      performerId,
+      performerId === "p1",
+      spec,
+    );
 
     const cardId = state.activeCards[performerId]!.sounds!;
     const secret = spec.decks[0]!.cards.find((card) => card.id === cardId)!;
     const guesserId = players.find((player) => player.id !== performerId)!.id;
-    expect(JSON.stringify(projectComposedGameState(state, spec, players, "SOUND1", guesserId))).not.toContain(secret.title);
-    expect(() => reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "submit_guess", payload: { text: secret.title }, idempotencyKey: "performer-cannot-guess" }, performerId, false, spec)).toThrow("cannot perform");
+    expect(JSON.stringify(projectComposedGameState(state, spec, players, "SOUND1", guesserId))).not.toContain(
+      secret.title,
+    );
+    expect(() =>
+      reduceComposedGame(
+        state,
+        {
+          type: "COMPOSED_ACTION",
+          actionId: "submit_guess",
+          payload: { text: secret.title },
+          idempotencyKey: "performer-cannot-guess",
+        },
+        performerId,
+        false,
+        spec,
+      ),
+    ).toThrow("cannot perform");
 
-    state = reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "submit_guess", payload: { text: "Wrong answer" }, idempotencyKey: "wrong-guess-001" }, guesserId, false, spec);
+    state = reduceComposedGame(
+      state,
+      {
+        type: "COMPOSED_ACTION",
+        actionId: "submit_guess",
+        payload: { text: "Wrong answer" },
+        idempotencyKey: "wrong-guess-001",
+      },
+      guesserId,
+      false,
+      spec,
+    );
     expect(state.phaseId).toBe("performing");
     const scoringTeam = state.teamByPlayer[guesserId]!;
-    state = reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "submit_guess", payload: { text: secret.title.toUpperCase() }, idempotencyKey: "right-guess-001" }, guesserId, false, spec);
+    state = reduceComposedGame(
+      state,
+      {
+        type: "COMPOSED_ACTION",
+        actionId: "submit_guess",
+        payload: { text: secret.title.toUpperCase() },
+        idempotencyKey: "right-guess-001",
+      },
+      guesserId,
+      false,
+      spec,
+    );
     expect(state.scores.teams[scoringTeam]).toBe(1);
     expect(state.phaseId).toBe("select_performer");
   });

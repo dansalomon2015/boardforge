@@ -1,11 +1,10 @@
 import { z } from "zod";
-import {
-  validateComposedGameSpec,
-  type ComposedGameSpec,
-  type Effect,
-} from "./composed";
+import { validateComposedGameSpec, type ComposedGameSpec, type Effect } from "./composed";
 
-const idSchema = z.string().regex(/^[a-z][a-z0-9_]*$/).max(48);
+const idSchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9_]*$/)
+  .max(48);
 const effectOwnerSchema = z.enum(["action", "rule", "phase"]);
 
 const effectTargetFields = {
@@ -151,7 +150,11 @@ export function applyComposedBalancePatch(
       if (!component) {
         issues.push({ code: "PATCH_TARGET_NOT_FOUND", path, message: `Unknown component: ${change.componentId}.` });
       } else if (component.kind !== "timer") {
-        issues.push({ code: "PATCH_TARGET_KIND_INVALID", path, message: `${change.componentId} is not a timer component.` });
+        issues.push({
+          code: "PATCH_TARGET_KIND_INVALID",
+          path,
+          message: `${change.componentId} is not a timer component.`,
+        });
       } else {
         component.seconds = change.seconds;
       }

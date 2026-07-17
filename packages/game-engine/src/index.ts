@@ -2,13 +2,7 @@ import type { GameSpec, HiddenRolesGameSpec, QuizVoteGameSpec } from "@boardforg
 export * from "./composed-engine";
 export * from "./playtest";
 export * from "./replay";
-import type {
-  GameAction,
-  HiddenRolesView,
-  PublicPlayer,
-  QuizVoteView,
-  RoomView,
-} from "@boardforge/shared";
+import type { GameAction, HiddenRolesView, PublicPlayer, QuizVoteView, RoomView } from "@boardforge/shared";
 
 type RoleAssignment = {
   id: string;
@@ -94,18 +88,17 @@ function seededShuffle<T>(values: readonly T[], seed: string): T[] {
   return output;
 }
 
-function initializeHiddenRoles(
-  spec: HiddenRolesGameSpec,
-  players: PublicPlayer[],
-  seed: string,
-): HiddenRolesState {
+function initializeHiddenRoles(spec: HiddenRolesGameSpec, players: PublicPlayer[], seed: string): HiddenRolesState {
   const crewRole = spec.roles.find((role) => role.team === "crew");
   const saboteurRole = spec.roles.find((role) => role.team === "saboteur");
   if (!crewRole || !saboteurRole) {
     throw new GameRuleError("The GameSpec is missing a required role team.");
   }
 
-  const shuffled = seededShuffle(players.map((player) => player.id), seed);
+  const shuffled = seededShuffle(
+    players.map((player) => player.id),
+    seed,
+  );
   const saboteurCount = players.length >= 7 ? 2 : 1;
   const saboteurIds = new Set(shuffled.slice(0, saboteurCount));
   const rolesByPlayer = Object.fromEntries(
@@ -128,7 +121,7 @@ function initializeHiddenRoles(
   };
 }
 
-function initializeQuizVote(spec: QuizVoteGameSpec, players: PublicPlayer[]): QuizVoteState {
+function initializeQuizVote(_spec: QuizVoteGameSpec, players: PublicPlayer[]): QuizVoteState {
   return {
     template: "quiz_vote",
     status: "playing",
@@ -325,7 +318,8 @@ function reduceQuizVote(
     throw new GameRuleError("This action is not supported by the quiz/vote engine.");
   }
 
-  const submissionCount = question.type === "trivia" ? Object.keys(next.answers).length : Object.keys(next.votes).length;
+  const submissionCount =
+    question.type === "trivia" ? Object.keys(next.answers).length : Object.keys(next.votes).length;
   if (submissionCount === next.playerOrder.length) {
     if (question.type === "trivia") {
       for (const [playerId, optionId] of Object.entries(next.answers)) {

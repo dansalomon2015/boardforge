@@ -16,8 +16,25 @@ const players: PublicPlayer[] = [
   { id: "p4", name: "Margaret", isHost: false, connected: true },
 ];
 
-function act(state: ComposedGameState, actionId: string, actorId: string, sequence: number, payload?: Parameters<typeof reduceComposedGame>[1]["payload"]) {
-  return reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId, idempotencyKey: `action-${sequence.toString().padStart(3, "0")}`, ...(payload ? { payload } : {}) }, actorId, players.find((player) => player.id === actorId)?.isHost ?? false, cinemaCharadesSpec);
+function act(
+  state: ComposedGameState,
+  actionId: string,
+  actorId: string,
+  sequence: number,
+  payload?: Parameters<typeof reduceComposedGame>[1]["payload"],
+) {
+  return reduceComposedGame(
+    state,
+    {
+      type: "COMPOSED_ACTION",
+      actionId,
+      idempotencyKey: `action-${sequence.toString().padStart(3, "0")}`,
+      ...(payload ? { payload } : {}),
+    },
+    actorId,
+    players.find((player) => player.id === actorId)?.isHost ?? false,
+    cinemaCharadesSpec,
+  );
 }
 
 describe("composed deterministic engine", () => {
@@ -66,15 +83,25 @@ describe("composed deterministic engine", () => {
     const actorId = state.activePlayerId;
     const action = { type: "COMPOSED_ACTION" as const, actionId: "draw_film", idempotencyKey: "same-key-001" };
     const next = reduceComposedGame(state, action, actorId, actorId === "p1", cinemaCharadesSpec);
-    expect(() => reduceComposedGame(next, action, actorId, actorId === "p1", cinemaCharadesSpec)).toThrow("already processed");
+    expect(() => reduceComposedGame(next, action, actorId, actorId === "p1", cinemaCharadesSpec)).toThrow(
+      "already processed",
+    );
   });
 
   it("supports one or several people per team and passes the release playtest", () => {
     for (const count of [2, 3, 4, 6]) {
-      const testPlayers = Array.from({ length: count }, (_, index) => ({ id: `team_player_${index}`, name: `Player ${index}`, isHost: index === 0, connected: true }));
+      const testPlayers = Array.from({ length: count }, (_, index) => ({
+        id: `team_player_${index}`,
+        name: `Player ${index}`,
+        isHost: index === 0,
+        connected: true,
+      }));
       const state = initializeComposedGame(cinemaCharadesSpec, testPlayers, `teams-${count}`);
       expect(state.teams.every((team) => team.playerIds.length >= 1)).toBe(true);
-      expect(Math.max(...state.teams.map((team) => team.playerIds.length)) - Math.min(...state.teams.map((team) => team.playerIds.length))).toBeLessThanOrEqual(1);
+      expect(
+        Math.max(...state.teams.map((team) => team.playerIds.length)) -
+          Math.min(...state.teams.map((team) => team.playerIds.length)),
+      ).toBeLessThanOrEqual(1);
     }
 
     const report = runComposedPlaytest(cinemaCharadesSpec, { simulations: 24, seed: "release-test" });
@@ -94,7 +121,9 @@ describe("composed deterministic engine", () => {
     const state = initializeComposedGame(cinemaCharadesSpec, players, "selected-teams", selection);
     expect(state.teamByPlayer).toEqual(selection);
     expect(state.teams.find((team) => team.id === "projecteurs")?.playerIds).toEqual(["p1", "p4"]);
-    expect(() => initializeComposedGame(cinemaCharadesSpec, players, "missing-team", { p1: "projecteurs" })).toThrow("Every player must choose");
+    expect(() => initializeComposedGame(cinemaCharadesSpec, players, "missing-team", { p1: "projecteurs" })).toThrow(
+      "Every player must choose",
+    );
   });
 });
 
@@ -109,13 +138,48 @@ const systemsSpec: ComposedGameSpec = {
   maxPlayers: 2,
   setup: { mode: "individual", rounds: 1, startingPhaseId: "play", startingPlayer: "first" },
   variables: [],
-  choices: [{ id: "answer_a", label: "A", correct: true }, { id: "answer_b", label: "B", correct: false }],
+  choices: [
+    { id: "answer_a", label: "A", correct: true },
+    { id: "answer_b", label: "B", correct: false },
+  ],
   clues: [],
   reveals: [],
-  orderingItems: [{ id: "early", label: "Avant", rank: 1 }, { id: "middle", label: "Milieu", rank: 2 }, { id: "late", label: "Après", rank: 3 }],
-  matchingItems: [{ id: "cat", label: "Chat", pairId: "animals" }, { id: "dog", label: "Chien", pairId: "animals" }, { id: "red", label: "Rouge", pairId: "colors" }, { id: "blue", label: "Bleu", pairId: "colors" }],
-  decks: [{ id: "tools", name: "Outils", visibility: "private", shuffle: false, initialHandSize: 1, cards: [{ id: "hammer", title: "Marteau", tags: [] }, { id: "rope", title: "Corde", tags: [] }] }],
-  boards: [{ id: "track", name: "Piste", layout: "track", spaces: [{ id: "start", label: "Départ" }, { id: "finish", label: "Arrivée" }], tokens: [{ id: "pawn", label: "Pion", owner: "player", startSpaceId: "start" }] }],
+  orderingItems: [
+    { id: "early", label: "Avant", rank: 1 },
+    { id: "middle", label: "Milieu", rank: 2 },
+    { id: "late", label: "Après", rank: 3 },
+  ],
+  matchingItems: [
+    { id: "cat", label: "Chat", pairId: "animals" },
+    { id: "dog", label: "Chien", pairId: "animals" },
+    { id: "red", label: "Rouge", pairId: "colors" },
+    { id: "blue", label: "Bleu", pairId: "colors" },
+  ],
+  decks: [
+    {
+      id: "tools",
+      name: "Outils",
+      visibility: "private",
+      shuffle: false,
+      initialHandSize: 1,
+      cards: [
+        { id: "hammer", title: "Marteau", tags: [] },
+        { id: "rope", title: "Corde", tags: [] },
+      ],
+    },
+  ],
+  boards: [
+    {
+      id: "track",
+      name: "Piste",
+      layout: "track",
+      spaces: [
+        { id: "start", label: "Départ" },
+        { id: "finish", label: "Arrivée" },
+      ],
+      tokens: [{ id: "pawn", label: "Pion", owner: "player", startSpaceId: "start" }],
+    },
+  ],
   resources: [{ id: "energy", name: "Énergie", scope: "player", initialValue: 1, min: 0, max: 5 }],
   randomizers: [{ id: "die", kind: "die", label: "Dé", sides: 6 }],
   media: [],
@@ -129,20 +193,97 @@ const systemsSpec: ComposedGameSpec = {
     { id: "match", kind: "matching", audience: "public", itemIds: ["cat", "dog", "red", "blue"] },
   ],
   actions: [
-    { id: "move", label: "Avancer", kind: "move", actor: "active_player", oncePerPhase: false, boardId: "track", effects: [{ kind: "move_selected_token", boardId: "track" }] },
-    { id: "energize", label: "Énergie", kind: "resource", actor: "active_player", oncePerPhase: true, effects: [{ kind: "add_resource", resourceId: "energy", target: "actor", amount: 2 }] },
-    { id: "roll", label: "Lancer", kind: "randomize", actor: "active_player", oncePerPhase: true, randomizerId: "die", effects: [{ kind: "randomize", randomizerId: "die" }] },
+    {
+      id: "move",
+      label: "Avancer",
+      kind: "move",
+      actor: "active_player",
+      oncePerPhase: false,
+      boardId: "track",
+      effects: [{ kind: "move_selected_token", boardId: "track" }],
+    },
+    {
+      id: "energize",
+      label: "Énergie",
+      kind: "resource",
+      actor: "active_player",
+      oncePerPhase: true,
+      effects: [{ kind: "add_resource", resourceId: "energy", target: "actor", amount: 2 }],
+    },
+    {
+      id: "roll",
+      label: "Lancer",
+      kind: "randomize",
+      actor: "active_player",
+      oncePerPhase: true,
+      randomizerId: "die",
+      effects: [{ kind: "randomize", randomizerId: "die" }],
+    },
     { id: "buzz", label: "Buzz", kind: "buzz", actor: "any_player", oncePerPhase: true, effects: [] },
-    { id: "order", label: "Ordonner", kind: "order", actor: "active_player", oncePerPhase: true, itemIds: ["early", "middle", "late"], effects: [] },
-    { id: "match", label: "Associer", kind: "match", actor: "active_player", oncePerPhase: true, itemIds: ["cat", "dog", "red", "blue"], effects: [] },
-    { id: "play_card", label: "Jouer", kind: "play_card", actor: "active_player", oncePerPhase: true, deckId: "tools", effects: [{ kind: "discard_selected_card", deckId: "tools", target: "actor" }] },
+    {
+      id: "order",
+      label: "Ordonner",
+      kind: "order",
+      actor: "active_player",
+      oncePerPhase: true,
+      itemIds: ["early", "middle", "late"],
+      effects: [],
+    },
+    {
+      id: "match",
+      label: "Associer",
+      kind: "match",
+      actor: "active_player",
+      oncePerPhase: true,
+      itemIds: ["cat", "dog", "red", "blue"],
+      effects: [],
+    },
+    {
+      id: "play_card",
+      label: "Jouer",
+      kind: "play_card",
+      actor: "active_player",
+      oncePerPhase: true,
+      deckId: "tools",
+      effects: [{ kind: "discard_selected_card", deckId: "tools", target: "actor" }],
+    },
   ],
-  rules: [{ id: "reward_order", trigger: { kind: "after_action", actionId: "order" }, conditionMode: "all", conditions: [{ kind: "last_input_correct", actionId: "order" }], effects: [{ kind: "add_score", target: "actor", amount: 3 }] }],
-  phases: [{ id: "play", title: "Play", componentIds: ["board", "hand", "resources", "die", "buzz", "order", "match"], actionIds: ["move", "energize", "roll", "buzz", "order", "match", "play_card"], completionMode: "manual", completionConditions: [], onComplete: [] }],
+  rules: [
+    {
+      id: "reward_order",
+      trigger: { kind: "after_action", actionId: "order" },
+      conditionMode: "all",
+      conditions: [{ kind: "last_input_correct", actionId: "order" }],
+      effects: [{ kind: "add_score", target: "actor", amount: 3 }],
+    },
+  ],
+  phases: [
+    {
+      id: "play",
+      title: "Play",
+      componentIds: ["board", "hand", "resources", "die", "buzz", "order", "match"],
+      actionIds: ["move", "energize", "roll", "buzz", "order", "match", "play_card"],
+      completionMode: "manual",
+      completionConditions: [],
+      onComplete: [],
+    },
+  ],
 };
 
-function systemsAction(state: ComposedGameState, actionId: string, key: string, payload?: Parameters<typeof reduceComposedGame>[1]["payload"], actorId = "p1") {
-  return reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId, idempotencyKey: key, ...(payload ? { payload } : {}) }, actorId, actorId === "p1", systemsSpec);
+function systemsAction(
+  state: ComposedGameState,
+  actionId: string,
+  key: string,
+  payload?: Parameters<typeof reduceComposedGame>[1]["payload"],
+  actorId = "p1",
+) {
+  return reduceComposedGame(
+    state,
+    { type: "COMPOSED_ACTION", actionId, idempotencyKey: key, ...(payload ? { payload } : {}) },
+    actorId,
+    actorId === "p1",
+    systemsSpec,
+  );
 }
 
 describe("composed systems", () => {
@@ -174,7 +315,12 @@ describe("composed systems", () => {
     expect(() => systemsAction(state, "buzz", "systems-buzz-2", undefined, "p1")).toThrow("already been claimed");
     state = systemsAction(state, "order", "systems-order", { orderedIds: ["early", "middle", "late"] });
     expect(state.scores.players.p1).toBe(3);
-    state = systemsAction(state, "match", "systems-match", { pairs: [{ leftId: "cat", rightId: "dog" }, { leftId: "red", rightId: "blue" }] });
+    state = systemsAction(state, "match", "systems-match", {
+      pairs: [
+        { leftId: "cat", rightId: "dog" },
+        { leftId: "red", rightId: "blue" },
+      ],
+    });
     expect(state.actions.at(-1)?.correct).toBe(true);
     state = systemsAction(state, "play_card", "systems-card", { cardId: p1Card });
     expect(state.decks.tools!.discardPile).toContain(p1Card);

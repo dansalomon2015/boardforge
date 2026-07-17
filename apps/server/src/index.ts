@@ -54,10 +54,7 @@ import {
   type ComposedGameState,
   type GameState,
 } from "@boardforge/game-engine";
-import {
-  createLlmProvider,
-  type ComposedBalanceEvidence,
-} from "@boardforge/llm";
+import { createLlmProvider, type ComposedBalanceEvidence } from "@boardforge/llm";
 import type {
   GameAction,
   GameActionEnvelope,
@@ -116,7 +113,18 @@ type Room = {
 };
 
 const rooms = new Map<string, Room>();
-const availableDemoSpecs: BoardGameSpec[] = [...demoGameSpecs, cinemaCharadesSpec, defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec, defaultStoryChainSpec, defaultWordDuelSpec, defaultSecondSenseSpec, systemsLabSpec];
+const availableDemoSpecs: BoardGameSpec[] = [
+  ...demoGameSpecs,
+  cinemaCharadesSpec,
+  defaultMovieMimeSpec,
+  defaultWordTrapSpec,
+  defaultDrawBattleSpec,
+  defaultSoundCheckSpec,
+  defaultStoryChainSpec,
+  defaultWordDuelSpec,
+  defaultSecondSenseSpec,
+  systemsLabSpec,
+];
 const llm = createLlmProvider({
   provider: config.llmProvider,
   apiKey: config.openAiApiKey,
@@ -125,7 +133,10 @@ const llm = createLlmProvider({
   onTelemetry: (telemetry) => app.log.info({ llmUsage: telemetry }, "OpenAI workflow usage"),
 });
 const seededBlueprints: BlueprintRecord[] = availableDemoSpecs.map((spec) => {
-  const playtest = spec.template === "composed" ? runComposedPlaytest(spec, { simulations: 24, seed: `release:${spec.id}` }) : undefined;
+  const playtest =
+    spec.template === "composed"
+      ? runComposedPlaytest(spec, { simulations: 24, seed: `release:${spec.id}` })
+      : undefined;
   return {
     id: spec.id,
     spec,
@@ -153,7 +164,10 @@ function actionWithoutServerTiming(spec: BoardGameSpec, action: GameAction): Gam
 }
 
 function sameRequestedAction(spec: BoardGameSpec, received: GameAction, persisted: GameAction): boolean {
-  return JSON.stringify(actionWithoutServerTiming(spec, received)) === JSON.stringify(actionWithoutServerTiming(spec, persisted));
+  return (
+    JSON.stringify(actionWithoutServerTiming(spec, received)) ===
+    JSON.stringify(actionWithoutServerTiming(spec, persisted))
+  );
 }
 
 function restoreTimingStarts(spec: BoardGameSpec, events: RoomEventRecord[]): Map<string, number> {
@@ -167,9 +181,14 @@ function restoreTimingStarts(spec: BoardGameSpec, events: RoomEventRecord[]): Ma
   return starts;
 }
 
-function checkpointChecksumMatches(state: GameState | ComposedGameState, storedCheckpoint: unknown, storedChecksum: string): boolean {
+function checkpointChecksumMatches(
+  state: GameState | ComposedGameState,
+  storedCheckpoint: unknown,
+  storedChecksum: string,
+): boolean {
   if (stateChecksum(state) === storedChecksum) return true;
-  if (typeof storedCheckpoint !== "object" || storedCheckpoint === null || Array.isArray(storedCheckpoint)) return false;
+  if (typeof storedCheckpoint !== "object" || storedCheckpoint === null || Array.isArray(storedCheckpoint))
+    return false;
   // Preserve checksum protection while allowing newer engines to add top-level state buckets.
   const current = state as unknown as Record<string, unknown>;
   const legacyProjection: Record<string, unknown> = {};
@@ -193,7 +212,7 @@ function summary(spec: BoardGameSpec): GameSummary {
     description: spec.description,
     minPlayers: spec.minPlayers,
     maxPlayers: spec.maxPlayers,
-    durationMinutes: spec.template === "composed" ? spec.suggestedDurationMinutes ?? 15 : spec.durationMinutes,
+    durationMinutes: spec.template === "composed" ? (spec.suggestedDurationMinutes ?? 15) : spec.durationMinutes,
     accent: spec.template === "composed" ? (typeof spec.theme === "string" ? spec.theme : "violet") : spec.accent,
   };
 }
@@ -267,7 +286,9 @@ async function revisionFamily(startBlueprintId: string): Promise<{
 function orderedRevisionFamily(blueprints: BlueprintRecord[], patches: BalancePatchRecord[]): BlueprintRecord[] {
   const byId = new Map(blueprints.map((blueprint) => [blueprint.id, blueprint]));
   const derivedIds = new Set(patches.map((patch) => patch.derivedBlueprintId));
-  const roots = blueprints.filter((blueprint) => !derivedIds.has(blueprint.id)).sort((a, b) => a.id.localeCompare(b.id));
+  const roots = blueprints
+    .filter((blueprint) => !derivedIds.has(blueprint.id))
+    .sort((a, b) => a.id.localeCompare(b.id));
   const outgoing = new Map<string, BalancePatchRecord[]>();
   for (const patch of patches) {
     const list = outgoing.get(patch.sourceBlueprintId) ?? [];
@@ -325,7 +346,10 @@ function persistedRoom(room: Room, state: Room["state"] = room.state): Omit<Room
 
 function enqueueRoom<T>(room: Room, operation: () => Promise<T>): Promise<T> {
   const result = room.operationQueue.then(operation, operation);
-  room.operationQueue = result.then(() => undefined, () => undefined);
+  room.operationQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
   return result;
 }
 
@@ -333,15 +357,15 @@ function viewFor(room: Room, playerId: string): RoomView {
   const players = publicPlayers(room);
   if (!room.state) {
     const playerIds = players.map((player) => player.id);
-    const selectedTeams = Object.fromEntries([...room.lobbyTeamByPlayer.entries()].filter(([id]) => room.players.has(id)));
-    const composedStart = room.spec.template === "composed"
-      ? validateComposedTeamSelection(room.spec, playerIds, selectedTeams)
-      : null;
-    const teamPolicy = room.spec.template === "composed" && room.spec.setup.mode === "teams"
-      ? room.spec.setup.teamPolicy
-      : undefined;
-    const requiresCaptains = room.spec.template === "composed"
-      && room.spec.actions.some((action) => action.actor === "team_captain");
+    const selectedTeams = Object.fromEntries(
+      [...room.lobbyTeamByPlayer.entries()].filter(([id]) => room.players.has(id)),
+    );
+    const composedStart =
+      room.spec.template === "composed" ? validateComposedTeamSelection(room.spec, playerIds, selectedTeams) : null;
+    const teamPolicy =
+      room.spec.template === "composed" && room.spec.setup.mode === "teams" ? room.spec.setup.teamPolicy : undefined;
+    const requiresCaptains =
+      room.spec.template === "composed" && room.spec.actions.some((action) => action.actor === "team_captain");
     const missingCaptainTeam = requiresCaptains
       ? teamPolicy?.teams.find((team) => {
           const captainId = room.lobbyCaptainByTeam.get(team.id);
@@ -359,25 +383,32 @@ function viewFor(room: Room, playerId: string): RoomView {
       players,
       selfPlayerId: playerId,
       canStart,
-      ...(!canStart ? {
-        startBlockReason: composedStart && !composedStart.ok
-          ? composedStart.reason
-          : missingCaptainTeam
-            ? `Choose a captain for ${missingCaptainTeam.name}.`
-          : `${Math.max(0, room.spec.minPlayers - players.length)} more player(s) required.`,
-      } : {}),
-      ...(teamPolicy ? {
-        teamSetup: {
-          teams: teamPolicy.teams.map((team) => ({
-            ...team,
-            playerIds: players.filter((player) => selectedTeams[player.id] === team.id).map((player) => player.id),
-            ...(room.lobbyCaptainByTeam.get(team.id) ? { captainPlayerId: room.lobbyCaptainByTeam.get(team.id) } : {}),
-            ...(teamPolicy.maxMembersPerTeam ? { maxMembers: teamPolicy.maxMembersPerTeam } : {}),
-          })),
-          ...(selectedTeams[playerId] ? { selfTeamId: selectedTeams[playerId] } : {}),
-          allowUnevenTeams: teamPolicy.allowUnevenTeams,
-        },
-      } : {}),
+      ...(!canStart
+        ? {
+            startBlockReason:
+              composedStart && !composedStart.ok
+                ? composedStart.reason
+                : missingCaptainTeam
+                  ? `Choose a captain for ${missingCaptainTeam.name}.`
+                  : `${Math.max(0, room.spec.minPlayers - players.length)} more player(s) required.`,
+          }
+        : {}),
+      ...(teamPolicy
+        ? {
+            teamSetup: {
+              teams: teamPolicy.teams.map((team) => ({
+                ...team,
+                playerIds: players.filter((player) => selectedTeams[player.id] === team.id).map((player) => player.id),
+                ...(room.lobbyCaptainByTeam.get(team.id)
+                  ? { captainPlayerId: room.lobbyCaptainByTeam.get(team.id) }
+                  : {}),
+                ...(teamPolicy.maxMembersPerTeam ? { maxMembers: teamPolicy.maxMembersPerTeam } : {}),
+              })),
+              ...(selectedTeams[playerId] ? { selfTeamId: selectedTeams[playerId] } : {}),
+              allowUnevenTeams: teamPolicy.allowUnevenTeams,
+            },
+          }
+        : {}),
     };
     return view;
   }
@@ -406,11 +437,19 @@ app.get("/health", async () => ({
   rooms: rooms.size,
   provider: llm.name,
   persistence: blueprintStore.mode,
-  databaseReady: blueprintStore.mode === "postgres" && await blueprintStore.health().catch(() => false),
+  databaseReady: blueprintStore.mode === "postgres" && (await blueprintStore.health().catch(() => false)),
 }));
 
 app.get("/api/games", async () => ({
-  games: [defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec, defaultStoryChainSpec, defaultWordDuelSpec, defaultSecondSenseSpec].map((spec) => ({ id: spec.id, ...summary(spec) })),
+  games: [
+    defaultMovieMimeSpec,
+    defaultWordTrapSpec,
+    defaultDrawBattleSpec,
+    defaultSoundCheckSpec,
+    defaultStoryChainSpec,
+    defaultWordDuelSpec,
+    defaultSecondSenseSpec,
+  ].map((spec) => ({ id: spec.id, ...summary(spec) })),
   provider: llm.name,
 }));
 
@@ -418,10 +457,18 @@ const movieMimeBodySchema = z
   .object({
     themeId: composedThemeIdSchema.default("noir"),
     filmCount: z.number().int().min(6).max(40).default(20),
-    teams: z.array(z.object({
-      name: z.string().trim().min(2).max(24),
-      color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-    }).strict()).min(2).max(4).optional(),
+    teams: z
+      .array(
+        z
+          .object({
+            name: z.string().trim().min(2).max(24),
+            color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(4)
+      .optional(),
     preferences: z.string().trim().max(240).optional(),
   })
   .strict();
@@ -475,7 +522,10 @@ app.post("/api/movie-mime/blueprints", async (request, reply) => {
       },
     });
   } catch (error) {
-    app.log.warn({ message: error instanceof Error ? error.message : "Unknown movie selection error" }, "Movie mime preparation failed");
+    app.log.warn(
+      { message: error instanceof Error ? error.message : "Unknown movie selection error" },
+      "Movie mime preparation failed",
+    );
     return reply.code(502).send({
       error: aiProviderErrorMessage(error),
       provider: llm.name,
@@ -483,15 +533,25 @@ app.post("/api/movie-mime/blueprints", async (request, reply) => {
   }
 });
 
-const wordTrapBodySchema = z.object({
-  themeId: composedThemeIdSchema.default("disco"),
-  cardCount: z.number().int().min(6).max(40).default(20),
-  teams: z.array(z.object({
-    name: z.string().trim().min(2).max(24),
-    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  }).strict()).min(2).max(4).optional(),
-  preferences: z.string().trim().max(240).optional(),
-}).strict();
+const wordTrapBodySchema = z
+  .object({
+    themeId: composedThemeIdSchema.default("disco"),
+    cardCount: z.number().int().min(6).max(40).default(20),
+    teams: z
+      .array(
+        z
+          .object({
+            name: z.string().trim().min(2).max(24),
+            color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(4)
+      .optional(),
+    preferences: z.string().trim().max(240).optional(),
+  })
+  .strict();
 
 app.post("/api/word-trap/blueprints", async (request, reply) => {
   const parsed = wordTrapBodySchema.safeParse(request.body);
@@ -502,7 +562,8 @@ app.post("/api/word-trap/blueprints", async (request, reply) => {
     ...(parsed.data.teams ? { teams: parsed.data.teams } : {}),
     ...(parsed.data.preferences ? { preferences: parsed.data.preferences } : {}),
   });
-  if (!setupResult.success) return reply.code(400).send({ error: "Invalid WordTrap setup.", issues: setupResult.error.issues });
+  if (!setupResult.success)
+    return reply.code(400).send({ error: "Invalid WordTrap setup.", issues: setupResult.error.issues });
   const setup = setupResult.data;
 
   try {
@@ -528,23 +589,40 @@ app.post("/api/word-trap/blueprints", async (request, reply) => {
       themeId: pack.themeId,
       cardCount: pack.cards.length,
       game: summary(spec),
-      playtest: { status: playtest.status, simulations: playtest.simulations, completedSimulations: playtest.completedSimulations },
+      playtest: {
+        status: playtest.status,
+        simulations: playtest.simulations,
+        completedSimulations: playtest.completedSimulations,
+      },
     });
   } catch (error) {
-    app.log.warn({ message: error instanceof Error ? error.message : "Unknown WordTrap selection error" }, "WordTrap preparation failed");
+    app.log.warn(
+      { message: error instanceof Error ? error.message : "Unknown WordTrap selection error" },
+      "WordTrap preparation failed",
+    );
     return reply.code(502).send({ error: aiProviderErrorMessage(error), provider: llm.name });
   }
 });
 
-const drawBattleBodySchema = z.object({
-  themeId: composedThemeIdSchema.default("arcade"),
-  promptCount: z.number().int().min(6).max(30).default(18),
-  teams: z.array(z.object({
-    name: z.string().trim().min(2).max(24),
-    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  }).strict()).min(2).max(4).optional(),
-  preferences: z.string().trim().max(240).optional(),
-}).strict();
+const drawBattleBodySchema = z
+  .object({
+    themeId: composedThemeIdSchema.default("arcade"),
+    promptCount: z.number().int().min(6).max(30).default(18),
+    teams: z
+      .array(
+        z
+          .object({
+            name: z.string().trim().min(2).max(24),
+            color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(4)
+      .optional(),
+    preferences: z.string().trim().max(240).optional(),
+  })
+  .strict();
 
 app.post("/api/draw-battle/blueprints", async (request, reply) => {
   const parsed = drawBattleBodySchema.safeParse(request.body);
@@ -555,7 +633,8 @@ app.post("/api/draw-battle/blueprints", async (request, reply) => {
     ...(parsed.data.teams ? { teams: parsed.data.teams } : {}),
     ...(parsed.data.preferences ? { preferences: parsed.data.preferences } : {}),
   });
-  if (!setupResult.success) return reply.code(400).send({ error: "Invalid DrawBattle setup.", issues: setupResult.error.issues });
+  if (!setupResult.success)
+    return reply.code(400).send({ error: "Invalid DrawBattle setup.", issues: setupResult.error.issues });
   const setup = setupResult.data;
 
   try {
@@ -581,23 +660,40 @@ app.post("/api/draw-battle/blueprints", async (request, reply) => {
       themeId: pack.themeId,
       promptCount: pack.prompts.length,
       game: summary(spec),
-      playtest: { status: playtest.status, simulations: playtest.simulations, completedSimulations: playtest.completedSimulations },
+      playtest: {
+        status: playtest.status,
+        simulations: playtest.simulations,
+        completedSimulations: playtest.completedSimulations,
+      },
     });
   } catch (error) {
-    app.log.warn({ message: error instanceof Error ? error.message : "Unknown DrawBattle selection error" }, "DrawBattle preparation failed");
+    app.log.warn(
+      { message: error instanceof Error ? error.message : "Unknown DrawBattle selection error" },
+      "DrawBattle preparation failed",
+    );
     return reply.code(502).send({ error: aiProviderErrorMessage(error), provider: llm.name });
   }
 });
 
-const soundCheckBodySchema = z.object({
-  themeId: composedThemeIdSchema.default("retro"),
-  promptCount: z.number().int().min(6).max(30).default(18),
-  teams: z.array(z.object({
-    name: z.string().trim().min(2).max(24),
-    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  }).strict()).min(2).max(4).optional(),
-  preferences: z.string().trim().max(240).optional(),
-}).strict();
+const soundCheckBodySchema = z
+  .object({
+    themeId: composedThemeIdSchema.default("retro"),
+    promptCount: z.number().int().min(6).max(30).default(18),
+    teams: z
+      .array(
+        z
+          .object({
+            name: z.string().trim().min(2).max(24),
+            color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(4)
+      .optional(),
+    preferences: z.string().trim().max(240).optional(),
+  })
+  .strict();
 
 app.post("/api/sound-check/blueprints", async (request, reply) => {
   const parsed = soundCheckBodySchema.safeParse(request.body);
@@ -608,7 +704,8 @@ app.post("/api/sound-check/blueprints", async (request, reply) => {
     ...(parsed.data.teams ? { teams: parsed.data.teams } : {}),
     ...(parsed.data.preferences ? { preferences: parsed.data.preferences } : {}),
   });
-  if (!setupResult.success) return reply.code(400).send({ error: "Invalid SoundCheck setup.", issues: setupResult.error.issues });
+  if (!setupResult.success)
+    return reply.code(400).send({ error: "Invalid SoundCheck setup.", issues: setupResult.error.issues });
   const setup = setupResult.data;
 
   try {
@@ -634,26 +731,36 @@ app.post("/api/sound-check/blueprints", async (request, reply) => {
       themeId: pack.themeId,
       promptCount: pack.prompts.length,
       game: summary(spec),
-      playtest: { status: playtest.status, simulations: playtest.simulations, completedSimulations: playtest.completedSimulations },
+      playtest: {
+        status: playtest.status,
+        simulations: playtest.simulations,
+        completedSimulations: playtest.completedSimulations,
+      },
     });
   } catch (error) {
-    app.log.warn({ message: error instanceof Error ? error.message : "Unknown SoundCheck selection error" }, "SoundCheck preparation failed");
+    app.log.warn(
+      { message: error instanceof Error ? error.message : "Unknown SoundCheck selection error" },
+      "SoundCheck preparation failed",
+    );
     return reply.code(502).send({ error: aiProviderErrorMessage(error), provider: llm.name });
   }
 });
 
-const storyChainBodySchema = z.object({
-  themeId: composedThemeIdSchema.default("cozy"),
-  mood: z.enum(["chaotic", "mystery", "fantasy", "spooky", "romantic", "family"]).default("chaotic"),
-  length: z.enum(["quick", "full", "epic"]).default("full"),
-  preferences: z.string().trim().max(240).optional(),
-}).strict();
+const storyChainBodySchema = z
+  .object({
+    themeId: composedThemeIdSchema.default("cozy"),
+    mood: z.enum(["chaotic", "mystery", "fantasy", "spooky", "romantic", "family"]).default("chaotic"),
+    length: z.enum(["quick", "full", "epic"]).default("full"),
+    preferences: z.string().trim().max(240).optional(),
+  })
+  .strict();
 
 app.post("/api/story-chain/blueprints", async (request, reply) => {
   const parsed = storyChainBodySchema.safeParse(request.body);
   if (!parsed.success) return reply.code(400).send({ error: "Invalid StoryChain setup.", issues: parsed.error.issues });
   const setupResult = storyChainSetupSchema.safeParse(parsed.data);
-  if (!setupResult.success) return reply.code(400).send({ error: "Invalid StoryChain setup.", issues: setupResult.error.issues });
+  if (!setupResult.success)
+    return reply.code(400).send({ error: "Invalid StoryChain setup.", issues: setupResult.error.issues });
   const setup = setupResult.data;
 
   try {
@@ -680,24 +787,34 @@ app.post("/api/story-chain/blueprints", async (request, reply) => {
       title: pack.title,
       twistCount: pack.twists.length,
       game: summary(spec),
-      playtest: { status: playtest.status, simulations: playtest.simulations, completedSimulations: playtest.completedSimulations },
+      playtest: {
+        status: playtest.status,
+        simulations: playtest.simulations,
+        completedSimulations: playtest.completedSimulations,
+      },
     });
   } catch (error) {
-    app.log.warn({ message: error instanceof Error ? error.message : "Unknown StoryChain generation error" }, "StoryChain preparation failed");
+    app.log.warn(
+      { message: error instanceof Error ? error.message : "Unknown StoryChain generation error" },
+      "StoryChain preparation failed",
+    );
     return reply.code(502).send({ error: aiProviderErrorMessage(error), provider: llm.name });
   }
 });
 
-const wordDuelBodySchema = z.object({
-  themeId: composedThemeIdSchema.default("minimal"),
-  difficulty: z.enum(["easy", "classic", "expert"]).default("classic"),
-}).strict();
+const wordDuelBodySchema = z
+  .object({
+    themeId: composedThemeIdSchema.default("minimal"),
+    difficulty: z.enum(["easy", "classic", "expert"]).default("classic"),
+  })
+  .strict();
 
 app.post("/api/word-duel/blueprints", async (request, reply) => {
   const parsed = wordDuelBodySchema.safeParse(request.body);
   if (!parsed.success) return reply.code(400).send({ error: "Invalid WordDuel setup.", issues: parsed.error.issues });
   const setupResult = wordDuelSetupSchema.safeParse(parsed.data);
-  if (!setupResult.success) return reply.code(400).send({ error: "Invalid WordDuel setup.", issues: setupResult.error.issues });
+  if (!setupResult.success)
+    return reply.code(400).send({ error: "Invalid WordDuel setup.", issues: setupResult.error.issues });
   const spec = createWordDuelSpec(setupResult.data);
   const blueprintId = `${spec.id}-${crypto.randomUUID().slice(0, 8)}`;
   await blueprintStore.saveBlueprint({ id: blueprintId, spec, status: "playtesting", provider: "boardforge-rules" });
@@ -710,20 +827,28 @@ app.post("/api/word-duel/blueprints", async (request, reply) => {
     themeId: setupResult.data.themeId,
     difficulty: setupResult.data.difficulty,
     game: summary(spec),
-    playtest: { status: playtest.status, simulations: playtest.simulations, completedSimulations: playtest.completedSimulations },
+    playtest: {
+      status: playtest.status,
+      simulations: playtest.simulations,
+      completedSimulations: playtest.completedSimulations,
+    },
   });
 });
 
-const secondSenseBodySchema = z.object({
-  themeId: composedThemeIdSchema.default("cyberpunk"),
-  tempo: z.enum(["quickfire", "classic", "mindbreaker"]).default("classic"),
-}).strict();
+const secondSenseBodySchema = z
+  .object({
+    themeId: composedThemeIdSchema.default("cyberpunk"),
+    tempo: z.enum(["quickfire", "classic", "mindbreaker"]).default("classic"),
+  })
+  .strict();
 
 app.post("/api/second-sense/blueprints", async (request, reply) => {
   const parsed = secondSenseBodySchema.safeParse(request.body);
-  if (!parsed.success) return reply.code(400).send({ error: "Invalid Second Sense setup.", issues: parsed.error.issues });
+  if (!parsed.success)
+    return reply.code(400).send({ error: "Invalid Second Sense setup.", issues: parsed.error.issues });
   const setupResult = secondSenseSetupSchema.safeParse(parsed.data);
-  if (!setupResult.success) return reply.code(400).send({ error: "Invalid Second Sense setup.", issues: setupResult.error.issues });
+  if (!setupResult.success)
+    return reply.code(400).send({ error: "Invalid Second Sense setup.", issues: setupResult.error.issues });
   const spec = createSecondSenseSpec(setupResult.data);
   const blueprintId = `${spec.id}-${crypto.randomUUID().slice(0, 8)}`;
   await blueprintStore.saveBlueprint({ id: blueprintId, spec, status: "playtesting", provider: "boardforge-rules" });
@@ -736,7 +861,11 @@ app.post("/api/second-sense/blueprints", async (request, reply) => {
     themeId: setupResult.data.themeId,
     tempo: setupResult.data.tempo,
     game: summary(spec),
-    playtest: { status: playtest.status, simulations: playtest.simulations, completedSimulations: playtest.completedSimulations },
+    playtest: {
+      status: playtest.status,
+      simulations: playtest.simulations,
+      completedSimulations: playtest.completedSimulations,
+    },
   });
 });
 
@@ -758,15 +887,17 @@ app.get<{ Params: { id: string } }>("/api/blueprints/:id/history", async (reques
       return {
         revision: index + 1,
         blueprintId: blueprint.id,
-        ...(patch ? {
-          parentBlueprintId: patch.sourceBlueprintId,
-          patch: {
-            id: patch.id,
-            status: patch.status,
-            summary: patch.patch.summary,
-            changes: patch.patch.changes,
-          },
-        } : {}),
+        ...(patch
+          ? {
+              parentBlueprintId: patch.sourceBlueprintId,
+              patch: {
+                id: patch.id,
+                status: patch.status,
+                summary: patch.patch.summary,
+                changes: patch.patch.changes,
+              },
+            }
+          : {}),
         releaseStatus: blueprint.status,
         canSelect: blueprint.status === "release_ready",
         game: summary(blueprint.spec),
@@ -797,11 +928,9 @@ app.post<{ Params: { id: string } }>("/api/blueprints/:id/balance", async (reque
 
   try {
     const patchSource = source.suggestedPatch ? "precomputed_review" : "live_fallback";
-    const patch = source.suggestedPatch ?? await llm.proposeComposedBalancePatch(
-      source.spec,
-      balanceEvidence(source.playtest),
-      source.critique,
-    );
+    const patch =
+      source.suggestedPatch ??
+      (await llm.proposeComposedBalancePatch(source.spec, balanceEvidence(source.playtest), source.critique));
     const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 6);
     const derivedSpecId = `${source.spec.id.slice(0, 32).replace(/_+$/, "")}_balanced_${suffix}`;
     const applied = applyComposedBalancePatch(source.spec, patch, derivedSpecId);
@@ -827,14 +956,9 @@ app.post<{ Params: { id: string } }>("/api/blueprints/:id/balance", async (reque
       seed: `balance:${balancePatchId}`,
     });
     const afterCritique = await llm.critiqueComposedGameSpec(applied.spec, balanceEvidence(afterReport));
-    const derivedStatus = afterReport.status === "passed" && afterCritique.verdict === "release_ready"
-      ? "validating"
-      : "needs_review";
-    await blueprintStore.savePlaytest(
-      derivedBlueprintId,
-      derivedStatus,
-      afterReport,
-    );
+    const derivedStatus =
+      afterReport.status === "passed" && afterCritique.verdict === "release_ready" ? "validating" : "needs_review";
+    await blueprintStore.savePlaytest(derivedBlueprintId, derivedStatus, afterReport);
     await blueprintStore.saveCritique(derivedBlueprintId, llm.name, afterCritique);
     await blueprintStore.saveBalancePatch({
       id: balancePatchId,
@@ -865,7 +989,10 @@ app.post<{ Params: { id: string } }>("/api/blueprints/:id/balance", async (reque
       },
     };
   } catch (error) {
-    app.log.warn({ message: error instanceof Error ? error.message : "Unknown balance error" }, "Balance workflow failed");
+    app.log.warn(
+      { message: error instanceof Error ? error.message : "Unknown balance error" },
+      "Balance workflow failed",
+    );
     return reply.code(502).send({
       error: aiProviderErrorMessage(error),
       provider: llm.name,
@@ -986,10 +1113,17 @@ app.get<{ Params: { code: string } }>("/api/rooms/:code", async (request, reply)
 
 const joinSchema = z
   .object({
-    code: z.string().trim().length(6).transform((value) => value.toUpperCase()),
+    code: z
+      .string()
+      .trim()
+      .length(6)
+      .transform((value) => value.toUpperCase()),
     name: z.string().trim().min(1).max(24),
     playerId: z.string().uuid().optional(),
-    reconnectToken: z.string().regex(/^[A-Za-z0-9_-]{40,64}$/).optional(),
+    reconnectToken: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{40,64}$/)
+      .optional(),
   })
   .strict()
   .refine((value) => Boolean(value.playerId) === Boolean(value.reconnectToken), {
@@ -1002,31 +1136,52 @@ const actionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("SUBMIT_ANSWER"), optionId: z.string().min(1).max(48) }).strict(),
   z.object({ type: z.literal("CAST_PLAYER_VOTE"), targetPlayerId: z.string().uuid() }).strict(),
   z.object({ type: z.literal("ADVANCE") }).strict(),
-  z.object({
-    type: z.literal("COMPOSED_ACTION"),
-    actionId: z.string().regex(/^[a-z][a-z0-9_]*$/).max(48),
-    payload: z.object({
-      choiceId: z.string().max(48).optional(),
-      text: z.string().max(600).optional(),
-      cardId: z.string().max(48).optional(),
-      tokenId: z.string().max(96).optional(),
-      spaceId: z.string().max(48).optional(),
-      orderedIds: z.array(z.string().max(48)).max(24).optional(),
-      pairs: z.array(z.object({ leftId: z.string().max(48), rightId: z.string().max(48) }).strict()).max(12).optional(),
-      targetPlayerId: z.string().uuid().optional(),
-      stroke: z.object({
-        id: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/),
-        points: z.array(z.object({ x: z.number().min(0).max(600), y: z.number().min(0).max(340) }).strict()).min(2).max(160),
-      }).strict().optional(),
-      clear: z.boolean().optional(),
-      elapsedMs: z.number().int().min(100).max(30_000).optional(),
-    }).strict().optional(),
-  }).strict(),
+  z
+    .object({
+      type: z.literal("COMPOSED_ACTION"),
+      actionId: z
+        .string()
+        .regex(/^[a-z][a-z0-9_]*$/)
+        .max(48),
+      payload: z
+        .object({
+          choiceId: z.string().max(48).optional(),
+          text: z.string().max(600).optional(),
+          cardId: z.string().max(48).optional(),
+          tokenId: z.string().max(96).optional(),
+          spaceId: z.string().max(48).optional(),
+          orderedIds: z.array(z.string().max(48)).max(24).optional(),
+          pairs: z
+            .array(z.object({ leftId: z.string().max(48), rightId: z.string().max(48) }).strict())
+            .max(12)
+            .optional(),
+          targetPlayerId: z.string().uuid().optional(),
+          stroke: z
+            .object({
+              id: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/),
+              points: z
+                .array(z.object({ x: z.number().min(0).max(600), y: z.number().min(0).max(340) }).strict())
+                .min(2)
+                .max(160),
+            })
+            .strict()
+            .optional(),
+          clear: z.boolean().optional(),
+          elapsedMs: z.number().int().min(100).max(30_000).optional(),
+        })
+        .strict()
+        .optional(),
+    })
+    .strict(),
 ]);
 
 const actionEnvelopeSchema = z
   .object({
-    code: z.string().trim().length(6).transform((value) => value.toUpperCase()),
+    code: z
+      .string()
+      .trim()
+      .length(6)
+      .transform((value) => value.toUpperCase()),
     playerId: z.string().uuid(),
     expectedRevision: z.number().int().min(1),
     idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,80}$/),
@@ -1034,41 +1189,61 @@ const actionEnvelopeSchema = z
   })
   .strict();
 
-const persistedPlayersSchema = z.array(
-  z.object({
-    id: z.string().uuid(),
-    name: z.string().trim().min(1).max(24),
-    isHost: z.boolean(),
-    connected: z.boolean(),
-  }).strict(),
-).max(12);
+const persistedPlayersSchema = z
+  .array(
+    z
+      .object({
+        id: z.string().uuid(),
+        name: z.string().trim().min(1).max(24),
+        isHost: z.boolean(),
+        connected: z.boolean(),
+      })
+      .strict(),
+  )
+  .max(12);
 const persistedStringMapSchema = z.record(z.string(), z.string());
-const persistedEventSchema = z.object({
-  id: z.string().uuid(),
-  roomCode: z.string().regex(/^[A-Z2-9]{6}$/),
-  createdAt: z.string().datetime(),
-  sequence: z.number().int().positive(),
-  actorId: z.string().uuid(),
-  actorIsHost: z.boolean(),
-  expectedRevision: z.number().int().positive(),
-  resultingRevision: z.number().int().positive(),
-  idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,80}$/),
-  action: actionSchema,
-}).strict();
+const persistedEventSchema = z
+  .object({
+    id: z.string().uuid(),
+    roomCode: z.string().regex(/^[A-Z2-9]{6}$/),
+    createdAt: z.string().datetime(),
+    sequence: z.number().int().positive(),
+    actorId: z.string().uuid(),
+    actorIsHost: z.boolean(),
+    expectedRevision: z.number().int().positive(),
+    resultingRevision: z.number().int().positive(),
+    idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,80}$/),
+    action: actionSchema,
+  })
+  .strict();
 
 const teamSelectionSchema = z
   .object({
-    code: z.string().trim().length(6).transform((value) => value.toUpperCase()),
+    code: z
+      .string()
+      .trim()
+      .length(6)
+      .transform((value) => value.toUpperCase()),
     playerId: z.string().uuid(),
-    teamId: z.string().regex(/^[a-z][a-z0-9_]*$/).max(48),
+    teamId: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]*$/)
+      .max(48),
   })
   .strict();
 
 const captainSelectionSchema = z
   .object({
-    code: z.string().trim().length(6).transform((value) => value.toUpperCase()),
+    code: z
+      .string()
+      .trim()
+      .length(6)
+      .transform((value) => value.toUpperCase()),
     playerId: z.string().uuid(),
-    teamId: z.string().regex(/^[a-z][a-z0-9_]*$/).max(48),
+    teamId: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]*$/)
+      .max(48),
     captainPlayerId: z.string().uuid(),
   })
   .strict();
@@ -1080,15 +1255,17 @@ function socketError(error: unknown): string {
 }
 
 function assertSocketOwnsPlayer(socket: Socket, room: Room, code: string, playerId: string): void {
-  if (socket.data.roomCode !== code || socket.data.playerId !== playerId || room.socketByPlayer.get(playerId) !== socket.id) {
+  if (
+    socket.data.roomCode !== code ||
+    socket.data.playerId !== playerId ||
+    room.socketByPlayer.get(playerId) !== socket.id
+  ) {
     throw new GameRuleError("This connection is not authorized for that player.");
   }
 }
 
 function aiProviderErrorMessage(error: unknown): string {
-  const status = typeof error === "object" && error !== null && "status" in error
-    ? Number(error.status)
-    : null;
+  const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : null;
   if (status === 401) return "The OpenAI API key is invalid or has been revoked.";
   if (status === 429) return "This OpenAI project has exhausted its quota or credits. Check API billing.";
   if (status === 403 || status === 404) return "This OpenAI project cannot access the configured model.";
@@ -1099,7 +1276,7 @@ async function restorePersistedRooms(): Promise<void> {
   for (const record of await blueprintStore.loadRooms()) {
     try {
       const blueprint = await blueprintStore.get(record.blueprintId);
-      if (!blueprint || blueprint.status !== "release_ready") throw new Error(`Blueprint ${record.blueprintId} is unavailable.`);
+      if (blueprint?.status !== "release_ready") throw new Error(`Blueprint ${record.blueprintId} is unavailable.`);
       const players = persistedPlayersSchema.parse(record.players).map((player) => ({ ...player, connected: false }));
       const reconnectTokenHashes = persistedStringMapSchema.parse(record.reconnectTokenHashes);
       const lobbyTeamByPlayer = persistedStringMapSchema.parse(record.lobbyTeamByPlayer);
@@ -1127,7 +1304,11 @@ async function restorePersistedRooms(): Promise<void> {
       if (state && record.checkpointRevision !== null && state.revision !== record.checkpointRevision) {
         throw new Error(`Checkpoint revision mismatch: replay=${state.revision}, stored=${record.checkpointRevision}.`);
       }
-      if (state && record.checkpointChecksum && !checkpointChecksumMatches(state, record.checkpoint, record.checkpointChecksum)) {
+      if (
+        state &&
+        record.checkpointChecksum &&
+        !checkpointChecksumMatches(state, record.checkpoint, record.checkpointChecksum)
+      ) {
         throw new Error("Checkpoint checksum does not match deterministic replay.");
       }
       const room: Room = {
@@ -1156,96 +1337,104 @@ async function restorePersistedRooms(): Promise<void> {
 await restorePersistedRooms();
 
 io.on("connection", (socket: Socket) => {
-  socket.on(
-    "room:join",
-    async (payload: JoinRoomPayload, ack?: (response: SocketAck<JoinRoomResult>) => void) => {
-      try {
-        const parsed = joinSchema.parse(payload);
-        const room = rooms.get(parsed.code);
-        if (!room) throw new GameRuleError("Room not found.");
+  socket.on("room:join", async (payload: JoinRoomPayload, ack?: (response: SocketAck<JoinRoomResult>) => void) => {
+    try {
+      const parsed = joinSchema.parse(payload);
+      const room = rooms.get(parsed.code);
+      if (!room) throw new GameRuleError("Room not found.");
 
-        let playerId = parsed.playerId;
-        let player = playerId ? room.players.get(playerId) : undefined;
-        if (playerId) {
-          const expectedHash = room.reconnectTokenHashes.get(playerId);
-          if (!player || !parsed.reconnectToken || !expectedHash || !reconnectTokenMatches(parsed.reconnectToken, expectedHash)) {
-            throw new GameRuleError("This reconnect session is no longer valid.");
-          }
-        } else if (room.state) {
-          throw new GameRuleError("This game has already started.");
+      let playerId = parsed.playerId;
+      let player = playerId ? room.players.get(playerId) : undefined;
+      if (playerId) {
+        const expectedHash = room.reconnectTokenHashes.get(playerId);
+        if (
+          !player ||
+          !parsed.reconnectToken ||
+          !expectedHash ||
+          !reconnectTokenMatches(parsed.reconnectToken, expectedHash)
+        ) {
+          throw new GameRuleError("This reconnect session is no longer valid.");
         }
-        if (!player) {
-          if (room.players.size >= room.spec.maxPlayers) {
-            throw new GameRuleError("This room is full.");
-          }
-          playerId = crypto.randomUUID();
-          player = {
-            id: playerId,
-            name: parsed.name,
-            isHost: room.players.size === 0,
-            connected: true,
-          };
-          room.players.set(playerId, player);
-        } else {
-          player.name = parsed.name;
-          player.connected = true;
-        }
-
-        const resolvedPlayerId = player.id;
-        const previousSocketId = room.socketByPlayer.get(resolvedPlayerId);
-        const reconnectCredential = issueReconnectToken();
-        room.reconnectTokenHashes.set(resolvedPlayerId, reconnectCredential.hash);
-        room.socketByPlayer.set(resolvedPlayerId, socket.id);
-        socket.data.roomCode = room.code;
-        socket.data.playerId = resolvedPlayerId;
-        void socket.join(room.code);
-        if (previousSocketId && previousSocketId !== socket.id) {
-          io.to(previousSocketId).emit("session:replaced");
-          io.sockets.sockets.get(previousSocketId)?.disconnect(true);
-        }
-
-        await blueprintStore.saveRoom(persistedRoom(room));
-        const view = viewFor(room, resolvedPlayerId);
-        acknowledge(ack, { ok: true, data: { playerId: resolvedPlayerId, reconnectToken: reconnectCredential.token, view } });
-        emitRoom(room);
-      } catch (error) {
-        acknowledge(ack, { ok: false, error: socketError(error) });
+      } else if (room.state) {
+        throw new GameRuleError("This game has already started.");
       }
-    },
-  );
-
-  socket.on(
-    "room:team:select",
-    async (payload: unknown, ack?: (response: SocketAck<{ view: LobbyView }>) => void) => {
-      try {
-        const parsed = teamSelectionSchema.parse(payload);
-        const room = rooms.get(parsed.code);
-        if (!room) throw new GameRuleError("Room not found.");
-        if (room.state) throw new GameRuleError("Teams are locked after the game starts.");
-        assertSocketOwnsPlayer(socket, room, parsed.code, parsed.playerId);
-        if (!room.players.has(parsed.playerId)) throw new GameRuleError("Unknown player.");
-        if (room.spec.template !== "composed" || room.spec.setup.mode !== "teams" || !room.spec.setup.teamPolicy) {
-          throw new GameRuleError("This game does not use player-selected teams.");
+      if (!player) {
+        if (room.players.size >= room.spec.maxPlayers) {
+          throw new GameRuleError("This room is full.");
         }
-        const policy = room.spec.setup.teamPolicy;
-        if (!policy.teams.some((team) => team.id === parsed.teamId)) throw new GameRuleError("Unknown team.");
-        const currentTeamId = room.lobbyTeamByPlayer.get(parsed.playerId);
-        const targetSize = [...room.lobbyTeamByPlayer.entries()].filter(([id, teamId]) => id !== parsed.playerId && room.players.has(id) && teamId === parsed.teamId).length;
-        if (currentTeamId !== parsed.teamId && policy.maxMembersPerTeam && targetSize >= policy.maxMembersPerTeam) {
-          throw new GameRuleError("This team is full.");
-        }
-        room.lobbyTeamByPlayer.set(parsed.playerId, parsed.teamId);
-        if (currentTeamId && currentTeamId !== parsed.teamId && room.lobbyCaptainByTeam.get(currentTeamId) === parsed.playerId) {
-          room.lobbyCaptainByTeam.delete(currentTeamId);
-        }
-        await blueprintStore.saveRoom(persistedRoom(room));
-        emitRoom(room);
-        acknowledge(ack, { ok: true, data: { view: viewFor(room, parsed.playerId) as LobbyView } });
-      } catch (error) {
-        acknowledge(ack, { ok: false, error: socketError(error) });
+        playerId = crypto.randomUUID();
+        player = {
+          id: playerId,
+          name: parsed.name,
+          isHost: room.players.size === 0,
+          connected: true,
+        };
+        room.players.set(playerId, player);
+      } else {
+        player.name = parsed.name;
+        player.connected = true;
       }
-    },
-  );
+
+      const resolvedPlayerId = player.id;
+      const previousSocketId = room.socketByPlayer.get(resolvedPlayerId);
+      const reconnectCredential = issueReconnectToken();
+      room.reconnectTokenHashes.set(resolvedPlayerId, reconnectCredential.hash);
+      room.socketByPlayer.set(resolvedPlayerId, socket.id);
+      socket.data.roomCode = room.code;
+      socket.data.playerId = resolvedPlayerId;
+      void socket.join(room.code);
+      if (previousSocketId && previousSocketId !== socket.id) {
+        io.to(previousSocketId).emit("session:replaced");
+        io.sockets.sockets.get(previousSocketId)?.disconnect(true);
+      }
+
+      await blueprintStore.saveRoom(persistedRoom(room));
+      const view = viewFor(room, resolvedPlayerId);
+      acknowledge(ack, {
+        ok: true,
+        data: { playerId: resolvedPlayerId, reconnectToken: reconnectCredential.token, view },
+      });
+      emitRoom(room);
+    } catch (error) {
+      acknowledge(ack, { ok: false, error: socketError(error) });
+    }
+  });
+
+  socket.on("room:team:select", async (payload: unknown, ack?: (response: SocketAck<{ view: LobbyView }>) => void) => {
+    try {
+      const parsed = teamSelectionSchema.parse(payload);
+      const room = rooms.get(parsed.code);
+      if (!room) throw new GameRuleError("Room not found.");
+      if (room.state) throw new GameRuleError("Teams are locked after the game starts.");
+      assertSocketOwnsPlayer(socket, room, parsed.code, parsed.playerId);
+      if (!room.players.has(parsed.playerId)) throw new GameRuleError("Unknown player.");
+      if (room.spec.template !== "composed" || room.spec.setup.mode !== "teams" || !room.spec.setup.teamPolicy) {
+        throw new GameRuleError("This game does not use player-selected teams.");
+      }
+      const policy = room.spec.setup.teamPolicy;
+      if (!policy.teams.some((team) => team.id === parsed.teamId)) throw new GameRuleError("Unknown team.");
+      const currentTeamId = room.lobbyTeamByPlayer.get(parsed.playerId);
+      const targetSize = [...room.lobbyTeamByPlayer.entries()].filter(
+        ([id, teamId]) => id !== parsed.playerId && room.players.has(id) && teamId === parsed.teamId,
+      ).length;
+      if (currentTeamId !== parsed.teamId && policy.maxMembersPerTeam && targetSize >= policy.maxMembersPerTeam) {
+        throw new GameRuleError("This team is full.");
+      }
+      room.lobbyTeamByPlayer.set(parsed.playerId, parsed.teamId);
+      if (
+        currentTeamId &&
+        currentTeamId !== parsed.teamId &&
+        room.lobbyCaptainByTeam.get(currentTeamId) === parsed.playerId
+      ) {
+        room.lobbyCaptainByTeam.delete(currentTeamId);
+      }
+      await blueprintStore.saveRoom(persistedRoom(room));
+      emitRoom(room);
+      acknowledge(ack, { ok: true, data: { view: viewFor(room, parsed.playerId) as LobbyView } });
+    } catch (error) {
+      acknowledge(ack, { ok: false, error: socketError(error) });
+    }
+  });
 
   socket.on(
     "room:captain:select",
@@ -1256,7 +1445,8 @@ io.on("connection", (socket: Socket) => {
         if (!room) throw new GameRuleError("Room not found.");
         if (room.state) throw new GameRuleError("Captains are locked after the game starts.");
         assertSocketOwnsPlayer(socket, room, parsed.code, parsed.playerId);
-        if (!room.players.get(parsed.playerId)?.isHost) throw new GameRuleError("Only the host can choose team captains.");
+        if (!room.players.get(parsed.playerId)?.isHost)
+          throw new GameRuleError("Only the host can choose team captains.");
         if (room.spec.template !== "composed" || room.spec.setup.mode !== "teams" || !room.spec.setup.teamPolicy) {
           throw new GameRuleError("This game does not use teams.");
         }
@@ -1266,7 +1456,10 @@ io.on("connection", (socket: Socket) => {
         if (!room.spec.setup.teamPolicy.teams.some((team) => team.id === parsed.teamId)) {
           throw new GameRuleError("Unknown team.");
         }
-        if (!room.players.has(parsed.captainPlayerId) || room.lobbyTeamByPlayer.get(parsed.captainPlayerId) !== parsed.teamId) {
+        if (
+          !room.players.has(parsed.captainPlayerId) ||
+          room.lobbyTeamByPlayer.get(parsed.captainPlayerId) !== parsed.teamId
+        ) {
           throw new GameRuleError("The captain must belong to the selected team.");
         }
         room.lobbyCaptainByTeam.set(parsed.teamId, parsed.captainPlayerId);
@@ -1292,20 +1485,23 @@ io.on("connection", (socket: Socket) => {
         if (room.state) throw new GameRuleError("The game has already started.");
         const lobbyView = viewFor(room, payload.playerId);
         if (lobbyView.kind !== "lobby" || !lobbyView.canStart) {
-          throw new GameRuleError(lobbyView.kind === "lobby"
-            ? lobbyView.startBlockReason ?? "The room is not ready."
-            : "The game has already started.");
+          throw new GameRuleError(
+            lobbyView.kind === "lobby"
+              ? (lobbyView.startBlockReason ?? "The room is not ready.")
+              : "The game has already started.",
+          );
         }
         const seed = `${room.code}-seed`;
-        const nextState = room.spec.template === "composed"
-          ? initializeComposedGame(
-              room.spec,
-              publicPlayers(room),
-              seed,
-              Object.fromEntries(room.lobbyTeamByPlayer),
-              Object.fromEntries(room.lobbyCaptainByTeam),
-            )
-          : initializeGame(room.spec, publicPlayers(room), seed);
+        const nextState =
+          room.spec.template === "composed"
+            ? initializeComposedGame(
+                room.spec,
+                publicPlayers(room),
+                seed,
+                Object.fromEntries(room.lobbyTeamByPlayer),
+                Object.fromEntries(room.lobbyCaptainByTeam),
+              )
+            : initializeGame(room.spec, publicPlayers(room), seed);
         await blueprintStore.saveRoom({ ...persistedRoom(room, nextState), seed });
         room.seed = seed;
         room.state = nextState;
@@ -1319,10 +1515,7 @@ io.on("connection", (socket: Socket) => {
 
   socket.on(
     "game:action",
-    async (
-      payload: GameActionEnvelope,
-      ack?: (response: SocketAck<{ revision: number }>) => void,
-    ) => {
+    async (payload: GameActionEnvelope, ack?: (response: SocketAck<{ revision: number }>) => void) => {
       try {
         const receivedAt = Date.now();
         const parsed = actionEnvelopeSchema.parse(payload);
@@ -1355,7 +1548,8 @@ io.on("connection", (socket: Socket) => {
           }
           let nextState: GameState | ComposedGameState;
           if (currentState.template === "composed" && room.spec.template === "composed") {
-            if (effectiveAction.type !== "COMPOSED_ACTION") throw new ComposedGameRuleError("This action is not supported by the composed engine.");
+            if (effectiveAction.type !== "COMPOSED_ACTION")
+              throw new ComposedGameRuleError("This action is not supported by the composed engine.");
             nextState = reduceComposedGame(
               currentState,
               { ...effectiveAction, idempotencyKey: parsed.idempotencyKey },
@@ -1364,7 +1558,8 @@ io.on("connection", (socket: Socket) => {
               room.spec,
             );
           } else if (currentState.template !== "composed" && room.spec.template !== "composed") {
-            if (parsed.action.type === "COMPOSED_ACTION") throw new GameRuleError("This action is not supported by the legacy engine.");
+            if (parsed.action.type === "COMPOSED_ACTION")
+              throw new GameRuleError("This action is not supported by the legacy engine.");
             nextState = reduceGame(currentState, parsed.action, player.id, player.isHost, room.spec);
           } else {
             throw new GameRuleError("State and GameSpec templates do not match.");

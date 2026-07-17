@@ -25,11 +25,7 @@ function themedStyle(theme: GameThemeInput | undefined, style?: CSSProperties): 
   return { ...gameThemeStyle(theme), ...style };
 }
 
-export function GameSurface({
-  theme = "minimal",
-  className,
-  children,
-}: ThemedProps & { children: ReactNode }) {
+export function GameSurface({ theme = "minimal", className, children }: ThemedProps & { children: ReactNode }) {
   const resolved = resolveGameTheme(theme);
   return (
     <section
@@ -59,7 +55,11 @@ export function GameHeader({
 }) {
   return (
     <header className={classes("game-ui", "game-header", className)} style={themedStyle(theme)}>
-      {icon ? <div className="game-header__icon" aria-hidden="true">{icon}</div> : null}
+      {icon ? (
+        <div className="game-header__icon" aria-hidden="true">
+          {icon}
+        </div>
+      ) : null}
       <div className="game-header__copy">
         {eyebrow ? <span className="game-eyebrow">{eyebrow}</span> : null}
         <h1>{title}</h1>
@@ -75,11 +75,13 @@ export function GameButton({
   className,
   variant = "primary",
   ...props
-}: ThemedProps & ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost";
-}) {
+}: ThemedProps &
+  ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: "primary" | "secondary" | "ghost";
+  }) {
   return (
     <button
+      type="button"
       {...props}
       className={classes("game-ui", "game-button", `game-button--${variant}`, className)}
       style={themedStyle(theme, props.style)}
@@ -139,16 +141,26 @@ export function CardDeck({
   const remaining = Math.max(cards.length - activeIndex, 0);
   return (
     <article className={classes("game-ui", "card-deck", className)} style={themedStyle(theme)}>
-      <div className="card-deck__meta"><span>{label}</span><b>{remaining} card{remaining === 1 ? "" : "s"}</b></div>
+      <div className="card-deck__meta">
+        <span>{label}</span>
+        <b>
+          {remaining} card{remaining === 1 ? "" : "s"}
+        </b>
+      </div>
       <div className="card-deck__stack" aria-live="polite">
-        <i /><i />
+        <i />
+        <i />
         <div className="card-deck__card">
           <span aria-hidden="true">{activeCard?.icon ?? "◆"}</span>
           <strong>{activeCard?.label ?? "Empty deck"}</strong>
           {activeCard?.detail ? <small>{activeCard.detail}</small> : null}
         </div>
       </div>
-      {onDraw ? <GameButton theme={theme} onClick={onDraw} disabled={!activeCard}>Draw next <span>→</span></GameButton> : null}
+      {onDraw ? (
+        <GameButton theme={theme} onClick={onDraw} disabled={!activeCard}>
+          Draw next <span>→</span>
+        </GameButton>
+      ) : null}
     </article>
   );
 }
@@ -176,17 +188,43 @@ export function CardZone({
   }, [cards, selectedId]);
   return (
     <article className={classes("game-ui", "card-zone", className)} style={themedStyle(theme)}>
-      <div className="card-zone__heading"><span className="game-eyebrow">Cards</span><strong>{label}</strong><b>{cards.length}</b></div>
+      <div className="card-zone__heading">
+        <span className="game-eyebrow">Cards</span>
+        <strong>{label}</strong>
+        <b>{cards.length}</b>
+      </div>
       {cards.length ? (
         <div className="card-zone__cards">
           {cards.map((card) => (
-            <button type="button" className={selectedId === card.id ? "is-selected" : undefined} onClick={() => setSelectedId(card.id)} disabled={disabled} aria-pressed={selectedId === card.id} key={card.id}>
-              <span aria-hidden="true">{card.icon ?? "◆"}</span><strong>{card.title}</strong>{card.body ? <small>{card.body}</small> : null}
+            <button
+              type="button"
+              className={selectedId === card.id ? "is-selected" : undefined}
+              onClick={() => setSelectedId(card.id)}
+              disabled={disabled}
+              aria-pressed={selectedId === card.id}
+              key={card.id}
+            >
+              <span aria-hidden="true">{card.icon ?? "◆"}</span>
+              <strong>{card.title}</strong>
+              {card.body ? <small>{card.body}</small> : null}
             </button>
           ))}
         </div>
-      ) : <p className="game-empty-state">There are no cards in this area.</p>}
-      {onPlay ? <GameButton theme={theme} disabled={disabled || !selectedId} onClick={() => { onPlay(selectedId); setSelectedId(""); }}>{actionLabel}</GameButton> : null}
+      ) : (
+        <p className="game-empty-state">There are no cards in this area.</p>
+      )}
+      {onPlay ? (
+        <GameButton
+          theme={theme}
+          disabled={disabled || !selectedId}
+          onClick={() => {
+            onPlay(selectedId);
+            setSelectedId("");
+          }}
+        >
+          {actionLabel}
+        </GameButton>
+      ) : null}
     </article>
   );
 }
@@ -220,34 +258,108 @@ export function GameBoard({
     if (spaceId && !spaces.some((space) => space.id === spaceId)) setSpaceId("");
   }, [spaces, spaceId, tokenId, tokens]);
   return (
-    <article className={classes("game-ui", "game-board", `game-board--${layout}`, className)} style={themedStyle(theme)}>
-      <div className="game-board__heading"><div><span className="game-eyebrow">Movement</span><h3>{title}</h3></div><small>Choose a token, then a destination</small></div>
+    <article
+      className={classes("game-ui", "game-board", `game-board--${layout}`, className)}
+      style={themedStyle(theme)}
+    >
+      <div className="game-board__heading">
+        <div>
+          <span className="game-eyebrow">Movement</span>
+          <h3>{title}</h3>
+        </div>
+        <small>Choose a token, then a destination</small>
+      </div>
       <div className="game-board__tokens" role="group" aria-label="Available tokens">
-        {tokens.map((token) => <button type="button" className={tokenId === token.id ? "is-selected" : undefined} disabled={disabled || !token.owned} onClick={() => setTokenId(token.id)} key={token.id}><i />{token.label}</button>)}
+        {tokens.map((token) => (
+          <button
+            type="button"
+            className={tokenId === token.id ? "is-selected" : undefined}
+            disabled={disabled || !token.owned}
+            onClick={() => setTokenId(token.id)}
+            key={token.id}
+          >
+            <i />
+            {token.label}
+          </button>
+        ))}
       </div>
       <ol className="game-board__spaces">
         {spaces.map((space, index) => (
           <li className={spaceId === space.id ? "is-selected" : undefined} key={space.id}>
-            <button type="button" onClick={() => setSpaceId(space.id)} disabled={disabled || !tokenId}><b>{index + 1}</b><strong>{space.label}</strong></button>
-            <div>{tokens.filter((token) => token.spaceId === space.id).map((token) => <span title={token.label} key={token.id}>{token.label.slice(0, 1).toUpperCase()}</span>)}</div>
+            <button type="button" onClick={() => setSpaceId(space.id)} disabled={disabled || !tokenId}>
+              <b>{index + 1}</b>
+              <strong>{space.label}</strong>
+            </button>
+            <div>
+              {tokens
+                .filter((token) => token.spaceId === space.id)
+                .map((token) => (
+                  <span title={token.label} key={token.id}>
+                    {token.label.slice(0, 1).toUpperCase()}
+                  </span>
+                ))}
+            </div>
           </li>
         ))}
       </ol>
-      {onMove ? <GameButton theme={theme} disabled={disabled || !tokenId || !spaceId} onClick={() => { onMove(tokenId, spaceId); setSpaceId(""); }}>{actionLabel}</GameButton> : null}
+      {onMove ? (
+        <GameButton
+          theme={theme}
+          disabled={disabled || !tokenId || !spaceId}
+          onClick={() => {
+            onMove(tokenId, spaceId);
+            setSpaceId("");
+          }}
+        >
+          {actionLabel}
+        </GameButton>
+      ) : null}
     </article>
   );
 }
 
-export type GameResource = { id: string; name: string; icon?: ReactNode; value: number; min: number; max: number; scope: "global" | "player" | "team" };
+export type GameResource = {
+  id: string;
+  name: string;
+  icon?: ReactNode;
+  value: number;
+  min: number;
+  max: number;
+  scope: "global" | "player" | "team";
+};
 
-export function ResourcePanel({ theme, className, resources, title = "Resources" }: ThemedProps & { resources: GameResource[]; title?: string }) {
+export function ResourcePanel({
+  theme,
+  className,
+  resources,
+  title = "Resources",
+}: ThemedProps & { resources: GameResource[]; title?: string }) {
   return (
     <article className={classes("game-ui", "resource-panel", className)} style={themedStyle(theme)}>
       <h3>{title}</h3>
-      <div>{resources.map((resource) => {
-        const progress = resource.max === resource.min ? 100 : ((resource.value - resource.min) / (resource.max - resource.min)) * 100;
-        return <div className="resource-panel__item" key={resource.id}><span aria-hidden="true">{resource.icon ?? "◆"}</span><p><strong>{resource.name}</strong><small>{resource.scope === "global" ? "Shared" : resource.scope === "team" ? "Team" : "Personal"}</small></p><b>{resource.value}</b><i><em style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} /></i></div>;
-      })}</div>
+      <div>
+        {resources.map((resource) => {
+          const progress =
+            resource.max === resource.min
+              ? 100
+              : ((resource.value - resource.min) / (resource.max - resource.min)) * 100;
+          return (
+            <div className="resource-panel__item" key={resource.id}>
+              <span aria-hidden="true">{resource.icon ?? "◆"}</span>
+              <p>
+                <strong>{resource.name}</strong>
+                <small>
+                  {resource.scope === "global" ? "Shared" : resource.scope === "team" ? "Team" : "Personal"}
+                </small>
+              </p>
+              <b>{resource.value}</b>
+              <i>
+                <em style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
+              </i>
+            </div>
+          );
+        })}
+      </div>
     </article>
   );
 }
@@ -261,27 +373,71 @@ export function RandomizerPanel({
   actionLabel = "Roll",
   onTrigger,
   disabled = false,
-}: ThemedProps & { label: string; kind: "die" | "spinner"; result?: string | number; actionLabel?: string; onTrigger?: () => void; disabled?: boolean }) {
+}: ThemedProps & {
+  label: string;
+  kind: "die" | "spinner";
+  result?: string | number;
+  actionLabel?: string;
+  onTrigger?: () => void;
+  disabled?: boolean;
+}) {
   return (
     <article className={classes("game-ui", "randomizer-panel", className)} style={themedStyle(theme)}>
-      <span aria-hidden="true">{kind === "die" ? "⚄" : "◉"}</span><div><small>{kind === "die" ? "Die" : "Spinner"}</small><strong>{label}</strong></div><b>{result ?? "—"}</b>
-      {onTrigger ? <GameButton theme={theme} onClick={onTrigger} disabled={disabled}>{actionLabel}</GameButton> : null}
+      <span aria-hidden="true">{kind === "die" ? "⚄" : "◉"}</span>
+      <div>
+        <small>{kind === "die" ? "Die" : "Spinner"}</small>
+        <strong>{label}</strong>
+      </div>
+      <b>{result ?? "—"}</b>
+      {onTrigger ? (
+        <GameButton theme={theme} onClick={onTrigger} disabled={disabled}>
+          {actionLabel}
+        </GameButton>
+      ) : null}
     </article>
   );
 }
 
-export function Buzzer({ theme, className, label = "Buzzer", claimedBy, onBuzz, disabled = false }: ThemedProps & { label?: string; claimedBy?: string; onBuzz?: () => void; disabled?: boolean }) {
+export function Buzzer({
+  theme,
+  className,
+  label = "Buzzer",
+  claimedBy,
+  onBuzz,
+  disabled = false,
+}: ThemedProps & { label?: string; claimedBy?: string; onBuzz?: () => void; disabled?: boolean }) {
   return (
-    <article className={classes("game-ui", "game-buzzer", claimedBy && "is-claimed", className)} style={themedStyle(theme)}>
-      <button type="button" onClick={onBuzz} disabled={disabled || Boolean(claimedBy)} aria-label={label}><span aria-hidden="true">!</span></button>
-      <div><span className="game-eyebrow">Reflex</span><strong>{claimedBy ? `${claimedBy} buzzed` : label}</strong><small>{claimedBy ? "The buzzer is locked for this phase." : "Be the first to press it."}</small></div>
+    <article
+      className={classes("game-ui", "game-buzzer", claimedBy && "is-claimed", className)}
+      style={themedStyle(theme)}
+    >
+      <button type="button" onClick={onBuzz} disabled={disabled || Boolean(claimedBy)} aria-label={label}>
+        <span aria-hidden="true">!</span>
+      </button>
+      <div>
+        <span className="game-eyebrow">Reflex</span>
+        <strong>{claimedBy ? `${claimedBy} buzzed` : label}</strong>
+        <small>{claimedBy ? "The buzzer is locked for this phase." : "Be the first to press it."}</small>
+      </div>
     </article>
   );
 }
 
 export type SortableItem = { id: string; label: string };
 
-export function OrderingBoard({ theme, className, items, actionLabel = "Confirm order", onSubmit, disabled = false }: ThemedProps & { items: SortableItem[]; actionLabel?: string; onSubmit?: (ids: string[]) => void; disabled?: boolean }) {
+export function OrderingBoard({
+  theme,
+  className,
+  items,
+  actionLabel = "Confirm order",
+  onSubmit,
+  disabled = false,
+}: ThemedProps & {
+  items: SortableItem[];
+  actionLabel?: string;
+  onSubmit?: (ids: string[]) => void;
+  disabled?: boolean;
+}) {
   const [ordered, setOrdered] = useState(items);
   useEffect(() => setOrdered(items), [items]);
   function move(index: number, offset: number) {
@@ -293,42 +449,170 @@ export function OrderingBoard({ theme, className, items, actionLabel = "Confirm 
   }
   return (
     <article className={classes("game-ui", "ordering-board", className)} style={themedStyle(theme)}>
-      <div><span className="game-eyebrow">Ranking</span><h3>Place the items in the correct order</h3></div>
-      <ol>{ordered.map((item, index) => <li key={item.id}><b>{index + 1}</b><strong>{item.label}</strong><span><button type="button" onClick={() => move(index, -1)} disabled={disabled || index === 0} aria-label={`Move ${item.label} up`}>↑</button><button type="button" onClick={() => move(index, 1)} disabled={disabled || index === ordered.length - 1} aria-label={`Move ${item.label} down`}>↓</button></span></li>)}</ol>
-      {onSubmit ? <GameButton theme={theme} onClick={() => onSubmit(ordered.map((item) => item.id))} disabled={disabled || !ordered.length}>{actionLabel}</GameButton> : null}
+      <div>
+        <span className="game-eyebrow">Ranking</span>
+        <h3>Place the items in the correct order</h3>
+      </div>
+      <ol>
+        {ordered.map((item, index) => (
+          <li key={item.id}>
+            <b>{index + 1}</b>
+            <strong>{item.label}</strong>
+            <span>
+              <button
+                type="button"
+                onClick={() => move(index, -1)}
+                disabled={disabled || index === 0}
+                aria-label={`Move ${item.label} up`}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                onClick={() => move(index, 1)}
+                disabled={disabled || index === ordered.length - 1}
+                aria-label={`Move ${item.label} down`}
+              >
+                ↓
+              </button>
+            </span>
+          </li>
+        ))}
+      </ol>
+      {onSubmit ? (
+        <GameButton
+          theme={theme}
+          onClick={() => onSubmit(ordered.map((item) => item.id))}
+          disabled={disabled || !ordered.length}
+        >
+          {actionLabel}
+        </GameButton>
+      ) : null}
     </article>
   );
 }
 
-export function MatchingBoard({ theme, className, items, actionLabel = "Confirm matches", onSubmit, disabled = false }: ThemedProps & { items: SortableItem[]; actionLabel?: string; onSubmit?: (pairs: Array<{ leftId: string; rightId: string }>) => void; disabled?: boolean }) {
+export function MatchingBoard({
+  theme,
+  className,
+  items,
+  actionLabel = "Confirm matches",
+  onSubmit,
+  disabled = false,
+}: ThemedProps & {
+  items: SortableItem[];
+  actionLabel?: string;
+  onSubmit?: (pairs: Array<{ leftId: string; rightId: string }>) => void;
+  disabled?: boolean;
+}) {
   const [selectedId, setSelectedId] = useState("");
   const [pairs, setPairs] = useState<Array<{ leftId: string; rightId: string }>>([]);
-  useEffect(() => { setPairs([]); setSelectedId(""); }, [items]);
+  useEffect(() => {
+    setPairs([]);
+    setSelectedId("");
+  }, [items]);
   const usedIds = new Set(pairs.flatMap((pair) => [pair.leftId, pair.rightId]));
   function select(id: string) {
     if (!selectedId) setSelectedId(id);
-    else if (selectedId !== id) { setPairs([...pairs, { leftId: selectedId, rightId: id }]); setSelectedId(""); }
+    else if (selectedId !== id) {
+      setPairs([...pairs, { leftId: selectedId, rightId: id }]);
+      setSelectedId("");
+    }
   }
   const name = (id: string) => items.find((item) => item.id === id)?.label ?? id;
   return (
     <article className={classes("game-ui", "matching-board", className)} style={themedStyle(theme)}>
-      <div><span className="game-eyebrow">Matching</span><h3>Build the pairs</h3><button type="button" onClick={() => { setPairs([]); setSelectedId(""); }} disabled={disabled || (!pairs.length && !selectedId)}>Start over</button></div>
-      <div className="matching-board__items">{items.map((item) => <button type="button" className={selectedId === item.id ? "is-selected" : undefined} disabled={disabled || usedIds.has(item.id)} onClick={() => select(item.id)} key={item.id}>{item.label}</button>)}</div>
-      {pairs.length ? <ol>{pairs.map((pair, index) => <li key={`${pair.leftId}-${pair.rightId}`}><b>{index + 1}</b><span>{name(pair.leftId)}</span><i>↔</i><span>{name(pair.rightId)}</span></li>)}</ol> : <p className="game-empty-state">Select two items to create a pair.</p>}
-      {onSubmit ? <GameButton theme={theme} onClick={() => onSubmit(pairs)} disabled={disabled || pairs.length * 2 !== items.length}>{actionLabel}</GameButton> : null}
+      <div>
+        <span className="game-eyebrow">Matching</span>
+        <h3>Build the pairs</h3>
+        <button
+          type="button"
+          onClick={() => {
+            setPairs([]);
+            setSelectedId("");
+          }}
+          disabled={disabled || (!pairs.length && !selectedId)}
+        >
+          Start over
+        </button>
+      </div>
+      <div className="matching-board__items">
+        {items.map((item) => (
+          <button
+            type="button"
+            className={selectedId === item.id ? "is-selected" : undefined}
+            disabled={disabled || usedIds.has(item.id)}
+            onClick={() => select(item.id)}
+            key={item.id}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {pairs.length ? (
+        <ol>
+          {pairs.map((pair, index) => (
+            <li key={`${pair.leftId}-${pair.rightId}`}>
+              <b>{index + 1}</b>
+              <span>{name(pair.leftId)}</span>
+              <i>↔</i>
+              <span>{name(pair.rightId)}</span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="game-empty-state">Select two items to create a pair.</p>
+      )}
+      {onSubmit ? (
+        <GameButton
+          theme={theme}
+          onClick={() => onSubmit(pairs)}
+          disabled={disabled || pairs.length * 2 !== items.length}
+        >
+          {actionLabel}
+        </GameButton>
+      ) : null}
     </article>
   );
 }
 
-export function MediaPanel({ theme, className, kind, title, url, alt }: ThemedProps & { kind: "image" | "audio" | "video"; title: string; url: string; alt: string }) {
+export function MediaPanel({
+  theme,
+  className,
+  kind,
+  title,
+  url,
+  alt,
+}: ThemedProps & { kind: "image" | "audio" | "video"; title: string; url: string; alt: string }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [url]);
 
-  const fallback = <div className="media-panel__fallback" role="img" aria-label={alt}><span aria-hidden="true">▧</span><small>Media unavailable</small></div>;
+  const fallback = (
+    <div className="media-panel__fallback" role="img" aria-label={alt}>
+      <span aria-hidden="true">▧</span>
+      <small>Media unavailable</small>
+    </div>
+  );
   return (
     <figure className={classes("game-ui", "media-panel", className)} style={themedStyle(theme)}>
-      {failed ? fallback : kind === "image" ? <img src={url} alt={alt} loading="lazy" onError={() => setFailed(true)} /> : kind === "audio" ? <audio src={url} controls preload="metadata" onError={() => setFailed(true)}>{alt}</audio> : <video src={url} controls preload="metadata" onError={() => setFailed(true)}>{alt}</video>}
-      <figcaption><span className="game-eyebrow">Media</span><strong>{title}</strong><small>{alt}</small></figcaption>
+      {failed ? (
+        fallback
+      ) : kind === "image" ? (
+        <img src={url} alt={alt} loading="lazy" onError={() => setFailed(true)} />
+      ) : kind === "audio" ? (
+        <audio src={url} controls preload="metadata" onError={() => setFailed(true)}>
+          {alt}
+        </audio>
+      ) : (
+        <video src={url} controls preload="metadata" onError={() => setFailed(true)}>
+          {alt}
+        </video>
+      )}
+      <figcaption>
+        <span className="game-eyebrow">Media</span>
+        <strong>{title}</strong>
+        <small>{alt}</small>
+      </figcaption>
     </figure>
   );
 }
@@ -347,9 +631,17 @@ export function TurnIndicator({
   status?: "active" | "waiting" | "done";
 }) {
   return (
-    <div className={classes("game-ui", "turn-indicator", `turn-indicator--${status}`, className)} style={themedStyle(theme)}>
-      <span className="turn-indicator__avatar" aria-hidden="true">{avatar ?? player.slice(0, 1).toUpperCase()}</span>
-      <span><small>{status === "active" ? "Current turn" : status === "done" ? "Turn complete" : "Next turn"}</small><strong>{player}</strong></span>
+    <div
+      className={classes("game-ui", "turn-indicator", `turn-indicator--${status}`, className)}
+      style={themedStyle(theme)}
+    >
+      <span className="turn-indicator__avatar" aria-hidden="true">
+        {avatar ?? player.slice(0, 1).toUpperCase()}
+      </span>
+      <span>
+        <small>{status === "active" ? "Current turn" : status === "done" ? "Turn complete" : "Next turn"}</small>
+        <strong>{player}</strong>
+      </span>
       <p>{instruction}</p>
     </div>
   );
@@ -366,9 +658,16 @@ export function RoundTracker({
   const safeCurrent = Math.min(Math.max(current, 0), safeTotal);
   return (
     <div className={classes("game-ui", "round-tracker", className)} style={themedStyle(theme)}>
-      <div><span>{label}</span><b>{safeCurrent} / {safeTotal}</b></div>
+      <div>
+        <span>{label}</span>
+        <b>
+          {safeCurrent} / {safeTotal}
+        </b>
+      </div>
       <ol aria-label={`${label} ${safeCurrent} of ${safeTotal}`}>
-        {Array.from({ length: safeTotal }, (_, index) => <li className={index < safeCurrent ? "is-complete" : ""} key={index} />)}
+        {Array.from({ length: safeTotal }, (_, index) => (
+          <li className={index < safeCurrent ? "is-complete" : ""} key={index} />
+        ))}
       </ol>
     </div>
   );
@@ -387,9 +686,14 @@ export function GameTimer({
   const minutes = Math.floor(safeSeconds / 60);
   const remainder = safeSeconds % 60;
   return (
-    <div className={classes("game-ui", "game-timer", safeSeconds <= urgentAt && "is-urgent", className)} style={themedStyle(theme)}>
+    <div
+      className={classes("game-ui", "game-timer", safeSeconds <= urgentAt && "is-urgent", className)}
+      style={themedStyle(theme)}
+    >
       <div className="game-timer__dial" style={{ "--timer-progress": `${progress * 3.6}deg` } as CSSProperties}>
-        <strong>{minutes}:{remainder.toString().padStart(2, "0")}</strong>
+        <strong>
+          {minutes}:{remainder.toString().padStart(2, "0")}
+        </strong>
       </div>
       <span>{label}</span>
     </div>
@@ -464,15 +768,29 @@ export function TextAnswer({
     event.preventDefault();
     if (value.trim()) onSubmit?.();
   }
-  const fieldProps = { value, placeholder, maxLength, disabled, onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(event.target.value) };
+  const fieldProps = {
+    value,
+    placeholder,
+    maxLength,
+    disabled,
+    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(event.target.value),
+  };
   return (
     <form className={classes("game-ui", "text-answer", className)} style={themedStyle(theme)} onSubmit={submit}>
       <label htmlFor="game-text-answer">{label}</label>
       <div>
-        {multiline ? <textarea id="game-text-answer" rows={3} {...fieldProps} /> : <input id="game-text-answer" {...fieldProps} />}
-        <GameButton theme={theme} disabled={disabled || !value.trim()}>{submitLabel}</GameButton>
+        {multiline ? (
+          <textarea id="game-text-answer" rows={3} {...fieldProps} />
+        ) : (
+          <input id="game-text-answer" {...fieldProps} />
+        )}
+        <GameButton theme={theme} disabled={disabled || !value.trim()}>
+          {submitLabel}
+        </GameButton>
       </div>
-      <small>{value.length} / {maxLength}</small>
+      <small>
+        {value.length} / {maxLength}
+      </small>
     </form>
   );
 }
@@ -489,8 +807,16 @@ export function TeamBoard({
     <div className={classes("game-ui", "team-board", className)} style={themedStyle(theme)}>
       {teams.map((team) => (
         <article className={activeTeamId === team.id ? "is-active" : undefined} key={team.id}>
-          <div><span aria-hidden="true">{team.icon ?? "●"}</span><strong>{team.name}</strong>{team.score !== undefined ? <b>{team.score}</b> : null}</div>
-          <ul>{team.members.map((member) => <li key={member}>{member}</li>)}</ul>
+          <div>
+            <span aria-hidden="true">{team.icon ?? "●"}</span>
+            <strong>{team.name}</strong>
+            {team.score !== undefined ? <b>{team.score}</b> : null}
+          </div>
+          <ul>
+            {team.members.map((member) => (
+              <li key={member}>{member}</li>
+            ))}
+          </ul>
         </article>
       ))}
     </div>
@@ -506,9 +832,19 @@ export function PlayerStrip({
   activePlayerId,
 }: ThemedProps & { players: Player[]; activePlayerId?: string }) {
   return (
-    <div className={classes("game-ui", "player-strip", className)} style={themedStyle(theme)} aria-label="Players">
+    <div
+      className={classes("game-ui", "player-strip", className)}
+      style={themedStyle(theme)}
+      role="list"
+      aria-label="Players"
+    >
       {players.map((player) => (
-        <div className={activePlayerId === player.id ? "is-active" : undefined} key={player.id} title={player.name}>
+        <div
+          className={activePlayerId === player.id ? "is-active" : undefined}
+          key={player.id}
+          title={player.name}
+          role="listitem"
+        >
           <span aria-hidden="true">{player.avatar ?? player.name.slice(0, 1).toUpperCase()}</span>
           <strong>{player.name}</strong>
           <i className={`status-${player.status ?? "waiting"}`} />
@@ -533,8 +869,12 @@ export function ScoreBoard({
       <ol>
         {ranked.map((entry, index) => (
           <li key={entry.id}>
-            <b>{index + 1}</b><span aria-hidden="true">{entry.icon ?? "●"}</span>
-            <p><strong>{entry.label}</strong>{entry.detail ? <small>{entry.detail}</small> : null}</p>
+            <b>{index + 1}</b>
+            <span aria-hidden="true">{entry.icon ?? "●"}</span>
+            <p>
+              <strong>{entry.label}</strong>
+              {entry.detail ? <small>{entry.detail}</small> : null}
+            </p>
             <em>{entry.score}</em>
           </li>
         ))}
@@ -552,11 +892,22 @@ export function ClueList({
 }: ThemedProps & { clues: Array<string | null>; revealed?: number; title?: string }) {
   return (
     <article className={classes("game-ui", "clue-list", className)} style={themedStyle(theme)}>
-      <div><span>✦</span><h3>{title}</h3><b>{Math.min(revealed, clues.length)} / {clues.length}</b></div>
+      <div>
+        <span>✦</span>
+        <h3>{title}</h3>
+        <b>
+          {Math.min(revealed, clues.length)} / {clues.length}
+        </b>
+      </div>
       <ol>
         {clues.map((clue, index) => {
           const visible = index < revealed && Boolean(clue);
-          return <li className={visible ? "is-revealed" : undefined} key={`${clue ?? "hidden"}-${index}`}><b>{index + 1}</b><span>{visible ? clue : "Locked clue"}</span></li>;
+          return (
+            <li className={visible ? "is-revealed" : undefined} key={`${clue ?? "hidden"}-${index}`}>
+              <b>{index + 1}</b>
+              <span>{visible ? clue : "Locked clue"}</span>
+            </li>
+          );
         })}
       </ol>
     </article>
@@ -582,9 +933,22 @@ export function ChallengeCard({
 }) {
   const difficultyLabel = { easy: "Easy", medium: "Intermediate", hard: "Hard" }[difficulty];
   return (
-    <article className={classes("game-ui", "challenge-card", `challenge-card--${difficulty}`, className)} style={themedStyle(theme)}>
-      <div className="challenge-card__icon" aria-hidden="true">{icon}</div>
-      <div><span>{difficultyLabel}{reward ? ` · ${reward}` : ""}</span><h3>{title}</h3><p>{instruction}</p>{children}</div>
+    <article
+      className={classes("game-ui", "challenge-card", `challenge-card--${difficulty}`, className)}
+      style={themedStyle(theme)}
+    >
+      <div className="challenge-card__icon" aria-hidden="true">
+        {icon}
+      </div>
+      <div>
+        <span>
+          {difficultyLabel}
+          {reward ? ` · ${reward}` : ""}
+        </span>
+        <h3>{title}</h3>
+        <p>{instruction}</p>
+        {children}
+      </div>
     </article>
   );
 }
@@ -593,7 +957,9 @@ export type SketchPoint = { x: number; y: number };
 export type SketchStroke = { id: string; points: SketchPoint[] };
 
 function pointsToPath(points: SketchPoint[]) {
-  return points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+  return points
+    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)},${point.y.toFixed(1)}`)
+    .join(" ");
 }
 
 export function DrawingCanvas({
@@ -643,10 +1009,32 @@ export function DrawingCanvas({
 
   return (
     <article className={classes("game-ui", "drawing-canvas", className)} style={themedStyle(theme)}>
-      <div><strong>{label}</strong><GameButton theme={theme} variant="ghost" type="button" onClick={() => onChange([])} disabled={disabled || strokes.length === 0}>Clear</GameButton></div>
-      <svg ref={svgRef} viewBox="0 0 600 340" role="img" aria-label={label} onPointerDown={startStroke} onPointerMove={extendStroke} onPointerUp={finishStroke} onPointerCancel={finishStroke}>
+      <div>
+        <strong>{label}</strong>
+        <GameButton
+          theme={theme}
+          variant="ghost"
+          type="button"
+          onClick={() => onChange([])}
+          disabled={disabled || strokes.length === 0}
+        >
+          Clear
+        </GameButton>
+      </div>
+      <svg
+        ref={svgRef}
+        viewBox="0 0 600 340"
+        role="img"
+        aria-label={label}
+        onPointerDown={startStroke}
+        onPointerMove={extendStroke}
+        onPointerUp={finishStroke}
+        onPointerCancel={finishStroke}
+      >
         <title>{label}</title>
-        {strokes.map((stroke) => <path d={pointsToPath(stroke.points)} key={stroke.id} />)}
+        {strokes.map((stroke) => (
+          <path d={pointsToPath(stroke.points)} key={stroke.id} />
+        ))}
         {draft ? <path d={pointsToPath(draft.points)} /> : null}
       </svg>
     </article>
@@ -673,8 +1061,23 @@ export function RevealPanel({
   icon?: ReactNode;
 }) {
   return (
-    <article className={classes("game-ui", "reveal-panel", revealed && "is-revealed", className)} style={themedStyle(theme)}>
-      {revealed ? <><span>{label}</span><b aria-hidden="true">{icon}</b><h3>{title}</h3>{description ? <p>{description}</p> : null}</> : <button type="button" onClick={onReveal}><span aria-hidden="true">?</span><strong>{concealedText}</strong></button>}
+    <article
+      className={classes("game-ui", "reveal-panel", revealed && "is-revealed", className)}
+      style={themedStyle(theme)}
+    >
+      {revealed ? (
+        <>
+          <span>{label}</span>
+          <b aria-hidden="true">{icon}</b>
+          <h3>{title}</h3>
+          {description ? <p>{description}</p> : null}
+        </>
+      ) : (
+        <button type="button" onClick={onReveal}>
+          <span aria-hidden="true">?</span>
+          <strong>{concealedText}</strong>
+        </button>
+      )}
     </article>
   );
 }
@@ -695,10 +1098,28 @@ export function OutcomeBanner({
   actions?: ReactNode;
 }) {
   return (
-    <article className={classes("game-ui", "outcome-banner", `outcome-banner--${status}`, className)} style={themedStyle(theme)}>
-      <div className="outcome-banner__mark" aria-hidden="true">{status === "success" ? "✓" : status === "failure" ? "×" : "◆"}</div>
-      <div className="outcome-banner__copy"><span>Result</span><h2>{title}</h2>{description ? <p>{description}</p> : null}</div>
-      {stats?.length ? <dl>{stats.map((stat) => <div key={stat.label}><dt>{stat.label}</dt><dd>{stat.value}</dd></div>)}</dl> : null}
+    <article
+      className={classes("game-ui", "outcome-banner", `outcome-banner--${status}`, className)}
+      style={themedStyle(theme)}
+    >
+      <div className="outcome-banner__mark" aria-hidden="true">
+        {status === "success" ? "✓" : status === "failure" ? "×" : "◆"}
+      </div>
+      <div className="outcome-banner__copy">
+        <span>Result</span>
+        <h2>{title}</h2>
+        {description ? <p>{description}</p> : null}
+      </div>
+      {stats?.length ? (
+        <dl>
+          {stats.map((stat) => (
+            <div key={stat.label}>
+              <dt>{stat.label}</dt>
+              <dd>{stat.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
       {actions ? <div className="outcome-banner__actions">{actions}</div> : null}
     </article>
   );

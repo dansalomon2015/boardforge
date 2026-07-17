@@ -20,19 +20,55 @@ describe("WordTrap release gate", () => {
     const captainId = state.activePlayerId;
     const activeTeamId = state.teamByPlayer[captainId]!;
     const clueGiverId = state.teams.find((team) => team.id === activeTeamId)!.playerIds.at(-1)!;
-    state = reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "select_clue_giver", payload: { targetPlayerId: clueGiverId }, idempotencyKey: "select-clue-01" }, captainId, captainId === "p1", spec);
-    state = reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "draw_word", idempotencyKey: "draw-word-001" }, clueGiverId, clueGiverId === "p1", spec);
+    state = reduceComposedGame(
+      state,
+      {
+        type: "COMPOSED_ACTION",
+        actionId: "select_clue_giver",
+        payload: { targetPlayerId: clueGiverId },
+        idempotencyKey: "select-clue-01",
+      },
+      captainId,
+      captainId === "p1",
+      spec,
+    );
+    state = reduceComposedGame(
+      state,
+      { type: "COMPOSED_ACTION", actionId: "draw_word", idempotencyKey: "draw-word-001" },
+      clueGiverId,
+      clueGiverId === "p1",
+      spec,
+    );
 
     const cardId = state.activeCards[clueGiverId]!.words!;
     const secret = spec.decks[0]!.cards.find((card) => card.id === cardId)!;
-    const teammateId = state.teams.find((team) => team.id === activeTeamId)!.playerIds.find((id) => id !== clueGiverId) ?? clueGiverId;
+    const teammateId =
+      state.teams.find((team) => team.id === activeTeamId)!.playerIds.find((id) => id !== clueGiverId) ?? clueGiverId;
     const opponentId = state.teams.find((team) => team.id !== activeTeamId)!.playerIds[0]!;
-    expect(JSON.stringify(projectComposedGameState(state, spec, players, "TRAP01", teammateId))).not.toContain(secret.title);
-    expect(projectComposedGameState(state, spec, players, "TRAP01", opponentId).availableActions.map((action) => action.id)).toContain("forbidden_called");
-    expect(() => reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "forbidden_called", idempotencyKey: "same-team-buzz" }, teammateId, false, spec)).toThrow("cannot perform");
+    expect(JSON.stringify(projectComposedGameState(state, spec, players, "TRAP01", teammateId))).not.toContain(
+      secret.title,
+    );
+    expect(
+      projectComposedGameState(state, spec, players, "TRAP01", opponentId).availableActions.map((action) => action.id),
+    ).toContain("forbidden_called");
+    expect(() =>
+      reduceComposedGame(
+        state,
+        { type: "COMPOSED_ACTION", actionId: "forbidden_called", idempotencyKey: "same-team-buzz" },
+        teammateId,
+        false,
+        spec,
+      ),
+    ).toThrow("cannot perform");
 
     const opponentTeamId = state.teamByPlayer[opponentId]!;
-    state = reduceComposedGame(state, { type: "COMPOSED_ACTION", actionId: "forbidden_called", idempotencyKey: "opponent-buzz1" }, opponentId, false, spec);
+    state = reduceComposedGame(
+      state,
+      { type: "COMPOSED_ACTION", actionId: "forbidden_called", idempotencyKey: "opponent-buzz1" },
+      opponentId,
+      false,
+      spec,
+    );
     expect(state.scores.teams[opponentTeamId]).toBe(1);
     expect(state.phaseId).toBe("select_clue_giver");
   });

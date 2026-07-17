@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { validateComposedGameSpec } from "./composed";
-import { createDrawBattlePack, createDrawBattleSpec, createRandomDrawBattlePack, drawBattleCatalog } from "./draw-battle";
+import {
+  createDrawBattlePack,
+  createDrawBattleSpec,
+  createRandomDrawBattlePack,
+  drawBattleCatalog,
+} from "./draw-battle";
 
 describe("DrawBattle game", () => {
   it("ships an English audited catalogue with stable unique IDs", () => {
@@ -12,8 +17,20 @@ describe("DrawBattle game", () => {
   it("creates deterministic packs and rejects unknown or duplicate prompts", () => {
     const setup = { themeId: "arcade" as const, promptCount: 10 };
     expect(createRandomDrawBattlePack(setup, "same-table")).toEqual(createRandomDrawBattlePack(setup, "same-table"));
-    expect(() => createDrawBattlePack({ ...setup, promptCount: 6 }, ["bicycle", "bicycle", "pizza", "dragon", "robot", "volcano"], "ai")).toThrow("duplicate");
-    expect(() => createDrawBattlePack({ ...setup, promptCount: 6 }, ["bicycle", "umbrella", "pizza", "dragon", "robot", "invented"], "ai")).toThrow("Unknown DrawBattle prompt");
+    expect(() =>
+      createDrawBattlePack(
+        { ...setup, promptCount: 6 },
+        ["bicycle", "bicycle", "pizza", "dragon", "robot", "volcano"],
+        "ai",
+      ),
+    ).toThrow("duplicate");
+    expect(() =>
+      createDrawBattlePack(
+        { ...setup, promptCount: 6 },
+        ["bicycle", "umbrella", "pizza", "dragon", "robot", "invented"],
+        "ai",
+      ),
+    ).toThrow("Unknown DrawBattle prompt");
   });
 
   it("compiles a captain-led private prompt and live sketch loop", () => {

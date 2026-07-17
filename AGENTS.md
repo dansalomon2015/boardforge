@@ -57,9 +57,12 @@ Update this file with the exact commands immediately after the project scaffold 
 Current root commands:
 
 - `pnpm dev` — run web and server locally.
-- `pnpm lint` — run package-level static checks.
+- `pnpm format:check` — verify Biome formatting without writing files.
+- `pnpm lint` — run Biome and package-level TypeScript static checks.
 - `pnpm typecheck` — type-check every workspace.
 - `pnpm test` — run all automated tests.
+- `pnpm coverage` — run the complete test suite with a V8 coverage report.
+- `pnpm deadcode` — detect unused files, dependencies and exports with Knip.
 - `pnpm build` — create production builds.
 - `pnpm check` — run the complete local verification gate.
 - `docker compose up --build` — run the reproducible local stack.

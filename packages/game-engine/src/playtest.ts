@@ -73,7 +73,9 @@ function rotate<T>(values: T[], seed: string): T[] {
 }
 
 function objectValue(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function arrayValue(value: unknown): unknown[] {
@@ -85,33 +87,65 @@ function stringId(value: unknown): string | null {
   return typeof object?.id === "string" ? object.id : null;
 }
 
-function payloadForAction(view: ComposedGameView, action: ViewAction, persona: VirtualAgentPersona, seed: string): ComposedActionPayload | null {
+function payloadForAction(
+  view: ComposedGameView,
+  action: ViewAction,
+  persona: VirtualAgentPersona,
+  seed: string,
+): ComposedActionPayload | null {
   const wordDuel = view.components.find((component) => component.kind === "word_duel");
   const secondSense = view.components.find((component) => component.kind === "second_sense");
   if (action.kind === "timing_stop") {
     const targetMs = typeof secondSense?.data.targetMs === "number" ? secondSense.data.targetMs : 2_000;
-    const playerIndex = Math.max(0, view.players.findIndex((player) => player.id === view.selfPlayerId));
-    const personaOffset = persona === "careful" ? 0 : persona === "bold" ? 11 : persona === "cooperative" ? 23 : persona === "chaotic" ? 47 : 71;
-    return { elapsedMs: targetMs + playerIndex * 37 + personaOffset + numberHash(seed) % 13 };
+    const playerIndex = Math.max(
+      0,
+      view.players.findIndex((player) => player.id === view.selfPlayerId),
+    );
+    const personaOffset =
+      persona === "careful"
+        ? 0
+        : persona === "bold"
+          ? 11
+          : persona === "cooperative"
+            ? 23
+            : persona === "chaotic"
+              ? 47
+              : 71;
+    return { elapsedMs: targetMs + playerIndex * 37 + personaOffset + (numberHash(seed) % 13) };
   }
   if (action.kind === "timing_start" || action.kind === "timing_advance") return {};
   if (action.kind === "secret_word") {
     const minLength = typeof wordDuel?.data.minLength === "number" ? wordDuel.data.minLength : 4;
     const maxLength = typeof wordDuel?.data.maxLength === "number" ? wordDuel.data.maxLength : 12;
-    const candidates = ["amber", "planet", "garden", "rocket", "silver", "castle", "horizon", "lantern", "notebook", "waterfall", "adventure"]
-      .filter((word) => word.length >= minLength && word.length <= maxLength);
+    const candidates = [
+      "amber",
+      "planet",
+      "garden",
+      "rocket",
+      "silver",
+      "castle",
+      "horizon",
+      "lantern",
+      "notebook",
+      "waterfall",
+      "adventure",
+    ].filter((word) => word.length >= minLength && word.length <= maxLength);
     const playerIndex = view.players.findIndex((player) => player.id === view.selfPlayerId);
     const word = candidates[(playerIndex < 0 ? numberHash(view.selfPlayerId) : playerIndex) % candidates.length];
     return word ? { text: word } : null;
   }
   if (action.kind === "letter_guess") {
-    const keyboard = arrayValue(wordDuel?.data.keyboard).map(objectValue).filter((value): value is Record<string, unknown> => Boolean(value));
+    const keyboard = arrayValue(wordDuel?.data.keyboard)
+      .map(objectValue)
+      .filter((value): value is Record<string, unknown> => Boolean(value));
     const key = keyboard.find((candidate) => candidate.state === "available" && typeof candidate.letter === "string");
     return typeof key?.letter === "string" ? { text: key.letter } : null;
   }
   if (action.kind === "word_guess") {
     const mask = arrayValue(wordDuel?.data.opponentMask);
-    return mask.length > 0 && mask.every((letter) => typeof letter === "string" && letter !== "_") ? { text: mask.join("") } : null;
+    return mask.length > 0 && mask.every((letter) => typeof letter === "string" && letter !== "_")
+      ? { text: mask.join("") }
+      : null;
   }
   if (action.kind === "choose") {
     const options = action.options ?? [];
@@ -119,11 +153,22 @@ function payloadForAction(view: ComposedGameView, action: ViewAction, persona: V
     return chosen ? { choiceId: chosen.id } : null;
   }
   if (action.kind === "text") {
-    const secretDeck = view.components.find((component) => component.kind === "deck" && objectValue(component.data.activeCard));
+    const secretDeck = view.components.find(
+      (component) => component.kind === "deck" && objectValue(component.data.activeCard),
+    );
     const activeCard = objectValue(secretDeck?.data.activeCard);
-    const writingPrompt = view.components.find((component) => component.kind === "prompt" && component.data.category === "Your sentence must include");
-    const requiredWord = typeof activeCard?.title === "string" ? activeCard.title : typeof writingPrompt?.data.prompt === "string" ? writingPrompt.data.prompt : null;
-    return { text: requiredWord ? `The ${requiredWord} changed everything for our ${persona} hero.` : `Test answer ${persona}` };
+    const writingPrompt = view.components.find(
+      (component) => component.kind === "prompt" && component.data.category === "Your sentence must include",
+    );
+    const requiredWord =
+      typeof activeCard?.title === "string"
+        ? activeCard.title
+        : typeof writingPrompt?.data.prompt === "string"
+          ? writingPrompt.data.prompt
+          : null;
+    return {
+      text: requiredWord ? `The ${requiredWord} changed everything for our ${persona} hero.` : `Test answer ${persona}`,
+    };
   }
   if (action.kind === "play_card") {
     const zone = view.components.find((component) => component.kind === "card_zone" && component.data.zone === "hand");
@@ -132,9 +177,14 @@ function payloadForAction(view: ComposedGameView, action: ViewAction, persona: V
   }
   if (action.kind === "move") {
     const board = view.components.find((component) => component.kind === "board");
-    const tokens = Object.values(objectValue(board?.data.tokens) ?? {}).map(objectValue).filter((value): value is Record<string, unknown> => Boolean(value));
+    const tokens = Object.values(objectValue(board?.data.tokens) ?? {})
+      .map(objectValue)
+      .filter((value): value is Record<string, unknown> => Boolean(value));
     const ownTeamId = view.teams.find((team) => team.playerIds.includes(view.selfPlayerId))?.id;
-    const token = tokens.find((candidate) => candidate.ownerId === view.selfPlayerId || candidate.ownerId === ownTeamId || candidate.ownerType === "global");
+    const token = tokens.find(
+      (candidate) =>
+        candidate.ownerId === view.selfPlayerId || candidate.ownerId === ownTeamId || candidate.ownerType === "global",
+    );
     const definition = objectValue(board?.data.definition);
     const spaces = arrayValue(definition?.spaces);
     const destination = persona === "adversarial" ? spaces[0] : spaces.at(-1);
@@ -144,12 +194,16 @@ function payloadForAction(view: ComposedGameView, action: ViewAction, persona: V
   }
   if (action.kind === "order") {
     const component = view.components.find((candidate) => candidate.kind === "ordering");
-    const ids = arrayValue(component?.data.items).map(stringId).filter((id): id is string => Boolean(id));
+    const ids = arrayValue(component?.data.items)
+      .map(stringId)
+      .filter((id): id is string => Boolean(id));
     return ids.length ? { orderedIds: persona === "chaotic" ? [...ids].reverse() : ids } : null;
   }
   if (action.kind === "match") {
     const component = view.components.find((candidate) => candidate.kind === "matching");
-    const ids = arrayValue(component?.data.items).map(stringId).filter((id): id is string => Boolean(id));
+    const ids = arrayValue(component?.data.items)
+      .map(stringId)
+      .filter((id): id is string => Boolean(id));
     const pairs: Array<{ leftId: string; rightId: string }> = [];
     for (let index = 0; index < ids.length; index += 2) {
       const leftId = ids[index];
@@ -163,14 +217,26 @@ function payloadForAction(view: ComposedGameView, action: ViewAction, persona: V
     const selectedId = activeTeam ? rotate(activeTeam.playerIds, seed)[0] : undefined;
     return selectedId ? { targetPlayerId: selectedId } : null;
   }
-  if (action.kind === "sketch") return { stroke: { id: `sim_${numberHash(seed).toString(36)}`, points: [{ x: 20, y: 20 }, { x: 120, y: 90 }] } };
+  if (action.kind === "sketch")
+    return {
+      stroke: {
+        id: `sim_${numberHash(seed).toString(36)}`,
+        points: [
+          { x: 20, y: 20 },
+          { x: 120, y: 90 },
+        ],
+      },
+    };
   return {};
 }
 
 export class DeterministicVirtualAgent implements VirtualPlayerAgent {
   readonly id: string;
 
-  constructor(readonly persona: VirtualAgentPersona, playerId: string) {
+  constructor(
+    readonly persona: VirtualAgentPersona,
+    playerId: string,
+  ) {
     this.id = playerId;
   }
 
@@ -197,7 +263,9 @@ export class DeterministicVirtualAgent implements VirtualPlayerAgent {
 
 function playtestPlayerCounts(spec: ComposedGameSpec): number[] {
   const preferred = [spec.minPlayers, 2, 3, 4, 6, spec.maxPlayers];
-  return [...new Set(preferred)].filter((count) => canStartComposedGame(spec, count)).sort((left, right) => left - right);
+  return [...new Set(preferred)]
+    .filter((count) => canStartComposedGame(spec, count))
+    .sort((left, right) => left - right);
 }
 
 function createPlayers(count: number): PublicPlayer[] {
@@ -209,10 +277,20 @@ function createPlayers(count: number): PublicPlayer[] {
   }));
 }
 
-function privateLeakEvidence(state: ComposedGameState, spec: ComposedGameSpec, players: PublicPlayer[], code: string): string | null {
+function privateLeakEvidence(
+  state: ComposedGameState,
+  spec: ComposedGameSpec,
+  players: PublicPlayer[],
+  code: string,
+): string | null {
   const privateDecks = spec.decks.filter((deck) => deck.visibility === "private");
   if (!privateDecks.length && !Object.keys(state.wordDuels).length) return null;
-  const views = Object.fromEntries(players.map((player) => [player.id, JSON.stringify(projectComposedGameState(state, spec, players, code, player.id))]));
+  const views = Object.fromEntries(
+    players.map((player) => [
+      player.id,
+      JSON.stringify(projectComposedGameState(state, spec, players, code, player.id)),
+    ]),
+  );
   for (const deckDefinition of privateDecks) {
     const deckState = state.decks[deckDefinition.id];
     if (!deckState) continue;
@@ -222,8 +300,10 @@ function privateLeakEvidence(state: ComposedGameState, spec: ComposedGameSpec, p
         if (!card) continue;
         for (const viewer of players) {
           if (viewer.id === owner.id) continue;
-          if (views[viewer.id]?.includes(card.title)) return `${viewer.id} received the private card title owned by ${owner.id}.`;
-          if (card.body && views[viewer.id]?.includes(card.body)) return `${viewer.id} received private card content owned by ${owner.id}.`;
+          if (views[viewer.id]?.includes(card.title))
+            return `${viewer.id} received the private card title owned by ${owner.id}.`;
+          if (card.body && views[viewer.id]?.includes(card.body))
+            return `${viewer.id} received private card content owned by ${owner.id}.`;
         }
       }
     }
@@ -232,7 +312,8 @@ function privateLeakEvidence(state: ComposedGameState, spec: ComposedGameSpec, p
     for (const duel of Object.values(state.wordDuels)) {
       for (const [ownerId, secretWord] of Object.entries(duel.secretWordsByPlayer)) {
         for (const viewer of players) {
-          if (viewer.id !== ownerId && views[viewer.id]?.includes(secretWord)) return `${viewer.id} received the private word owned by ${ownerId}.`;
+          if (viewer.id !== ownerId && views[viewer.id]?.includes(secretWord))
+            return `${viewer.id} received the private word owned by ${ownerId}.`;
         }
       }
     }
@@ -260,12 +341,19 @@ export function runComposedPlaytest(
     try {
       state = initializeComposedGame(spec, players, seed);
     } catch (error) {
-      failures.push({ code: "INITIALIZATION_FAILED", simulation, playerCount, evidence: error instanceof Error ? error.message : "Unknown initialization error." });
+      failures.push({
+        code: "INITIALIZATION_FAILED",
+        simulation,
+        playerCount,
+        evidence: error instanceof Error ? error.message : "Unknown initialization error.",
+      });
       runs.push({ simulation, seed, playerCount, teamSizes: [], completed: false, actions: 0, winner: null });
       continue;
     }
 
-    const agents = players.map((player, index) => new DeterministicVirtualAgent(personas[index % personas.length]!, player.id));
+    const agents = players.map(
+      (player, index) => new DeterministicVirtualAgent(personas[index % personas.length]!, player.id),
+    );
     let actionCount = 0;
     let stopped = false;
     while (state.status === "playing" && actionCount < maxActions) {
@@ -276,7 +364,9 @@ export function runComposedPlaytest(
         break;
       }
       let selected: { agent: DeterministicVirtualAgent; action: ComposedGameAction } | null = null;
-      const orderedAgents = [...agents].sort((left, right) => Number(right.id === state.activePlayerId) - Number(left.id === state.activePlayerId));
+      const orderedAgents = [...agents].sort(
+        (left, right) => Number(right.id === state.activePlayerId) - Number(left.id === state.activePlayerId),
+      );
       for (const agent of orderedAgents) {
         const view = projectComposedGameState(state, spec, players, `SIM${simulation}`, agent.id);
         const action = agent.chooseAction({ view, persona: agent.persona, seed, turn: actionCount });
@@ -286,7 +376,12 @@ export function runComposedPlaytest(
         }
       }
       if (!selected) {
-        failures.push({ code: "NO_LEGAL_ACTION", simulation, playerCount, evidence: `No agent had a legal action in phase ${state.phaseId}.` });
+        failures.push({
+          code: "NO_LEGAL_ACTION",
+          simulation,
+          playerCount,
+          evidence: `No agent had a legal action in phase ${state.phaseId}.`,
+        });
         stopped = true;
         break;
       }
@@ -295,14 +390,33 @@ export function runComposedPlaytest(
         state = reduceComposedGame(state, selected.action, actor.id, actor.isHost, spec);
         actionCount += 1;
       } catch (error) {
-        failures.push({ code: "ACTION_REJECTED", simulation, playerCount, evidence: error instanceof Error ? error.message : "Unknown action error." });
+        failures.push({
+          code: "ACTION_REJECTED",
+          simulation,
+          playerCount,
+          evidence: error instanceof Error ? error.message : "Unknown action error.",
+        });
         stopped = true;
         break;
       }
     }
 
-    if (!stopped && state.status !== "completed") failures.push({ code: "MAX_ACTIONS_REACHED", simulation, playerCount, evidence: `The game did not finish within ${maxActions} actions.` });
-    runs.push({ simulation, seed, playerCount, teamSizes: state.teams.map((team) => team.playerIds.length), completed: state.status === "completed", actions: actionCount, winner: state.winner });
+    if (!stopped && state.status !== "completed")
+      failures.push({
+        code: "MAX_ACTIONS_REACHED",
+        simulation,
+        playerCount,
+        evidence: `The game did not finish within ${maxActions} actions.`,
+      });
+    runs.push({
+      simulation,
+      seed,
+      playerCount,
+      teamSizes: state.teams.map((team) => team.playerIds.length),
+      completed: state.status === "completed",
+      actions: actionCount,
+      winner: state.winner,
+    });
   }
 
   const completedSimulations = runs.filter((run) => run.completed).length;

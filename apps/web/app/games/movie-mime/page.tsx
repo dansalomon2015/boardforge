@@ -3,11 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type CSSProperties, type FormEvent } from "react";
-import {
-  gameThemeStyle,
-  gameThemes,
-  type GameThemeName,
-} from "../../../components/game-ui";
+import { gameThemeStyle, gameThemes, type GameThemeName } from "../../../components/game-ui";
 import styles from "./page.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -39,21 +35,26 @@ export default function MovieMimeSetupPage() {
   const previewStyle = useMemo(() => gameThemeStyle(theme) as CSSProperties, [theme]);
 
   function updateTeam(id: string, changes: Partial<Pick<TeamDraft, "name" | "color">>) {
-    setTeams((current) => current.map((team) => team.id === id ? { ...team, ...changes } : team));
+    setTeams((current) => current.map((team) => (team.id === id ? { ...team, ...changes } : team)));
   }
 
   function addTeam() {
-    setTeams((current) => current.length >= 4
-      ? current
-      : [...current, {
-          id: crypto.randomUUID(),
-          name: `Team ${current.length + 1}`,
-          color: teamColors[current.length] ?? teamColors[0],
-        }]);
+    setTeams((current) =>
+      current.length >= 4
+        ? current
+        : [
+            ...current,
+            {
+              id: crypto.randomUUID(),
+              name: `Team ${current.length + 1}`,
+              color: teamColors[current.length] ?? teamColors[0],
+            },
+          ],
+    );
   }
 
   function removeTeam(id: string) {
-    setTeams((current) => current.length <= 2 ? current : current.filter((team) => team.id !== id));
+    setTeams((current) => (current.length <= 2 ? current : current.filter((team) => team.id !== id)));
   }
 
   async function prepareGame(event: FormEvent) {
@@ -78,7 +79,7 @@ export default function MovieMimeSetupPage() {
         const failure = (await blueprintResponse.json().catch(() => null)) as { error?: string } | null;
         throw new Error(failure?.error ?? "The movie selection could not be prepared.");
       }
-      const prepared = await blueprintResponse.json() as PreparedGame;
+      const prepared = (await blueprintResponse.json()) as PreparedGame;
       if (prepared.releaseStatus !== "release_ready") {
         throw new Error("That lineup needs a quick rethink. Try a different mix.");
       }
@@ -91,7 +92,7 @@ export default function MovieMimeSetupPage() {
         const failure = (await roomResponse.json().catch(() => null)) as { error?: string } | null;
         throw new Error(failure?.error ?? "The room could not be opened.");
       }
-      const room = await roomResponse.json() as { code: string };
+      const room = (await roomResponse.json()) as { code: string };
       router.push(`/room/${room.code}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Something unexpected happened.");
@@ -102,20 +103,36 @@ export default function MovieMimeSetupPage() {
   return (
     <main className={styles.page}>
       <nav className={styles.nav}>
-        <Link className={styles.brand} href="/"><span>BF</span><b>BoardForge</b></Link>
-        <Link className={styles.back} href="/">← Back to the collection</Link>
+        <Link className={styles.brand} href="/">
+          <span>BF</span>
+          <b>BoardForge</b>
+        </Link>
+        <Link className={styles.back} href="/">
+          ← Back to the collection
+        </Link>
       </nav>
 
       <form className={styles.layout} onSubmit={prepareGame}>
         <section className={styles.configuration}>
           <div className={styles.titleBlock}>
             <p>BoardForge Original Nº 01</p>
-            <h1>Make tonight&apos;s<br /><em>CineMimes.</em></h1>
-            <span>Set the mood, name your teams, and tell us what belongs on tonight&apos;s watchlist. We will handle the rest.</span>
+            <h1>
+              Make tonight&apos;s
+              <br />
+              <em>CineMimes.</em>
+            </h1>
+            <span>
+              Set the mood, name your teams, and tell us what belongs on tonight&apos;s watchlist. We will handle the
+              rest.
+            </span>
           </div>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>01</b><span>Choose the mood</span><small>What should tonight feel like?</small></legend>
+            <legend>
+              <b>01</b>
+              <span>Choose the mood</span>
+              <small>What should tonight feel like?</small>
+            </legend>
             <div className={styles.themeGrid}>
               {themeIds.map((themeId) => {
                 const item = gameThemes[themeId];
@@ -124,10 +141,20 @@ export default function MovieMimeSetupPage() {
                     className={theme === themeId ? styles.selectedTheme : ""}
                     key={themeId}
                     onClick={() => setTheme(themeId)}
-                    style={{ "--swatch-a": item.colors.primary, "--swatch-b": item.colors.secondary, "--swatch-c": item.colors.accent } as CSSProperties}
+                    style={
+                      {
+                        "--swatch-a": item.colors.primary,
+                        "--swatch-b": item.colors.secondary,
+                        "--swatch-c": item.colors.accent,
+                      } as CSSProperties
+                    }
                     type="button"
                   >
-                    <span><i /><i /><i /></span>
+                    <span>
+                      <i />
+                      <i />
+                      <i />
+                    </span>
                     <b>{item.emoji}</b>
                     <strong>{item.name}</strong>
                     <small>{item.description}</small>
@@ -138,18 +165,29 @@ export default function MovieMimeSetupPage() {
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>02</b><span>Your teams</span><small>Create and name two to four teams</small></legend>
+            <legend>
+              <b>02</b>
+              <span>Your teams</span>
+              <small>Create and name two to four teams</small>
+            </legend>
             <div className={styles.teamEditor}>
               {teams.map((team, index) => (
-                <article className={styles.teamDraft} style={{ "--team-color": team.color } as CSSProperties} key={team.id}>
-                  <div className={styles.teamNumber}><i />Team {index + 1}</div>
+                <article
+                  className={styles.teamDraft}
+                  style={{ "--team-color": team.color } as CSSProperties}
+                  key={team.id}
+                >
+                  <div className={styles.teamNumber}>
+                    <i />
+                    Team {index + 1}
+                  </div>
                   <input
                     aria-label={`Team ${index + 1} name`}
                     maxLength={24}
                     onChange={(event) => updateTeam(team.id, { name: event.target.value })}
                     value={team.name}
                   />
-                  <div className={styles.teamPalette} aria-label={`${team.name} color`}>
+                  <div className={styles.teamPalette} role="group" aria-label={`${team.name} color`}>
                     {teamColors.map((color) => (
                       <button
                         aria-label={`Choose color ${color}`}
@@ -161,27 +199,54 @@ export default function MovieMimeSetupPage() {
                       />
                     ))}
                   </div>
-                  {teams.length > 2 ? <button className={styles.removeTeam} onClick={() => removeTeam(team.id)} type="button">Remove</button> : null}
+                  {teams.length > 2 ? (
+                    <button className={styles.removeTeam} onClick={() => removeTeam(team.id)} type="button">
+                      Remove
+                    </button>
+                  ) : null}
                 </article>
               ))}
-              {teams.length < 4 ? <button className={styles.addTeam} onClick={addTeam} type="button"><b>＋</b><span>Add a team</span><small>Up to four teams</small></button> : null}
+              {teams.length < 4 ? (
+                <button className={styles.addTeam} onClick={addTeam} type="button">
+                  <b>＋</b>
+                  <span>Add a team</span>
+                  <small>Up to four teams</small>
+                </button>
+              ) : null}
             </div>
-            <p className={styles.captainNote}><span>★</span> Players join teams in the room. The host then appoints one captain per team.</p>
+            <p className={styles.captainNote}>
+              <span>★</span> Players join teams in the room. The host then appoints one captain per team.
+            </p>
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>03</b><span>How long are we playing?</span><small>Pick the pace for tonight</small></legend>
+            <legend>
+              <b>03</b>
+              <span>How long are we playing?</span>
+              <small>Pick the pace for tonight</small>
+            </legend>
             <div className={styles.countGrid}>
               {filmCounts.map((count) => (
-                <button className={filmCount === count ? styles.selectedCount : ""} key={count} onClick={() => setFilmCount(count)} type="button">
-                  <strong>{count}</strong><span>movies</span><small>~{Math.ceil(count * 1.2)} min</small>
+                <button
+                  className={filmCount === count ? styles.selectedCount : ""}
+                  key={count}
+                  onClick={() => setFilmCount(count)}
+                  type="button"
+                >
+                  <strong>{count}</strong>
+                  <span>movies</span>
+                  <small>~{Math.ceil(count * 1.2)} min</small>
                 </button>
               ))}
             </div>
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>04</b><span>Make the lineup yours</span><small>Optional · leave it blank for a great surprise</small></legend>
+            <legend>
+              <b>04</b>
+              <span>Make the lineup yours</span>
+              <small>Optional · leave it blank for a great surprise</small>
+            </legend>
             <textarea
               maxLength={240}
               onChange={(event) => setPreferences(event.target.value)}
@@ -191,18 +256,27 @@ export default function MovieMimeSetupPage() {
             />
             <div className={styles.suggestions}>
               {["Cult classics", "Family night", "Science fiction", "Easy comedies"].map((suggestion) => (
-                <button key={suggestion} onClick={() => setPreferences(suggestion)} type="button">{suggestion}</button>
+                <button key={suggestion} onClick={() => setPreferences(suggestion)} type="button">
+                  {suggestion}
+                </button>
               ))}
               <span>{preferences.length}/240</span>
             </div>
           </fieldset>
 
-          {error ? <p className={styles.error} role="alert">{error}</p> : null}
+          {error ? (
+            <p className={styles.error} role="alert">
+              {error}
+            </p>
+          ) : null}
           <button className={styles.submit} disabled={busy} type="submit">
-            <span>{busy ? "Setting the scene…" : "Open the screening room"}</span><b>{busy ? "•••" : "↗"}</b>
+            <span>{busy ? "Setting the scene…" : "Open the screening room"}</span>
+            <b>{busy ? "•••" : "↗"}</b>
           </button>
           <p className={styles.submitNote}>
-            {preferences.trim() ? "Your brief will shape tonight’s movie mix." : "No brief needed — the surprise is part of the fun."}
+            {preferences.trim()
+              ? "Your brief will shape tonight’s movie mix."
+              : "No brief needed — the surprise is part of the fun."}
           </p>
         </section>
 
@@ -212,23 +286,43 @@ export default function MovieMimeSetupPage() {
             <div className={styles.gamePreview} style={previewStyle}>
               <div className={styles.previewGlow} />
               <div className={styles.previewTop}>
-                <span>BoardForge Original</span><strong>{activeTheme.emoji}</strong>
+                <span>BoardForge Original</span>
+                <strong>{activeTheme.emoji}</strong>
               </div>
               <div className={styles.previewCenter}>
                 <small>Movie-charades showdown</small>
-                <h2>Cine<br />Mimes</h2>
+                <h2>
+                  Cine
+                  <br />
+                  Mimes
+                </h2>
                 <p>{preferences.trim() || "A surprise lineup of famous, varied, and memorable movies."}</p>
               </div>
               <div className={styles.previewStats}>
-                <span><b>{filmCount}</b> movies</span>
-                <span><b>{teams.length}</b> teams</span>
-                <span><b>60</b> sec.</span>
+                <span>
+                  <b>{filmCount}</b> movies
+                </span>
+                <span>
+                  <b>{teams.length}</b> teams
+                </span>
+                <span>
+                  <b>60</b> sec.
+                </span>
               </div>
             </div>
             <div className={styles.previewDetails}>
-              <div><span>Tonight&apos;s mood</span><b>{activeTheme.name}</b></div>
-              <div><span>Movie mix</span><b>{preferences.trim() ? "Made for your group" : "Surprise me"}</b></div>
-              <div><span>Best with</span><b>Big performances</b></div>
+              <div>
+                <span>Tonight&apos;s mood</span>
+                <b>{activeTheme.name}</b>
+              </div>
+              <div>
+                <span>Movie mix</span>
+                <b>{preferences.trim() ? "Made for your group" : "Surprise me"}</b>
+              </div>
+              <div>
+                <span>Best with</span>
+                <b>Big performances</b>
+              </div>
             </div>
           </div>
         </aside>
@@ -236,7 +330,10 @@ export default function MovieMimeSetupPage() {
 
       {busy ? (
         <div className={styles.loading} aria-live="polite">
-          <div className={styles.loadingMark}><span>BF</span><i /></div>
+          <div className={styles.loadingMark}>
+            <span>BF</span>
+            <i />
+          </div>
           <p>{preferences.trim() ? "Tonight’s lineup is taking shape…" : "The reels are starting to turn…"}</p>
           <small>Picking the movies · setting the mood · opening the room</small>
         </div>

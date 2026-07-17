@@ -73,7 +73,10 @@ export type ComposedAdjustableParameter =
 export const composedGameCritiqueSchema = z
   .object({
     schemaVersion: z.literal(1),
-    sourceSpecId: z.string().regex(/^[a-z][a-z0-9_]*$/).max(48),
+    sourceSpecId: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]*$/)
+      .max(48),
     verdict: z.enum(["release_ready", "revise"]),
     summary: z.string().trim().min(8).max(400),
     strengths: z.array(z.string().trim().min(8).max(220)).max(5),
@@ -81,7 +84,10 @@ export const composedGameCritiqueSchema = z
       .array(
         z
           .object({
-            code: z.string().regex(/^[A-Z][A-Z0-9_]*$/).max(48),
+            code: z
+              .string()
+              .regex(/^[A-Z][A-Z0-9_]*$/)
+              .max(48),
             severity: z.enum(["low", "medium", "high"]),
             category: z.enum(["flow", "balance", "clarity", "privacy", "pace", "team_fairness", "replayability"]),
             evidence: z.string().trim().min(8).max(300),
@@ -96,7 +102,14 @@ export const composedGameCritiqueSchema = z
 export type ComposedGameCritique = z.infer<typeof composedGameCritiqueSchema>;
 
 export type LlmUsageTelemetry = {
-  operation: "movie_mime_selection" | "word_trap_selection" | "draw_battle_selection" | "sound_check_selection" | "story_chain_generation" | "composed_critique" | "composed_patch";
+  operation:
+    | "movie_mime_selection"
+    | "word_trap_selection"
+    | "draw_battle_selection"
+    | "sound_check_selection"
+    | "story_chain_generation"
+    | "composed_critique"
+    | "composed_patch";
   provider: string;
   model: string;
   responseId: string;
@@ -115,10 +128,7 @@ export interface LlmProvider {
   generateDrawBattlePack(setup: DrawBattleSetupInput): Promise<DrawBattlePack>;
   generateSoundCheckPack(setup: SoundCheckSetupInput): Promise<SoundCheckPack>;
   generateStoryChainPack(setup: StoryChainSetupInput): Promise<StoryChainPack>;
-  critiqueComposedGameSpec(
-    spec: ComposedGameSpec,
-    evidence: ComposedBalanceEvidence,
-  ): Promise<ComposedGameCritique>;
+  critiqueComposedGameSpec(spec: ComposedGameSpec, evidence: ComposedBalanceEvidence): Promise<ComposedGameCritique>;
   proposeComposedBalancePatch(
     spec: ComposedGameSpec,
     evidence: ComposedBalanceEvidence,
@@ -247,7 +257,12 @@ export class FakeLlmProvider implements LlmProvider {
   async generateMovieMimePack(setupInput: MovieMimeSetupInput): Promise<MimeFilmPack> {
     const setup = movieMimeSetupSchema.parse(setupInput);
     const preferences = normalizedPrompt(setup.preferences ?? "sélection variée");
-    const preferenceWords = new Set(preferences.toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter((word) => word.length >= 4));
+    const preferenceWords = new Set(
+      preferences
+        .toLowerCase()
+        .split(/[^a-zà-ÿ0-9]+/)
+        .filter((word) => word.length >= 4),
+    );
     const genreAliases: Record<string, string[]> = {
       action: ["action", "combat", "explosion"],
       adventure: ["adventure", "aventure", "travel", "voyage", "exploration"],
@@ -270,13 +285,23 @@ export class FakeLlmProvider implements LlmProvider {
         for (const genre of film.genres) {
           if (genreAliases[genre]?.some((alias) => preferenceWords.has(alias))) score += 1_000;
         }
-        if (film.audience === "family" && [...preferenceWords].some((word) => ["family", "children", "kids", "famille", "familial", "enfant", "enfants"].includes(word))) score += 800;
+        if (
+          film.audience === "family" &&
+          [...preferenceWords].some((word) =>
+            ["family", "children", "kids", "famille", "familial", "enfant", "enfants"].includes(word),
+          )
+        )
+          score += 800;
         const decade = Math.floor(film.year / 10) * 10;
         if (preferences.includes(String(decade))) score += 700;
         return { film, score };
       })
       .sort((left, right) => right.score - left.score || left.film.id.localeCompare(right.film.id));
-    return createMovieMimePack(setup, ranked.slice(0, setup.filmCount).map(({ film }) => film.id), "ai");
+    return createMovieMimePack(
+      setup,
+      ranked.slice(0, setup.filmCount).map(({ film }) => film.id),
+      "ai",
+    );
   }
 
   async generateWordTrapPack(setupInput: WordTrapSetupInput): Promise<WordTrapPack> {
@@ -287,10 +312,14 @@ export class FakeLlmProvider implements LlmProvider {
       .map((card) => {
         const searchable = [card.word, card.category, card.difficulty, ...card.forbidden].join(" ").toLowerCase();
         const matches = [...preferenceWords].filter((word) => searchable.includes(word)).length;
-        return { card, score: matches * 1_000 + hashText(`${preferences}:${card.id}`) % 100 };
+        return { card, score: matches * 1_000 + (hashText(`${preferences}:${card.id}`) % 100) };
       })
       .sort((left, right) => right.score - left.score || left.card.id.localeCompare(right.card.id));
-    return createWordTrapPack(setup, ranked.slice(0, setup.cardCount).map(({ card }) => card.id), "ai");
+    return createWordTrapPack(
+      setup,
+      ranked.slice(0, setup.cardCount).map(({ card }) => card.id),
+      "ai",
+    );
   }
 
   async generateDrawBattlePack(setupInput: DrawBattleSetupInput): Promise<DrawBattlePack> {
@@ -301,10 +330,14 @@ export class FakeLlmProvider implements LlmProvider {
       .map((prompt) => {
         const searchable = [prompt.prompt, prompt.category, prompt.difficulty].join(" ").toLowerCase();
         const matches = [...preferenceWords].filter((word) => searchable.includes(word)).length;
-        return { prompt, score: matches * 1_000 + hashText(`${preferences}:${prompt.id}`) % 100 };
+        return { prompt, score: matches * 1_000 + (hashText(`${preferences}:${prompt.id}`) % 100) };
       })
       .sort((left, right) => right.score - left.score || left.prompt.id.localeCompare(right.prompt.id));
-    return createDrawBattlePack(setup, ranked.slice(0, setup.promptCount).map(({ prompt }) => prompt.id), "ai");
+    return createDrawBattlePack(
+      setup,
+      ranked.slice(0, setup.promptCount).map(({ prompt }) => prompt.id),
+      "ai",
+    );
   }
 
   async generateSoundCheckPack(setupInput: SoundCheckSetupInput): Promise<SoundCheckPack> {
@@ -315,10 +348,14 @@ export class FakeLlmProvider implements LlmProvider {
       .map((prompt) => {
         const searchable = [prompt.answer, prompt.category, prompt.difficulty].join(" ").toLowerCase();
         const matches = [...preferenceWords].filter((word) => searchable.includes(word)).length;
-        return { prompt, score: matches * 1_000 + hashText(`${preferences}:${prompt.id}`) % 100 };
+        return { prompt, score: matches * 1_000 + (hashText(`${preferences}:${prompt.id}`) % 100) };
       })
       .sort((left, right) => right.score - left.score || left.prompt.id.localeCompare(right.prompt.id));
-    return createSoundCheckPack(setup, ranked.slice(0, setup.promptCount).map(({ prompt }) => prompt.id), "ai");
+    return createSoundCheckPack(
+      setup,
+      ranked.slice(0, setup.promptCount).map(({ prompt }) => prompt.id),
+      "ai",
+    );
   }
 
   async generateStoryChainPack(setupInput: StoryChainSetupInput): Promise<StoryChainPack> {
@@ -338,9 +375,11 @@ export class FakeLlmProvider implements LlmProvider {
       return {
         schemaVersion: 1,
         sourceSpecId: spec.id,
-        summary: critique.issues[0]?.recommendation ?? (evidence.completionRate < 1
-          ? "Donne davantage de temps aux joueurs pour réduire les parties bloquées."
-          : "Resserre légèrement le rythme après un playtest entièrement terminé."),
+        summary:
+          critique.issues[0]?.recommendation ??
+          (evidence.completionRate < 1
+            ? "Donne davantage de temps aux joueurs pour réduire les parties bloquées."
+            : "Resserre légèrement le rythme après un playtest entièrement terminé."),
         changes: [
           {
             kind: "set_timer_seconds",
@@ -398,7 +437,6 @@ export class FakeLlmProvider implements LlmProvider {
           })),
     };
   }
-
 }
 
 function requireParsedOutput<T>(value: T | null, operation: string): T {
@@ -427,7 +465,7 @@ export class OpenAiLlmProvider implements LlmProvider {
 
   constructor(
     apiKey: string,
-    private readonly model = "gpt-5.6-terra",
+    model = "gpt-5.6-terra",
     private readonly reviewModel = model,
     private readonly onTelemetry?: (telemetry: LlmUsageTelemetry) => void,
   ) {
@@ -462,9 +500,19 @@ export class OpenAiLlmProvider implements LlmProvider {
     setup: MovieMimeSetup,
     repairContext?: string,
   ): Promise<{ filmIds: string[] }> {
-    const selectionSchema = z.object({
-      filmIds: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/).max(48)).min(6).max(40),
-    }).strict();
+    const selectionSchema = z
+      .object({
+        filmIds: z
+          .array(
+            z
+              .string()
+              .regex(/^[a-z][a-z0-9_]*$/)
+              .max(48),
+          )
+          .min(6)
+          .max(40),
+      })
+      .strict();
     const startedAt = Date.now();
     const response = await this.client.responses.parse({
       model: this.reviewModel,
@@ -512,13 +560,20 @@ export class OpenAiLlmProvider implements LlmProvider {
     }
   }
 
-  private async selectWordTrapCandidate(
-    setup: WordTrapSetup,
-    repairContext?: string,
-  ): Promise<{ cardIds: string[] }> {
-    const selectionSchema = z.object({
-      cardIds: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/).max(48)).min(6).max(40),
-    }).strict();
+  private async selectWordTrapCandidate(setup: WordTrapSetup, repairContext?: string): Promise<{ cardIds: string[] }> {
+    const selectionSchema = z
+      .object({
+        cardIds: z
+          .array(
+            z
+              .string()
+              .regex(/^[a-z][a-z0-9_]*$/)
+              .max(48),
+          )
+          .min(6)
+          .max(40),
+      })
+      .strict();
     const startedAt = Date.now();
     const response = await this.client.responses.parse({
       model: this.reviewModel,
@@ -535,7 +590,12 @@ export class OpenAiLlmProvider implements LlmProvider {
         },
         {
           role: "user",
-          content: JSON.stringify({ requestedCount: setup.cardCount, preferences: setup.preferences, catalog: wordTrapCatalog, ...(repairContext ? { repairContext } : {}) }),
+          content: JSON.stringify({
+            requestedCount: setup.cardCount,
+            preferences: setup.preferences,
+            catalog: wordTrapCatalog,
+            ...(repairContext ? { repairContext } : {}),
+          }),
         },
       ],
       prompt_cache_key: "boardforge:word-trap-selection:v1",
@@ -552,7 +612,10 @@ export class OpenAiLlmProvider implements LlmProvider {
     try {
       return createWordTrapPack(setup, first.cardIds, "ai");
     } catch (error) {
-      const repaired = await this.selectWordTrapCandidate(setup, error instanceof Error ? error.message : "The previous selection was invalid.");
+      const repaired = await this.selectWordTrapCandidate(
+        setup,
+        error instanceof Error ? error.message : "The previous selection was invalid.",
+      );
       return createWordTrapPack(setup, repaired.cardIds, "ai");
     }
   }
@@ -561,19 +624,42 @@ export class OpenAiLlmProvider implements LlmProvider {
     setup: DrawBattleSetup,
     repairContext?: string,
   ): Promise<{ promptIds: string[] }> {
-    const selectionSchema = z.object({ promptIds: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/).max(48)).min(6).max(30) }).strict();
+    const selectionSchema = z
+      .object({
+        promptIds: z
+          .array(
+            z
+              .string()
+              .regex(/^[a-z][a-z0-9_]*$/)
+              .max(48),
+          )
+          .min(6)
+          .max(30),
+      })
+      .strict();
     const startedAt = Date.now();
     const response = await this.client.responses.parse({
       model: this.reviewModel,
       input: [
-        { role: "system", content: [
-          "You curate a live drawing party deck from an audited catalog.",
-          "Return only catalog IDs. Never invent, rename or repeat a prompt.",
-          "Select exactly the requested count.",
-          "Honor the requested topic while balancing categories, difficulty, recognizability and drawability.",
-          "Keep the selection welcoming and visually varied.",
-        ].join("\n") },
-        { role: "user", content: JSON.stringify({ requestedCount: setup.promptCount, preferences: setup.preferences, catalog: drawBattleCatalog, ...(repairContext ? { repairContext } : {}) }) },
+        {
+          role: "system",
+          content: [
+            "You curate a live drawing party deck from an audited catalog.",
+            "Return only catalog IDs. Never invent, rename or repeat a prompt.",
+            "Select exactly the requested count.",
+            "Honor the requested topic while balancing categories, difficulty, recognizability and drawability.",
+            "Keep the selection welcoming and visually varied.",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            requestedCount: setup.promptCount,
+            preferences: setup.preferences,
+            catalog: drawBattleCatalog,
+            ...(repairContext ? { repairContext } : {}),
+          }),
+        },
       ],
       prompt_cache_key: "boardforge:draw-battle-selection:v1",
       text: { format: zodTextFormat(selectionSchema, "draw_battle_selection") },
@@ -589,7 +675,10 @@ export class OpenAiLlmProvider implements LlmProvider {
     try {
       return createDrawBattlePack(setup, first.promptIds, "ai");
     } catch (error) {
-      const repaired = await this.selectDrawBattleCandidate(setup, error instanceof Error ? error.message : "The previous selection was invalid.");
+      const repaired = await this.selectDrawBattleCandidate(
+        setup,
+        error instanceof Error ? error.message : "The previous selection was invalid.",
+      );
       return createDrawBattlePack(setup, repaired.promptIds, "ai");
     }
   }
@@ -598,19 +687,42 @@ export class OpenAiLlmProvider implements LlmProvider {
     setup: SoundCheckSetup,
     repairContext?: string,
   ): Promise<{ promptIds: string[] }> {
-    const selectionSchema = z.object({ promptIds: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/).max(48)).min(6).max(30) }).strict();
+    const selectionSchema = z
+      .object({
+        promptIds: z
+          .array(
+            z
+              .string()
+              .regex(/^[a-z][a-z0-9_]*$/)
+              .max(48),
+          )
+          .min(6)
+          .max(30),
+      })
+      .strict();
     const startedAt = Date.now();
     const response = await this.client.responses.parse({
       model: this.reviewModel,
       input: [
-        { role: "system", content: [
-          "You curate a voice-only sound imitation party deck from an audited catalog.",
-          "Return only catalog IDs. Never invent, rename or repeat a prompt.",
-          "Select exactly the requested count.",
-          "Honor the requested topic while balancing categories, difficulty and recognizability.",
-          "Every selection must be safe and practical to imitate without props or a microphone.",
-        ].join("\n") },
-        { role: "user", content: JSON.stringify({ requestedCount: setup.promptCount, preferences: setup.preferences, catalog: soundCheckCatalog, ...(repairContext ? { repairContext } : {}) }) },
+        {
+          role: "system",
+          content: [
+            "You curate a voice-only sound imitation party deck from an audited catalog.",
+            "Return only catalog IDs. Never invent, rename or repeat a prompt.",
+            "Select exactly the requested count.",
+            "Honor the requested topic while balancing categories, difficulty and recognizability.",
+            "Every selection must be safe and practical to imitate without props or a microphone.",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            requestedCount: setup.promptCount,
+            preferences: setup.preferences,
+            catalog: soundCheckCatalog,
+            ...(repairContext ? { repairContext } : {}),
+          }),
+        },
       ],
       prompt_cache_key: "boardforge:sound-check-selection:v1",
       text: { format: zodTextFormat(selectionSchema, "sound_check_selection") },
@@ -626,7 +738,10 @@ export class OpenAiLlmProvider implements LlmProvider {
     try {
       return createSoundCheckPack(setup, first.promptIds, "ai");
     } catch (error) {
-      const repaired = await this.selectSoundCheckCandidate(setup, error instanceof Error ? error.message : "The previous selection was invalid.");
+      const repaired = await this.selectSoundCheckCandidate(
+        setup,
+        error instanceof Error ? error.message : "The previous selection was invalid.",
+      );
       return createSoundCheckPack(setup, repaired.promptIds, "ai");
     }
   }
@@ -636,25 +751,39 @@ export class OpenAiLlmProvider implements LlmProvider {
     repairContext?: string,
   ): Promise<{ title: string; opening: string; twists: z.infer<typeof storyTwistSchema>[] }> {
     const count = storyRounds[setup.length];
-    const candidateSchema = z.object({
-      title: z.string().trim().min(2).max(64),
-      opening: z.string().trim().min(20).max(420),
-      twists: z.array(storyTwistSchema).min(8).max(16),
-    }).strict();
+    const candidateSchema = z
+      .object({
+        title: z.string().trim().min(2).max(64),
+        opening: z.string().trim().min(20).max(420),
+        twists: z.array(storyTwistSchema).min(8).max(16),
+      })
+      .strict();
     const startedAt = Date.now();
     const response = await this.client.responses.parse({
       model: this.reviewModel,
       input: [
-        { role: "system", content: [
-          "You are the story editor for a premium, welcoming party game.",
-          "Create English story content only; never create or modify game rules.",
-          `Return exactly ${count} distinct secret twists.`,
-          "Each twist needs a unique lowercase snake_case id, a unique one- or two-word requiredWord, and a short creative direction.",
-          "The opening should be vivid, immediately playable, and leave room for many directions.",
-          "Keep everything PG-13, inclusive, original, and suitable for reading aloud with friends or family.",
-          "Do not reference copyrighted characters, living public figures, politics, explicit sex, self-harm, or graphic violence.",
-        ].join("\n") },
-        { role: "user", content: JSON.stringify({ mood: setup.mood, storyLength: setup.length, requestedTwists: count, preferences: setup.preferences, ...(repairContext ? { repairContext } : {}) }) },
+        {
+          role: "system",
+          content: [
+            "You are the story editor for a premium, welcoming party game.",
+            "Create English story content only; never create or modify game rules.",
+            `Return exactly ${count} distinct secret twists.`,
+            "Each twist needs a unique lowercase snake_case id, a unique one- or two-word requiredWord, and a short creative direction.",
+            "The opening should be vivid, immediately playable, and leave room for many directions.",
+            "Keep everything PG-13, inclusive, original, and suitable for reading aloud with friends or family.",
+            "Do not reference copyrighted characters, living public figures, politics, explicit sex, self-harm, or graphic violence.",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            mood: setup.mood,
+            storyLength: setup.length,
+            requestedTwists: count,
+            preferences: setup.preferences,
+            ...(repairContext ? { repairContext } : {}),
+          }),
+        },
       ],
       prompt_cache_key: "boardforge:story-chain-generation:v1",
       text: { format: zodTextFormat(candidateSchema, "story_chain_pack") },
@@ -670,7 +799,10 @@ export class OpenAiLlmProvider implements LlmProvider {
     try {
       return createStoryChainPack(setup, first, "ai");
     } catch (error) {
-      const repaired = await this.generateStoryChainCandidate(setup, error instanceof Error ? error.message : "The previous story pack was invalid.");
+      const repaired = await this.generateStoryChainCandidate(
+        setup,
+        error instanceof Error ? error.message : "The previous story pack was invalid.",
+      );
       return createStoryChainPack(setup, repaired, "ai");
     }
   }
@@ -744,7 +876,6 @@ export class OpenAiLlmProvider implements LlmProvider {
     }
     return critique;
   }
-
 }
 
 export type LlmProviderConfig = {

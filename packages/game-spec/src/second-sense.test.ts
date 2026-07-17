@@ -17,6 +17,10 @@ describe("Second Sense game", () => {
     expect(defaultSecondSenseSpec.minPlayers).toBe(2);
     expect(defaultSecondSenseSpec.maxPlayers).toBe(12);
     expect(defaultSecondSenseSpec.setup.mode).toBe("individual");
-    expect(defaultSecondSenseSpec.actions.map((action) => action.kind)).toEqual(["timing_start", "timing_stop", "timing_advance"]);
+    expect(defaultSecondSenseSpec.actions.map((action) => action.kind)).toEqual([
+      "timing_start",
+      "timing_stop",
+      "timing_advance",
+    ]);
   });
 });

@@ -7,7 +7,13 @@ import { MemoryBlueprintStore } from "./persistence";
 describe("MemoryBlueprintStore", () => {
   it("persists a validated blueprint and its release report", async () => {
     const store = new MemoryBlueprintStore();
-    await store.saveBlueprint({ id: "cinema-test", spec: cinemaCharadesSpec, status: "playtesting", provider: "test", prompt: "test prompt" });
+    await store.saveBlueprint({
+      id: "cinema-test",
+      spec: cinemaCharadesSpec,
+      status: "playtesting",
+      provider: "test",
+      prompt: "test prompt",
+    });
     const report = runComposedPlaytest(cinemaCharadesSpec, { simulations: 2, seed: "persistence-test" });
     await store.savePlaytest("cinema-test", "release_ready", report);
     const provider = new FakeLlmProvider();
@@ -31,29 +37,38 @@ describe("MemoryBlueprintStore", () => {
 
   it("rejects an invalid GameSpec before storage", async () => {
     const store = new MemoryBlueprintStore();
-    await expect(store.saveBlueprint({
-      id: "invalid",
-      spec: { ...cinemaCharadesSpec, phases: [] },
-      status: "draft",
-      provider: "test",
-    })).rejects.toThrow("Refusing invalid persisted GameSpec");
+    await expect(
+      store.saveBlueprint({
+        id: "invalid",
+        spec: { ...cinemaCharadesSpec, phases: [] },
+        status: "draft",
+        provider: "test",
+      }),
+    ).rejects.toThrow("Refusing invalid persisted GameSpec");
   });
 
   it("never overwrites an existing revision", async () => {
     const store = new MemoryBlueprintStore();
     await store.saveBlueprint({ id: "immutable", spec: cinemaCharadesSpec, status: "playtesting", provider: "test" });
-    await expect(store.saveBlueprint({
-      id: "immutable",
-      spec: { ...cinemaCharadesSpec, title: "A different game" },
-      status: "playtesting",
-      provider: "test",
-    })).rejects.toThrow("immutable");
+    await expect(
+      store.saveBlueprint({
+        id: "immutable",
+        spec: { ...cinemaCharadesSpec, title: "A different game" },
+        status: "playtesting",
+        provider: "test",
+      }),
+    ).rejects.toThrow("immutable");
     expect((await store.get("immutable"))?.spec.title).toBe(cinemaCharadesSpec.title);
   });
 
   it("persists room snapshots and append-only idempotent events", async () => {
     const store = new MemoryBlueprintStore();
-    await store.saveBlueprint({ id: "cinema-room", spec: cinemaCharadesSpec, status: "release_ready", provider: "test" });
+    await store.saveBlueprint({
+      id: "cinema-room",
+      spec: cinemaCharadesSpec,
+      status: "release_ready",
+      provider: "test",
+    });
     const session = {
       code: "ABC234",
       blueprintId: "cinema-room",
@@ -83,7 +98,9 @@ describe("MemoryBlueprintStore", () => {
 
     expect((await store.findRoomEvent("ABC234", "event-key-001"))?.resultingRevision).toBe(2);
     expect((await store.loadRooms())[0]?.events).toEqual([event]);
-    await expect(store.appendRoomEvent(session, { ...event, id: "00000000-0000-4000-8000-000000000100", sequence: 2 })).rejects.toThrow("Duplicate");
+    await expect(
+      store.appendRoomEvent(session, { ...event, id: "00000000-0000-4000-8000-000000000100", sequence: 2 }),
+    ).rejects.toThrow("Duplicate");
   });
 
   it("persists and explicitly accepts a verified balance revision", async () => {
@@ -100,7 +117,12 @@ describe("MemoryBlueprintStore", () => {
     if (!applied.ok) return;
     const afterReport = runComposedPlaytest(applied.spec, { simulations: 2, seed: "balance-after" });
 
-    await store.saveBlueprint({ id: "balance-source", spec: cinemaCharadesSpec, status: "release_ready", provider: "test" });
+    await store.saveBlueprint({
+      id: "balance-source",
+      spec: cinemaCharadesSpec,
+      status: "release_ready",
+      provider: "test",
+    });
     await store.savePlaytest("balance-source", "release_ready", beforeReport);
     await store.saveBlueprint({ id: "balance-derived", spec: applied.spec, status: "validating", provider: "test" });
     await store.savePlaytest("balance-derived", "validating", afterReport);
@@ -135,11 +157,7 @@ describe("MemoryBlueprintStore", () => {
       summary: "Teste une seconde variante qui sera explicitement rejetée.",
       changes: [{ kind: "set_timer_seconds" as const, componentId: "mime_timer", seconds: 50 }],
     };
-    const rejectedApplied = applyComposedBalancePatch(
-      applied.spec,
-      rejectedPatch,
-      "cinema_charades_balanced_two",
-    );
+    const rejectedApplied = applyComposedBalancePatch(applied.spec, rejectedPatch, "cinema_charades_balanced_two");
     expect(rejectedApplied.ok).toBe(true);
     if (!rejectedApplied.ok) return;
     const rejectedReport = runComposedPlaytest(rejectedApplied.spec, {

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { validateComposedGameSpec } from "./composed";
-import { createRandomSoundCheckPack, createSoundCheckPack, createSoundCheckSpec, soundCheckCatalog } from "./sound-check";
+import {
+  createRandomSoundCheckPack,
+  createSoundCheckPack,
+  createSoundCheckSpec,
+  soundCheckCatalog,
+} from "./sound-check";
 
 describe("SoundCheck game", () => {
   it("ships an English audited catalogue with stable unique IDs", () => {
@@ -12,8 +17,20 @@ describe("SoundCheck game", () => {
   it("creates deterministic packs and rejects unknown or duplicate prompts", () => {
     const setup = { themeId: "retro" as const, promptCount: 6 };
     expect(createRandomSoundCheckPack(setup, "same-room")).toEqual(createRandomSoundCheckPack(setup, "same-room"));
-    expect(() => createSoundCheckPack(setup, ["cat_purring", "cat_purring", "doorbell", "thunderstorm", "race_car", "drum_solo"], "ai")).toThrow("duplicate");
-    expect(() => createSoundCheckPack(setup, ["cat_purring", "dog_barking", "doorbell", "thunderstorm", "race_car", "invented"], "ai")).toThrow("Unknown SoundCheck prompt");
+    expect(() =>
+      createSoundCheckPack(
+        setup,
+        ["cat_purring", "cat_purring", "doorbell", "thunderstorm", "race_car", "drum_solo"],
+        "ai",
+      ),
+    ).toThrow("duplicate");
+    expect(() =>
+      createSoundCheckPack(
+        setup,
+        ["cat_purring", "dog_barking", "doorbell", "thunderstorm", "race_car", "invented"],
+        "ai",
+      ),
+    ).toThrow("Unknown SoundCheck prompt");
   });
 
   it("compiles a captain-led private performance and open guessing loop", () => {

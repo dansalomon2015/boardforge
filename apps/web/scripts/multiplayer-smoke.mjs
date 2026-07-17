@@ -118,7 +118,9 @@ async function runGame(template, playerCount) {
           client.view = view;
           if (view.kind === "lobby") return;
           if (clientIndex === 0) {
-            console.log(`  ${template} r${view.round} ${typeof view.phase === "string" ? view.phase : view.phase.id} rev${view.revision}`);
+            console.log(
+              `  ${template} r${view.round} ${typeof view.phase === "string" ? view.phase : view.phase.id} rev${view.revision}`,
+            );
           }
           if (view.status === "completed") {
             clearTimeout(timeout);
@@ -143,14 +145,17 @@ async function runGame(template, playerCount) {
               action = { type: "ADVANCE" };
             }
           } else if (view.kind === "composed") {
-            const available = view.availableActions.find((candidate) => ["draw", "complete_challenge", "advance"].includes(candidate.kind));
+            const available = view.availableActions.find((candidate) =>
+              ["draw", "complete_challenge", "advance"].includes(candidate.kind),
+            );
             if (available) {
               action = { type: "COMPOSED_ACTION", actionId: available.id };
             }
           } else if (view.phase === "answer" && !view.submitted) {
-            action = view.question.type === "trivia"
-              ? { type: "SUBMIT_ANSWER", optionId: view.question.options[0].id }
-              : { type: "CAST_PLAYER_VOTE", targetPlayerId: view.players[0].id };
+            action =
+              view.question.type === "trivia"
+                ? { type: "SUBMIT_ANSWER", optionId: view.question.options[0].id }
+                : { type: "CAST_PLAYER_VOTE", targetPlayerId: view.players[0].id };
           } else if (view.phase === "reveal" && clientIndex === 0) {
             action = { type: "ADVANCE" };
           }
@@ -171,7 +176,9 @@ async function runGame(template, playerCount) {
     const finalView = await completed;
     console.log(`✓ ${template} completed in room ${room.code} at revision ${finalView.revision}`);
   } finally {
-    clients.forEach((client) => client.socket.disconnect());
+    clients.forEach((client) => {
+      client.socket.disconnect();
+    });
   }
 }
 
@@ -191,7 +198,8 @@ async function testSecureReconnect() {
       reconnectToken: firstSession.reconnectToken,
     });
     await originalDisconnected;
-    if (rotatedSession.reconnectToken === firstSession.reconnectToken) throw new Error("Reconnect token was not rotated");
+    if (rotatedSession.reconnectToken === firstSession.reconnectToken)
+      throw new Error("Reconnect token was not rotated");
 
     await emitAckFailure(attacker, "room:join", {
       code: room.code,
@@ -215,10 +223,19 @@ async function testRevisionAndIdempotency() {
     { socket: io(apiUrl, { transports: ["websocket"] }), name: "Revision Guest" },
   ];
   try {
-    for (const client of clients) Object.assign(client, await emitAck(client.socket, "room:join", { code: room.code, name: client.name }));
+    for (const client of clients)
+      Object.assign(client, await emitAck(client.socket, "room:join", { code: room.code, name: client.name }));
     const teamIds = clients[0].view.teamSetup.teams.map((team) => team.id);
-    await emitAck(clients[0].socket, "room:team:select", { code: room.code, playerId: clients[0].playerId, teamId: teamIds[0] });
-    await emitAck(clients[1].socket, "room:team:select", { code: room.code, playerId: clients[1].playerId, teamId: teamIds[1] });
+    await emitAck(clients[0].socket, "room:team:select", {
+      code: room.code,
+      playerId: clients[0].playerId,
+      teamId: teamIds[0],
+    });
+    await emitAck(clients[1].socket, "room:team:select", {
+      code: room.code,
+      playerId: clients[1].playerId,
+      teamId: teamIds[1],
+    });
     const statePromises = clients.map((client) => nextState(client.socket, (view) => view.kind === "composed"));
     await emitAck(clients[0].socket, "room:start", { code: room.code, playerId: clients[0].playerId });
     const views = await Promise.all(statePromises);
@@ -247,7 +264,9 @@ async function testRevisionAndIdempotency() {
     });
     console.log(`✓ revision conflicts and idempotent retries verified in room ${room.code}`);
   } finally {
-    clients.forEach((client) => client.socket.disconnect());
+    clients.forEach((client) => {
+      client.socket.disconnect();
+    });
   }
 }
 

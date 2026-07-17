@@ -1,22 +1,38 @@
 import { describe, expect, it } from "vitest";
 import { createSecondSenseSpec } from "@boardforge/game-spec";
 import type { PublicPlayer } from "@boardforge/shared";
-import { initializeComposedGame, projectComposedGameState, reduceComposedGame, type ComposedGameState } from "./composed-engine";
+import {
+  initializeComposedGame,
+  projectComposedGameState,
+  reduceComposedGame,
+  type ComposedGameState,
+} from "./composed-engine";
 import { runComposedPlaytest } from "./playtest";
 
 const spec = createSecondSenseSpec({ themeId: "cyberpunk", tempo: "classic" });
 
 function players(count: number): PublicPlayer[] {
-  return Array.from({ length: count }, (_, index) => ({ id: `p${index + 1}`, name: `Player ${index + 1}`, isHost: index === 0, connected: true }));
+  return Array.from({ length: count }, (_, index) => ({
+    id: `p${index + 1}`,
+    name: `Player ${index + 1}`,
+    isHost: index === 0,
+    connected: true,
+  }));
 }
 
 function act(state: ComposedGameState, actorId: string, actionId: string, sequence: number, elapsedMs?: number) {
-  return reduceComposedGame(state, {
-    type: "COMPOSED_ACTION",
-    actionId,
-    idempotencyKey: `sense-${sequence.toString().padStart(4, "0")}`,
-    ...(elapsedMs === undefined ? {} : { payload: { elapsedMs } }),
-  }, actorId, actorId === "p1", spec);
+  return reduceComposedGame(
+    state,
+    {
+      type: "COMPOSED_ACTION",
+      actionId,
+      idempotencyKey: `sense-${sequence.toString().padStart(4, "0")}`,
+      ...(elapsedMs === undefined ? {} : { payload: { elapsedMs } }),
+    },
+    actorId,
+    actorId === "p1",
+    spec,
+  );
 }
 
 function attempt(state: ComposedGameState, actorId: string, sequence: number, elapsedMs: number) {

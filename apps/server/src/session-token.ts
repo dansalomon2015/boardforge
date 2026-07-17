@@ -5,7 +5,7 @@ export function issueReconnectToken(): { token: string; hash: string } {
   return { token, hash: hashReconnectToken(token) };
 }
 
-export function hashReconnectToken(token: string): string {
+function hashReconnectToken(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("base64url");
 }
 

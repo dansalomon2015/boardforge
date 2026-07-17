@@ -12,8 +12,12 @@ describe("WordTrap game", () => {
   it("creates deterministic packs and rejects unsafe catalogue references", () => {
     const setup = { themeId: "disco" as const, cardCount: 10 };
     expect(createRandomWordTrapPack(setup, "same-party")).toEqual(createRandomWordTrapPack(setup, "same-party"));
-    expect(() => createWordTrapPack({ ...setup, cardCount: 6 }, ["pizza", "pizza", "coffee", "robot", "paris", "ghost"], "ai")).toThrow("duplicate");
-    expect(() => createWordTrapPack({ ...setup, cardCount: 6 }, ["pizza", "coffee", "robot", "paris", "ghost", "invented"], "ai")).toThrow("Unknown WordTrap card");
+    expect(() =>
+      createWordTrapPack({ ...setup, cardCount: 6 }, ["pizza", "pizza", "coffee", "robot", "paris", "ghost"], "ai"),
+    ).toThrow("duplicate");
+    expect(() =>
+      createWordTrapPack({ ...setup, cardCount: 6 }, ["pizza", "coffee", "robot", "paris", "ghost", "invented"], "ai"),
+    ).toThrow("Unknown WordTrap card");
   });
 
   it("compiles a captain-led loop with an opponent buzzer", () => {

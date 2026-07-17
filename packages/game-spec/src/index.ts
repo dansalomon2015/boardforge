@@ -11,7 +11,10 @@ export * from "./story-chain";
 export * from "./word-duel";
 export * from "./second-sense";
 
-const idSchema = z.string().regex(/^[a-z][a-z0-9_]*$/).max(48);
+const idSchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9_]*$/)
+  .max(48);
 const shortTextSchema = z.string().trim().min(1).max(180);
 
 const baseFields = {
@@ -100,10 +103,7 @@ export const quizVoteGameSpecSchema = z
   })
   .strict();
 
-export const gameSpecSchema = z.discriminatedUnion("template", [
-  hiddenRolesGameSpecSchema,
-  quizVoteGameSpecSchema,
-]);
+export const gameSpecSchema = z.discriminatedUnion("template", [hiddenRolesGameSpecSchema, quizVoteGameSpecSchema]);
 
 export type HiddenRolesGameSpec = z.infer<typeof hiddenRolesGameSpecSchema>;
 export type QuizVoteGameSpec = z.infer<typeof quizVoteGameSpecSchema>;
@@ -117,9 +117,7 @@ export type ValidationIssue = {
   message: string;
 };
 
-export type GameSpecValidation =
-  | { ok: true; spec: GameSpec }
-  | { ok: false; issues: ValidationIssue[] };
+export type GameSpecValidation = { ok: true; spec: GameSpec } | { ok: false; issues: ValidationIssue[] };
 
 function semanticIssues(spec: GameSpec): ValidationIssue[] {
   const issues: ValidationIssue[] = [];

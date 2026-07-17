@@ -66,6 +66,8 @@ Set `OPENAI_API_KEY` only in your local `.env`; environment files remain outside
 pnpm check
 ```
 
+The gate verifies Biome formatting/linting, strict TypeScript (including unused locals and parameters), all tests, Knip dead-code analysis and production builds. Run `pnpm coverage` for the V8 coverage report.
+
 With both development servers running, exercise the real multiplayer protocol:
 
 ```bash
