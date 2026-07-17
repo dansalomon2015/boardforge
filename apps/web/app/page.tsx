@@ -49,7 +49,7 @@ export default function HomePage() {
           </div>
           <div className={styles.proof}>
             <span><b>24/24</b> playtests</span>
-            <span><b>170</b> audited cards</span>
+            <span><b>234</b> audited cards</span>
             <span><b>20</b> art directions</span>
           </div>
         </div>
@@ -87,7 +87,7 @@ export default function HomePage() {
         <div className={styles.catalogHeading}>
           <div>
             <p className={styles.eyebrow}><span /> The BoardForge collection</p>
-            <h2>Three real games.<br />No compromises.</h2>
+            <h2>Four real games.<br />No compromises.</h2>
           </div>
           <p>Every title has its own tuned rule loop, art direction, private information model, and multiplayer experience.</p>
         </div>
@@ -130,6 +130,18 @@ export default function HomePage() {
           <div className={styles.gameInfo}>
             <p>Team game · Live drawing</p><h3>DrawBattle</h3>
             <span>Draw a secret prompt on a synchronized canvas while every other player races to name it.</span>
+            <div><b>Build my edition</b><strong>→</strong></div>
+          </div>
+        </Link>
+        <Link className={`${styles.gameCard} ${styles.soundCheckCard}`} href="/games/sound-check">
+          <div className={`${styles.gameArtwork} ${styles.soundCheckArtwork}`}>
+            <span className={styles.gameNumber}>No. 04</span>
+            <div className={styles.vinyl}><i /><i /><i /><strong>BF</strong></div>
+            <div className={styles.soundWave}><i /><i /><i /><i /><i /><i /><i /></div>
+          </div>
+          <div className={styles.gameInfo}>
+            <p>Team game · Sound imitation</p><h3>SoundCheck</h3>
+            <span>Imitate a secret sound using only your voice while every other player races to identify it.</span>
             <div><b>Build my edition</b><strong>→</strong></div>
           </div>
         </Link>

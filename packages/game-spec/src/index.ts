@@ -6,6 +6,7 @@ export * from "./balance-patch";
 export * from "./movie-mime";
 export * from "./word-trap";
 export * from "./draw-battle";
+export * from "./sound-check";
 
 const idSchema = z.string().regex(/^[a-z][a-z0-9_]*$/).max(48);
 const shortTextSchema = z.string().trim().min(1).max(180);

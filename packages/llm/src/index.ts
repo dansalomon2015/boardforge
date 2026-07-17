@@ -7,6 +7,9 @@ import {
   createDrawBattlePack,
   drawBattleCatalog,
   drawBattleSetupSchema,
+  createSoundCheckPack,
+  soundCheckCatalog,
+  soundCheckSetupSchema,
   movieCatalog,
   movieMimeSetupSchema,
   wordTrapCatalog,
@@ -24,6 +27,9 @@ import {
   type DrawBattlePack,
   type DrawBattleSetup,
   type DrawBattleSetupInput,
+  type SoundCheckPack,
+  type SoundCheckSetup,
+  type SoundCheckSetupInput,
   type QuizVoteGameSpec,
   type QuizVoteQuestion,
   hiddenRolesGameSpecSchema,
@@ -127,7 +133,7 @@ export const composedGameReviewSchema = z
 export type ComposedGameReview = z.infer<typeof composedGameReviewSchema>;
 
 export type LlmUsageTelemetry = {
-  operation: "movie_mime_selection" | "word_trap_selection" | "draw_battle_selection" | "composed_generation" | "composed_review" | "composed_critique" | "composed_patch";
+  operation: "movie_mime_selection" | "word_trap_selection" | "draw_battle_selection" | "sound_check_selection" | "composed_generation" | "composed_review" | "composed_critique" | "composed_patch";
   provider: string;
   model: string;
   responseId: string;
@@ -144,6 +150,7 @@ export interface LlmProvider {
   generateMovieMimePack(setup: MovieMimeSetupInput): Promise<MimeFilmPack>;
   generateWordTrapPack(setup: WordTrapSetupInput): Promise<WordTrapPack>;
   generateDrawBattlePack(setup: DrawBattleSetupInput): Promise<DrawBattlePack>;
+  generateSoundCheckPack(setup: SoundCheckSetupInput): Promise<SoundCheckPack>;
   generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec>;
   reviewComposedGameSpec(
     spec: ComposedGameSpec,
@@ -706,6 +713,20 @@ export class FakeLlmProvider implements LlmProvider {
     return createDrawBattlePack(setup, ranked.slice(0, setup.promptCount).map(({ prompt }) => prompt.id), "ai");
   }
 
+  async generateSoundCheckPack(setupInput: SoundCheckSetupInput): Promise<SoundCheckPack> {
+    const setup = soundCheckSetupSchema.parse(setupInput);
+    const preferences = normalizedPrompt(setup.preferences ?? "a varied sound imitation mix").toLowerCase();
+    const preferenceWords = new Set(preferences.split(/[^a-z0-9]+/).filter((word) => word.length >= 3));
+    const ranked = soundCheckCatalog
+      .map((prompt) => {
+        const searchable = [prompt.answer, prompt.category, prompt.difficulty].join(" ").toLowerCase();
+        const matches = [...preferenceWords].filter((word) => searchable.includes(word)).length;
+        return { prompt, score: matches * 1_000 + hashText(`${preferences}:${prompt.id}`) % 100 };
+      })
+      .sort((left, right) => right.score - left.score || left.prompt.id.localeCompare(right.prompt.id));
+    return createSoundCheckPack(setup, ranked.slice(0, setup.promptCount).map(({ prompt }) => prompt.id), "ai");
+  }
+
   async generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec> {
     const normalized = normalizedPrompt(prompt) || "Un jeu de soirée convivial";
     const hash = hashText(normalized);
@@ -1072,6 +1093,43 @@ export class OpenAiLlmProvider implements LlmProvider {
     } catch (error) {
       const repaired = await this.selectDrawBattleCandidate(setup, error instanceof Error ? error.message : "The previous selection was invalid.");
       return createDrawBattlePack(setup, repaired.promptIds, "ai");
+    }
+  }
+
+  private async selectSoundCheckCandidate(
+    setup: SoundCheckSetup,
+    repairContext?: string,
+  ): Promise<{ promptIds: string[] }> {
+    const selectionSchema = z.object({ promptIds: z.array(z.string().regex(/^[a-z][a-z0-9_]*$/).max(48)).min(6).max(30) }).strict();
+    const startedAt = Date.now();
+    const response = await this.client.responses.parse({
+      model: this.reviewModel,
+      input: [
+        { role: "system", content: [
+          "You curate a voice-only sound imitation party deck from an audited catalog.",
+          "Return only catalog IDs. Never invent, rename or repeat a prompt.",
+          "Select exactly the requested count.",
+          "Honor the requested topic while balancing categories, difficulty and recognizability.",
+          "Every selection must be safe and practical to imitate without props or a microphone.",
+        ].join("\n") },
+        { role: "user", content: JSON.stringify({ requestedCount: setup.promptCount, preferences: setup.preferences, catalog: soundCheckCatalog, ...(repairContext ? { repairContext } : {}) }) },
+      ],
+      prompt_cache_key: "boardforge:sound-check-selection:v1",
+      text: { format: zodTextFormat(selectionSchema, "sound_check_selection") },
+      max_output_tokens: 1_200,
+    });
+    this.recordTelemetry("sound_check_selection", this.reviewModel, startedAt, response);
+    return requireParsedOutput(response.output_parsed, "SoundCheck selection");
+  }
+
+  async generateSoundCheckPack(setupInput: SoundCheckSetupInput): Promise<SoundCheckPack> {
+    const setup = soundCheckSetupSchema.parse(setupInput);
+    const first = await this.selectSoundCheckCandidate(setup);
+    try {
+      return createSoundCheckPack(setup, first.promptIds, "ai");
+    } catch (error) {
+      const repaired = await this.selectSoundCheckCandidate(setup, error instanceof Error ? error.message : "The previous selection was invalid.");
+      return createSoundCheckPack(setup, repaired.promptIds, "ai");
     }
   }
 

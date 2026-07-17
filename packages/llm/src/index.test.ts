@@ -66,6 +66,14 @@ describe("procedural local GameSpec compiler", () => {
     expect(pack.prompts.some((prompt) => prompt.category === "animals" || prompt.category === "fantasy")).toBe(true);
   });
 
+  it("selects a bounded SoundCheck pack from the audited catalog", async () => {
+    const pack = await provider.generateSoundCheckPack({ themeId: "retro", promptCount: 8, preferences: "animals and music" });
+    expect(pack.source).toBe("ai");
+    expect(pack.prompts).toHaveLength(8);
+    expect(new Set(pack.prompts.map((prompt) => prompt.id)).size).toBe(8);
+    expect(pack.prompts.some((prompt) => prompt.category === "animals" || prompt.category === "music")).toBe(true);
+  });
+
   it("changes hidden-role content when the requested universe changes", async () => {
     const common = { template: "hidden_roles" as const, players: 6, durationMinutes: 20 };
     const pirate = await provider.generateGameSpec({ ...common, prompt: "Mutinerie pirate autour d'un trésor maudit" });

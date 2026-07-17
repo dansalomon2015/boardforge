@@ -38,6 +38,7 @@ import {
 } from "../../../components/game-ui";
 import movieMimeStyles from "./movie-mime.module.css";
 import roomChromeStyles from "./room-chrome.module.css";
+import soundCheckStyles from "./sound-check.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -202,10 +203,11 @@ export default function RoomPage() {
   const isMovieMime = currentTitle === "CinéMimes" || currentTitle === "CineMimes";
   const isWordTrap = currentTitle === "WordTrap";
   const isDrawBattle = currentTitle === "DrawBattle";
-  const isOriginal = isMovieMime || isWordTrap || isDrawBattle;
+  const isSoundCheck = currentTitle === "SoundCheck";
+  const isOriginal = isMovieMime || isWordTrap || isDrawBattle || isSoundCheck;
 
   return (
-    <main className={`room-shell ${isOriginal ? roomChromeStyles.movieRoom : ""}`} data-original-game={isDrawBattle ? "draw-battle" : isWordTrap ? "word-trap" : isMovieMime ? "cinemimes" : undefined}>
+    <main className={`room-shell ${isOriginal ? roomChromeStyles.movieRoom : ""}`} data-original-game={isSoundCheck ? "sound-check" : isDrawBattle ? "draw-battle" : isWordTrap ? "word-trap" : isMovieMime ? "cinemimes" : undefined}>
       <header className="room-topbar">
         <a className="brand" href="/"><span className="brand-mark">BF</span><span>BoardForge</span></a>
         <div className="room-code"><span>ROOM</span><strong>{code}</strong><button onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/room/${code}`)}>Copy invite</button></div>
@@ -218,7 +220,7 @@ export default function RoomPage() {
           <p className="eyebrow">{isOriginal ? "Your private game night" : "You are invited"}</p>
           <h1>{isOriginal ? "Step into the room." : "Join the room"}</h1>
           <p>{isOriginal ? "Choose the player name that will appear throughout this game." : "Choose the name your friends will see during the game."}</p>
-          {isOriginal ? <div className={roomChromeStyles.joinCode}><span>Invitation</span><strong>{code}</strong><small>{isDrawBattle ? "DrawBattle" : isWordTrap ? "WordTrap" : "CineMimes"} · BoardForge Original</small></div> : null}
+          {isOriginal ? <div className={roomChromeStyles.joinCode}><span>Invitation</span><strong>{code}</strong><small>{isSoundCheck ? "SoundCheck" : isDrawBattle ? "DrawBattle" : isWordTrap ? "WordTrap" : "CineMimes"} · BoardForge Original</small></div> : null}
           <form onSubmit={join}>
             <label htmlFor="player-name">Your player name</label>
             <input id="player-name" autoFocus placeholder="e.g. Alex" maxLength={24} value={name} onChange={(event) => setName(event.target.value)} />
@@ -228,11 +230,11 @@ export default function RoomPage() {
       ) : view.kind === "lobby" ? (
         <section className="lobby-layout">
           <div className="lobby-hero">
-            {isOriginal ? <div className={roomChromeStyles.lobbyEdition}><span>BoardForge Original</span><b>No. {isDrawBattle ? "03" : isWordTrap ? "02" : "01"}</b></div> : null}
-            <p className="eyebrow">{isDrawBattle ? "The gallery is opening" : isWordTrap ? "Teams are entering the trap" : isMovieMime ? "Casting in progress" : "The table is getting ready"}</p>
+            {isOriginal ? <div className={roomChromeStyles.lobbyEdition}><span>BoardForge Original</span><b>No. {isSoundCheck ? "04" : isDrawBattle ? "03" : isWordTrap ? "02" : "01"}</b></div> : null}
+            <p className="eyebrow">{isSoundCheck ? "The studio is warming up" : isDrawBattle ? "The gallery is opening" : isWordTrap ? "Teams are entering the trap" : isMovieMime ? "Casting in progress" : "The table is getting ready"}</p>
             <h1>{view.game.title}</h1>
             <p>{view.game.description}</p>
-            {isOriginal ? <div className={roomChromeStyles.lobbyFacts}><span>{isDrawBattle ? "✎ Live drawing" : isWordTrap ? "⚡ Forbidden words" : "🎬 Movie charades"}</span><span>⏱ {isDrawBattle ? "75" : "60"} seconds</span><span>✦ {view.teamSetup?.teams.length ?? 2} teams</span></div> : null}
+            {isOriginal ? <div className={roomChromeStyles.lobbyFacts}><span>{isSoundCheck ? "◖ Voice-only sounds" : isDrawBattle ? "✎ Live drawing" : isWordTrap ? "⚡ Forbidden words" : "🎬 Movie charades"}</span><span>⏱ {isDrawBattle ? "75" : "60"} seconds</span><span>✦ {view.teamSetup?.teams.length ?? 2} teams</span></div> : null}
             <div className="lobby-progress"><span style={{ width: `${Math.min(100, (view.players.length / view.game.minPlayers) * 100)}%` }} /></div>
             <small>{view.players.length} player(s) in the room · minimum {view.game.minPlayers}</small>
             {view.teamSetup ? <TeamSetup view={view} pending={pending} selectTeam={selectTeam} selectCaptain={selectCaptain} /> : null}
@@ -367,6 +369,7 @@ function GameStage({ view, isHost, pending, sendAction }: {
     }
     if (view.title === "WordTrap") return <WordTrapStage view={view} pending={pending} sendAction={sendAction} />;
     if (view.title === "DrawBattle") return <DrawBattleStage view={view} pending={pending} sendAction={sendAction} />;
+    if (view.title === "SoundCheck") return <SoundCheckStage view={view} pending={pending} sendAction={sendAction} />;
     return <ComposedStage view={view} pending={pending} sendAction={sendAction} />;
   }
 
@@ -730,6 +733,82 @@ function DrawBattleStage({ view, pending, sendAction }: {
             <aside className={movieMimeStyles.drawingSidebar}>
               {isActivePlayer && prompt?.prompt ? <div className={movieMimeStyles.artistPrompt}><small>Your secret prompt</small><h2>{prompt.prompt}</h2><span>{prompt.hint}</span><p>Draw only · No letters · No numbers · No gestures</p></div> : <div className={movieMimeStyles.guessPanel}><small>Open guessing</small><h2>Name the picture.</h2><p>The first exact answer earns one point for the guesser’s team.</p>{guessAction ? <TextAnswer theme={theme} label="Your guess" placeholder="What do you see?" value={guess} onChange={setGuess} submitLabel="Lock guess" disabled={pending} onSubmit={() => { perform(guessAction.id, { text: guess }); setGuess(""); }} /> : <span className={movieMimeStyles.waitingGuess}>The artist cannot submit a guess.</span>}</div>}
               {passAction ? <button className={movieMimeStyles.pass} disabled={pending} onClick={() => perform(passAction.id)}>Pass this prompt</button> : null}
+            </aside>
+          </div>
+        </section>
+      )}
+    </GameSurface>
+  );
+}
+
+function SoundCheckStage({ view, pending, sendAction }: {
+  view: ComposedGameView;
+  pending: boolean;
+  sendAction: (action: GameAction) => void;
+}) {
+  const [guess, setGuess] = useState("");
+  const theme = themeForRoom(view.theme);
+  const activePlayer = view.players.find((player) => player.id === view.activePlayerId);
+  const isActivePlayer = view.selfPlayerId === view.activePlayerId;
+  const activeTeamId = view.teams.find((team) => team.playerIds.includes(view.activePlayerId))?.id;
+  const activeTeam = view.teams.find((team) => team.id === activeTeamId);
+  const activeCaptainId = activeTeamId ? view.captainByTeam[activeTeamId] : undefined;
+  const isActiveCaptain = view.selfPlayerId === activeCaptainId;
+  const selectAction = view.availableActions.find((action) => action.id === "select_performer");
+  const drawAction = view.availableActions.find((action) => action.id === "draw_sound");
+  const guessAction = view.availableActions.find((action) => action.id === "submit_guess");
+  const passAction = view.availableActions.find((action) => action.id === "pass_sound");
+  const prompt = view.components.find((component) => component.kind === "prompt")?.data as { prompt?: string; hint?: string } | undefined;
+  const winnerNames = view.winner?.kind === "teams" ? view.winner.ids.map((id) => view.teams.find((team) => team.id === id)?.name).filter(Boolean) : [];
+
+  function perform(actionId: string, payload?: Extract<GameAction, { type: "COMPOSED_ACTION" }>["payload"]) {
+    sendAction({ type: "COMPOSED_ACTION", actionId, ...(payload ? { payload } : {}) });
+  }
+
+  return (
+    <GameSurface theme={theme} className={`${movieMimeStyles.stage} ${soundCheckStyles.stage}`}>
+      <header className={movieMimeStyles.header}>
+        <div><span>BoardForge Original</span><strong>SoundCheck</strong></div>
+        <div className={movieMimeStyles.progress}><small>Track</small><b>{Math.min(view.round, view.totalRounds)}</b><i>/</i><span>{view.totalRounds}</span></div>
+      </header>
+      <div className={movieMimeStyles.scoreboard}>
+        {view.teams.map((team) => <div className={team.id === activeTeamId ? movieMimeStyles.activeTeam : ""} key={team.id}><i style={{ background: team.color }} /><span>{team.name}</span><strong>{view.scores.teams[team.id] ?? 0}</strong></div>)}
+      </div>
+
+      {view.status === "completed" ? (
+        <section className={movieMimeStyles.final}><span>The final track has ended</span><div className={`${movieMimeStyles.trophy} ${soundCheckStyles.recordTrophy}`}>◖</div><h1>{winnerNames.join(" & ") || "Perfect tie"}</h1><p>{winnerNames.length ? "wins tonight’s SoundCheck session." : "The teams share the final mix."}</p><a href="/">Back to the collection <b>→</b></a></section>
+      ) : view.phase.id === "select_performer" ? (
+        <section className={`${movieMimeStyles.castingStage} ${soundCheckStyles.casting}`}>
+          <div className={soundCheckStyles.equalizer} aria-hidden="true">{Array.from({ length: 17 }, (_, index) => <i key={index} />)}</div>
+          <p>{activeTeam?.name ?? "The active team"} owns the next track</p>
+          <h1>{isActiveCaptain ? "Choose your performer." : `${view.players.find((player) => player.id === activeCaptainId)?.name ?? "The captain"} is choosing.`}</h1>
+          <span>{isActiveCaptain ? "Pick the player who will hear the next secret sound in their private view." : "The next voice will step into the spotlight in a moment."}</span>
+          <div className={movieMimeStyles.castGrid}>{activeTeam?.playerIds.map((id) => {
+            const player = view.players.find((candidate) => candidate.id === id);
+            return <button disabled={pending || !selectAction} key={id} onClick={() => selectAction && perform(selectAction.id, { targetPlayerId: id })}><i>{player?.name.slice(0, 1).toUpperCase() ?? "?"}</i><span><small>Ready on vocals</small><strong>{player?.name ?? "Player"}</strong></span><b>{id === activeCaptainId ? "★ Captain" : "Choose →"}</b></button>;
+          })}</div>
+          {!isActiveCaptain ? <em>Only the active team captain can choose.</em> : null}
+        </section>
+      ) : view.phase.id === "draw_sound" ? (
+        <section className={`${movieMimeStyles.drawStage} ${soundCheckStyles.reveal}`}>
+          <div className={soundCheckStyles.record}><i /><i /><strong>BF</strong></div><p>{isActivePlayer ? "Your private track is ready" : "Next performer"}</p><h1>{activePlayer?.name ?? "The next player"}</h1>
+          <span>{isActivePlayer ? "Reveal the sound privately. The answer never leaves your server-filtered view." : "Look away while the performer discovers the secret sound."}</span>
+          <div className={`${movieMimeStyles.secretCard} ${soundCheckStyles.secretSleeve}`}><small>Secret sound</small><strong>◖</strong><i>?</i></div>
+          {drawAction ? <button disabled={pending} onClick={() => perform(drawAction.id)}><span>{pending ? "Dropping the needle…" : "Reveal my sound"}</span><b>↗</b></button> : <em>Waiting for {activePlayer?.name ?? "the performer"}…</em>}
+        </section>
+      ) : (
+        <section className={soundCheckStyles.liveRoom}>
+          <div className={movieMimeStyles.mimeHeading}><div><p>The studio is live</p><h1>{isActivePlayer ? "Make the sound." : `What is ${activePlayer?.name ?? "the performer"} imitating?`}</h1></div><div className={movieMimeStyles.timer}><i /><span>60</span><small>seconds</small></div></div>
+          <div className={soundCheckStyles.performanceGrid}>
+            <div className={soundCheckStyles.performanceStage}>
+              <div className={soundCheckStyles.onAir}><i /> On air</div>
+              <div className={soundCheckStyles.waveform} aria-hidden="true">{Array.from({ length: 31 }, (_, index) => <i key={index} />)}</div>
+              <div className={soundCheckStyles.performer}><span>{activePlayer?.name.slice(0, 1).toUpperCase() ?? "?"}</span><div><small>Now performing</small><strong>{activePlayer?.name ?? "Player"}</strong></div></div>
+              <p>Voice only · No words · No gestures · No props</p>
+            </div>
+            <aside className={soundCheckStyles.controlPanel}>
+              {isActivePlayer && prompt?.prompt ? <div className={soundCheckStyles.performerPrompt}><small>Your secret sound</small><h2>{prompt.prompt}</h2><span>{prompt.hint}</span><p>Recreate it using only your voice. Do not say any part of the answer.</p></div> : <div className={soundCheckStyles.guessPanel}><small>Open guessing</small><h2>Name that sound.</h2><p>The first exact answer earns one point for the guesser’s team.</p>{guessAction ? <TextAnswer theme={theme} label="Your guess" placeholder="What do you hear?" value={guess} onChange={setGuess} submitLabel="Lock guess" disabled={pending} onSubmit={() => { perform(guessAction.id, { text: guess }); setGuess(""); }} /> : <span className={soundCheckStyles.waiting}>The performer cannot submit a guess.</span>}</div>}
+              {passAction ? <button className={soundCheckStyles.pass} disabled={pending} onClick={() => perform(passAction.id)}>Pass this sound</button> : null}
             </aside>
           </div>
         </section>
