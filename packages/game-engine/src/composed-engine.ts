@@ -20,6 +20,7 @@ export type ComposedActionPayload = {
   targetPlayerId?: string | undefined;
   stroke?: { id: string; points: Array<{ x: number; y: number }> } | undefined;
   clear?: boolean | undefined;
+  elapsedMs?: number | undefined;
 };
 
 export type ComposedGameAction = {
@@ -61,6 +62,23 @@ export type WordDuelState = {
   lastGuess: { actorId: string; kind: "letter" | "word"; value: string; correct: boolean; revealedCount: number } | null;
 };
 
+export type SecondSenseState = {
+  stage: number;
+  stageStatus: "open" | "reveal";
+  targetMs: number;
+  targetHistory: number[];
+  activePlayerIds: string[];
+  startedPlayerIds: string[];
+  attemptsByPlayer: Record<string, number>;
+  lastRound: {
+    stage: number;
+    targetMs: number;
+    entries: Array<{ playerId: string; elapsedMs: number; errorMs: number; rank: number }>;
+    qualifiedPlayerIds: string[];
+    finalTie: boolean;
+  } | null;
+};
+
 export type ComposedGameState = {
   template: "composed";
   status: "playing" | "completed";
@@ -87,6 +105,7 @@ export type ComposedGameState = {
   itemOrders: Record<string, string[]>;
   sketches: Record<string, Array<{ id: string; points: Array<{ x: number; y: number }> }>>;
   wordDuels: Record<string, WordDuelState>;
+  secondSenses: Record<string, SecondSenseState>;
   actions: ComposedActionRecord[];
   acceptedIdempotencyKeys: string[];
   winner: { kind: "players" | "teams" | "none"; ids: string[] } | null;
@@ -209,6 +228,22 @@ function nextRandom(state: ComposedGameState, scope: string): number {
   const value = hashSeed(`${state.seed}:${scope}:${state.randomCounter}`) / 4_294_967_296;
   state.randomCounter += 1;
   return value;
+}
+
+function secondSenseTarget(
+  seed: string,
+  component: Extract<ComposedComponent, { kind: "second_sense" }>,
+  stage: number,
+  previousTarget?: number,
+): number {
+  const slots = Math.floor((component.maxTargetMs - component.minTargetMs) / component.precisionMs) + 1;
+  let slot = hashSeed(`${seed}:second-sense:${component.id}:${stage}`) % slots;
+  let target = component.minTargetMs + slot * component.precisionMs;
+  if (target === previousTarget && slots > 1) {
+    slot = (slot + 1) % slots;
+    target = component.minTargetMs + slot * component.precisionMs;
+  }
+  return target;
 }
 
 function createTeams(
@@ -351,6 +386,19 @@ export function initializeComposedGame(
       incorrectWordsByPlayer: Object.fromEntries(players.map((player) => [player.id, [] as string[]])),
       lastGuess: null,
     } satisfies WordDuelState])),
+    secondSenses: Object.fromEntries(spec.components.filter((component) => component.kind === "second_sense").map((component) => {
+      const targetMs = secondSenseTarget(seed, component, 1);
+      return [component.id, {
+        stage: 1,
+        stageStatus: "open",
+        targetMs,
+        targetHistory: [targetMs],
+        activePlayerIds: players.map((player) => player.id),
+        startedPlayerIds: [],
+        attemptsByPlayer: {},
+        lastRound: null,
+      } satisfies SecondSenseState];
+    })),
     actions: [],
     acceptedIdempotencyKeys: [],
     winner: null,
@@ -396,6 +444,12 @@ function wordDuelComponent(spec: ComposedGameSpec, wordDuelId: string | undefine
   return component;
 }
 
+function secondSenseComponent(spec: ComposedGameSpec, secondSenseId: string | undefined): Extract<ComposedComponent, { kind: "second_sense" }> {
+  const component = spec.components.find((candidate): candidate is Extract<ComposedComponent, { kind: "second_sense" }> => candidate.kind === "second_sense" && candidate.id === secondSenseId);
+  if (!component) throw new ComposedGameRuleError("This Second Sense board is not configured.");
+  return component;
+}
+
 function opponentId(state: ComposedGameState, actorId: string): string {
   const opponent = state.playerOrder.find((playerId) => playerId !== actorId);
   if (!opponent || state.playerOrder.length !== 2) throw new ComposedGameRuleError("WordDuel requires exactly two players.");
@@ -403,6 +457,29 @@ function opponentId(state: ComposedGameState, actorId: string): string {
 }
 
 function validatePayload(state: ComposedGameState, spec: ComposedGameSpec, action: ActionDefinition, actorId: string, payload: ComposedActionPayload): boolean | null {
+  if (action.kind === "timing_start" || action.kind === "timing_stop" || action.kind === "timing_advance") {
+    const component = secondSenseComponent(spec, action.secondSenseId);
+    const sense = state.secondSenses[component.id];
+    if (!sense) throw new ComposedGameRuleError("This timing round is not ready.");
+    if (action.kind === "timing_advance") {
+      if (sense.stageStatus !== "reveal") throw new ComposedGameRuleError("The current timing round is not ready to advance.");
+      return null;
+    }
+    if (sense.stageStatus !== "open") throw new ComposedGameRuleError("Wait for the next target.");
+    if (!sense.activePlayerIds.includes(actorId)) throw new ComposedGameRuleError("This player has been eliminated.");
+    const started = sense.startedPlayerIds.includes(actorId);
+    const stopped = sense.attemptsByPlayer[actorId] !== undefined;
+    if (action.kind === "timing_start") {
+      if (started || stopped) throw new ComposedGameRuleError("Your clock has already started.");
+      return null;
+    }
+    if (!started) throw new ComposedGameRuleError("Touch once to start your clock before stopping it.");
+    if (stopped) throw new ComposedGameRuleError("Your time is already locked.");
+    if (!Number.isInteger(payload.elapsedMs) || payload.elapsedMs! < 100 || payload.elapsedMs! > 30_000) {
+      throw new ComposedGameRuleError("Submit one measured duration between 0.10 and 30.00 seconds.");
+    }
+    return null;
+  }
   if (action.kind === "secret_word") {
     const component = wordDuelComponent(spec, action.wordDuelId);
     const word = normalizeDuelWord(payload.text ?? "");
@@ -612,6 +689,47 @@ function applyEffect(state: ComposedGameState, spec: ComposedGameSpec, effect: E
       const attempts = duel.incorrectWordsByPlayer[actorId] ?? [];
       duel.incorrectWordsByPlayer[actorId] = [...attempts.slice(-7), guess];
     }
+  }
+  else if (effect.kind === "start_timing") {
+    const sense = state.secondSenses[effect.secondSenseId];
+    if (!sense) throw new ComposedGameRuleError("No timing round is available to start.");
+    sense.startedPlayerIds = [...sense.startedPlayerIds, actorId];
+  }
+  else if (effect.kind === "stop_timing") {
+    const sense = state.secondSenses[effect.secondSenseId];
+    const elapsedMs = payload.elapsedMs;
+    if (!sense || !Number.isInteger(elapsedMs)) throw new ComposedGameRuleError("No measured duration is available to stop.");
+    sense.attemptsByPlayer[actorId] = elapsedMs!;
+    if (sense.activePlayerIds.every((playerId) => sense.attemptsByPlayer[playerId] !== undefined)) {
+      const sorted = sense.activePlayerIds
+        .map((playerId) => ({ playerId, elapsedMs: sense.attemptsByPlayer[playerId]!, errorMs: Math.abs(sense.attemptsByPlayer[playerId]! - sense.targetMs) }))
+        .sort((left, right) => left.errorMs - right.errorMs || left.elapsedMs - right.elapsedMs || left.playerId.localeCompare(right.playerId));
+      const entries = sorted.map((entry) => ({ ...entry, rank: sorted.findIndex((candidate) => candidate.errorMs === entry.errorMs) + 1 }));
+      const desiredCount = Math.max(1, Math.ceil(sorted.length / 2));
+      const cutoffErrorMs = sorted[desiredCount - 1]?.errorMs ?? sorted[0]?.errorMs ?? 0;
+      const qualifiedPlayerIds = sorted.filter((entry) => entry.errorMs <= cutoffErrorMs).map((entry) => entry.playerId);
+      const finalTie = sorted.length === 2 && sorted[0]?.errorMs === sorted[1]?.errorMs;
+      sense.stageStatus = "reveal";
+      sense.lastRound = { stage: sense.stage, targetMs: sense.targetMs, entries, qualifiedPlayerIds, finalTie };
+      if (qualifiedPlayerIds.length === 1) {
+        state.status = "completed";
+        state.winner = { kind: "players", ids: [qualifiedPlayerIds[0]!] };
+      }
+    }
+  }
+  else if (effect.kind === "advance_timing_round") {
+    const sense = state.secondSenses[effect.secondSenseId];
+    const qualifiedPlayerIds = sense?.lastRound?.qualifiedPlayerIds;
+    if (!sense || !qualifiedPlayerIds?.length || sense.stageStatus !== "reveal") throw new ComposedGameRuleError("No completed timing round is ready to advance.");
+    sense.stage += 1;
+    sense.stageStatus = "open";
+    sense.activePlayerIds = [...qualifiedPlayerIds];
+    sense.startedPlayerIds = [];
+    sense.attemptsByPlayer = {};
+    sense.targetMs = secondSenseTarget(state.seed, secondSenseComponent(spec, effect.secondSenseId), sense.stage, sense.targetMs);
+    sense.targetHistory.push(sense.targetMs);
+    state.round = sense.stage;
+    state.activePlayerId = qualifiedPlayerIds[0] ?? state.activePlayerId;
   }
   else if (effect.kind === "draw_cards") drawCards(state, effect.deckId, effect.target === "actor" ? actorId : state.activePlayerId, effect.count);
   else if (effect.kind === "discard_selected_card") {
@@ -838,7 +956,47 @@ function componentView(component: ComposedComponent, state: ComposedGameState, s
       lastGuess,
     } };
   }
+  if (component.kind === "second_sense") {
+    const sense = state.secondSenses[component.id];
+    const revealVisible = sense?.stageStatus === "reveal" || state.status === "completed";
+    const qualifiedIds = new Set(sense?.lastRound?.qualifiedPlayerIds ?? []);
+    return { ...base, data: {
+      minTargetMs: component.minTargetMs,
+      maxTargetMs: component.maxTargetMs,
+      stage: sense?.stage ?? 1,
+      stageStatus: sense?.stageStatus ?? "open",
+      targetMs: sense?.targetMs ?? component.minTargetMs,
+      activePlayerIds: sense?.activePlayerIds ?? [],
+      startedPlayerIds: sense?.startedPlayerIds ?? [],
+      lockedPlayerIds: Object.keys(sense?.attemptsByPlayer ?? {}),
+      ownAttemptMs: sense?.attemptsByPlayer[viewerId],
+      playerStates: players.map((player) => ({
+        playerId: player.id,
+        name: player.name,
+        status: !(sense?.activePlayerIds.includes(player.id) ?? false)
+          ? "eliminated"
+          : revealVisible
+            ? qualifiedIds.has(player.id) ? "qualified" : "eliminated"
+            : sense?.attemptsByPlayer[player.id] !== undefined
+              ? "locked"
+              : sense?.startedPlayerIds.includes(player.id) ? "timing" : "ready",
+      })),
+      lastRound: revealVisible ? sense?.lastRound : null,
+      previousTargetMs: sense && sense.targetHistory.length > 1 ? sense.targetHistory.at(-2) : null,
+    } };
+  }
   return { ...base, data: {} };
+}
+
+function specializedActionAvailable(state: ComposedGameState, action: ActionDefinition, playerId: string): boolean {
+  if (action.kind !== "timing_start" && action.kind !== "timing_stop" && action.kind !== "timing_advance") return true;
+  const sense = action.secondSenseId ? state.secondSenses[action.secondSenseId] : undefined;
+  if (!sense) return false;
+  if (action.kind === "timing_advance") return sense.stageStatus === "reveal";
+  if (sense.stageStatus !== "open" || !sense.activePlayerIds.includes(playerId)) return false;
+  const started = sense.startedPlayerIds.includes(playerId);
+  const stopped = sense.attemptsByPlayer[playerId] !== undefined;
+  return action.kind === "timing_start" ? !started && !stopped : started && !stopped;
 }
 
 export function projectComposedGameState(state: ComposedGameState, spec: ComposedGameSpec, players: PublicPlayer[], code: string, playerId: string): ComposedGameView {
@@ -848,7 +1006,7 @@ export function projectComposedGameState(state: ComposedGameState, spec: Compose
   const components = spec.components.filter((component) => phase.componentIds.includes(component.id) && componentVisible(component, state, viewer)).map((component) => componentView(component, state, spec, players, playerId));
   const availableActions = phase.actionIds
     .map((id) => actionFor(spec, id))
-    .filter((action) => isActorAllowed(state, action, playerId, viewer.isHost) && !(action.oncePerPhase && state.actions.some((record) => record.actionId === action.id && record.actorId === playerId && record.phaseVisit === state.phaseVisit)))
+    .filter((action) => isActorAllowed(state, action, playerId, viewer.isHost) && specializedActionAvailable(state, action, playerId) && !(action.oncePerPhase && state.actions.some((record) => record.actionId === action.id && record.actorId === playerId && record.phaseVisit === state.phaseVisit)))
     .map((action) => ({
       id: action.id,
       label: action.label,

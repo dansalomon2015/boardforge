@@ -103,6 +103,7 @@ describe("MemoryBlueprintStore", () => {
     const event = {
       id: "00000000-0000-4000-8000-000000000099",
       roomCode: "ABC234",
+      createdAt: "2026-07-17T12:00:00.000Z",
       sequence: 1,
       actorId: "00000000-0000-4000-8000-000000000001",
       actorIsHost: true,

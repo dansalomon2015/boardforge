@@ -41,6 +41,7 @@ import roomChromeStyles from "./room-chrome.module.css";
 import soundCheckStyles from "./sound-check.module.css";
 import storyChainStyles from "./story-chain.module.css";
 import wordDuelStyles from "./word-duel.module.css";
+import secondSenseStyles from "./second-sense.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -67,16 +68,12 @@ export default function RoomPage() {
   useEffect(() => {
     const socket = io(apiUrl, { transports: ["websocket", "polling"] });
     socketRef.current = socket;
-    socket.on("connect", () => setConnected(true));
-    socket.on("disconnect", () => setConnected(false));
-    socket.on("room:state", (nextView: RoomView) => setView(nextView));
-    socket.on("session:replaced", () => setError("This session was resumed in another tab."));
-
-    const savedId = localStorage.getItem(`boardforge:${code}:playerId`);
-    const savedName = localStorage.getItem(`boardforge:${code}:name`);
-    const savedToken = localStorage.getItem(`boardforge:${code}:reconnectToken`);
-    if (savedId && savedName && savedToken) {
-      setName(savedName);
+    const resumeSavedSession = () => {
+      setConnected(true);
+      const savedId = localStorage.getItem(`boardforge:${code}:playerId`);
+      const savedName = localStorage.getItem(`boardforge:${code}:name`);
+      const savedToken = localStorage.getItem(`boardforge:${code}:reconnectToken`);
+      if (!savedId || !savedName || !savedToken) return;
       socket.emit(
         "room:join",
         { code, name: savedName, playerId: savedId, reconnectToken: savedToken },
@@ -92,7 +89,11 @@ export default function RoomPage() {
           }
         },
       );
-    }
+    };
+    socket.on("connect", resumeSavedSession);
+    socket.on("disconnect", () => setConnected(false));
+    socket.on("room:state", (nextView: RoomView) => setView(nextView));
+    socket.on("session:replaced", () => setError("This session was resumed in another tab."));
 
     return () => {
       socket.disconnect();
@@ -208,10 +209,11 @@ export default function RoomPage() {
   const isSoundCheck = currentTitle === "SoundCheck";
   const isStoryChain = currentTitle === "StoryChain";
   const isWordDuel = currentTitle === "WordDuel";
-  const isOriginal = isMovieMime || isWordTrap || isDrawBattle || isSoundCheck || isStoryChain || isWordDuel;
+  const isSecondSense = currentTitle === "Second Sense";
+  const isOriginal = isMovieMime || isWordTrap || isDrawBattle || isSoundCheck || isStoryChain || isWordDuel || isSecondSense;
 
   return (
-    <main className={`room-shell ${isOriginal ? roomChromeStyles.movieRoom : ""}`} data-original-game={isWordDuel ? "word-duel" : isStoryChain ? "story-chain" : isSoundCheck ? "sound-check" : isDrawBattle ? "draw-battle" : isWordTrap ? "word-trap" : isMovieMime ? "cinemimes" : undefined}>
+    <main className={`room-shell ${isOriginal ? roomChromeStyles.movieRoom : ""}`} data-original-game={isSecondSense ? "second-sense" : isWordDuel ? "word-duel" : isStoryChain ? "story-chain" : isSoundCheck ? "sound-check" : isDrawBattle ? "draw-battle" : isWordTrap ? "word-trap" : isMovieMime ? "cinemimes" : undefined}>
       <header className="room-topbar">
         <a className="brand" href="/"><span className="brand-mark">BF</span><span>BoardForge</span></a>
         <div className="room-code"><span>ROOM</span><strong>{code}</strong><button onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/room/${code}`)}>Copy invite</button></div>
@@ -224,7 +226,7 @@ export default function RoomPage() {
           <p className="eyebrow">{isOriginal ? "Your private game night" : "You are invited"}</p>
           <h1>{isOriginal ? "Step into the room." : "Join the room"}</h1>
           <p>{isOriginal ? "Choose the player name that will appear throughout this game." : "Choose the name your friends will see during the game."}</p>
-          {isOriginal ? <div className={roomChromeStyles.joinCode}><span>Invitation</span><strong>{code}</strong><small>{isWordDuel ? "WordDuel" : isStoryChain ? "StoryChain" : isSoundCheck ? "SoundCheck" : isDrawBattle ? "DrawBattle" : isWordTrap ? "WordTrap" : "CineMimes"} · BoardForge Original</small></div> : null}
+          {isOriginal ? <div className={roomChromeStyles.joinCode}><span>Invitation</span><strong>{code}</strong><small>{isSecondSense ? "Second Sense" : isWordDuel ? "WordDuel" : isStoryChain ? "StoryChain" : isSoundCheck ? "SoundCheck" : isDrawBattle ? "DrawBattle" : isWordTrap ? "WordTrap" : "CineMimes"} · BoardForge Original</small></div> : null}
           <form onSubmit={join}>
             <label htmlFor="player-name">Your player name</label>
             <input id="player-name" autoFocus placeholder="e.g. Alex" maxLength={24} value={name} onChange={(event) => setName(event.target.value)} />
@@ -234,17 +236,17 @@ export default function RoomPage() {
       ) : view.kind === "lobby" ? (
         <section className="lobby-layout">
           <div className="lobby-hero">
-            {isOriginal ? <div className={roomChromeStyles.lobbyEdition}><span>BoardForge Original</span><b>No. {isWordDuel ? "06" : isStoryChain ? "05" : isSoundCheck ? "04" : isDrawBattle ? "03" : isWordTrap ? "02" : "01"}</b></div> : null}
-            <p className="eyebrow">{isWordDuel ? "The challenger is waiting" : isStoryChain ? "The first page is waiting" : isSoundCheck ? "The studio is warming up" : isDrawBattle ? "The gallery is opening" : isWordTrap ? "Teams are entering the trap" : isMovieMime ? "Casting in progress" : "The table is getting ready"}</p>
+            {isOriginal ? <div className={roomChromeStyles.lobbyEdition}><span>BoardForge Original</span><b>No. {isSecondSense ? "07" : isWordDuel ? "06" : isStoryChain ? "05" : isSoundCheck ? "04" : isDrawBattle ? "03" : isWordTrap ? "02" : "01"}</b></div> : null}
+            <p className="eyebrow">{isSecondSense ? "The pulse is waiting" : isWordDuel ? "The challenger is waiting" : isStoryChain ? "The first page is waiting" : isSoundCheck ? "The studio is warming up" : isDrawBattle ? "The gallery is opening" : isWordTrap ? "Teams are entering the trap" : isMovieMime ? "Casting in progress" : "The table is getting ready"}</p>
             <h1>{view.game.title}</h1>
             <p>{view.game.description}</p>
-            {isOriginal ? <div className={roomChromeStyles.lobbyFacts}>{isWordDuel ? <><span>W Secret words</span><span>⌨ Playable keyboard</span><span>⚔ Exactly 2 players</span></> : isStoryChain ? <><span>✦ One shared story</span><span>⌁ Secret twists</span><span>♡ No teams, no score</span></> : <><span>{isSoundCheck ? "◖ Voice-only sounds" : isDrawBattle ? "✎ Live drawing" : isWordTrap ? "⚡ Forbidden words" : "🎬 Movie charades"}</span><span>⏱ {isDrawBattle ? "75" : "60"} seconds</span><span>✦ {view.teamSetup?.teams.length ?? 2} teams</span></>}</div> : null}
+            {isOriginal ? <div className={roomChromeStyles.lobbyFacts}>{isSecondSense ? <><span>◉ Invisible clock</span><span>⌁ Knockout rounds</span><span>✦ 2–12 players</span></> : isWordDuel ? <><span>W Secret words</span><span>⌨ Playable keyboard</span><span>⚔ Exactly 2 players</span></> : isStoryChain ? <><span>✦ One shared story</span><span>⌁ Secret twists</span><span>♡ No teams, no score</span></> : <><span>{isSoundCheck ? "◖ Voice-only sounds" : isDrawBattle ? "✎ Live drawing" : isWordTrap ? "⚡ Forbidden words" : "🎬 Movie charades"}</span><span>⏱ {isDrawBattle ? "75" : "60"} seconds</span><span>✦ {view.teamSetup?.teams.length ?? 2} teams</span></>}</div> : null}
             <div className="lobby-progress"><span style={{ width: `${Math.min(100, (view.players.length / view.game.minPlayers) * 100)}%` }} /></div>
             <small>{view.players.length} {view.players.length === 1 ? "friend is" : "friends are"} here · {view.game.minPlayers} needed to play</small>
             {view.teamSetup ? <TeamSetup view={view} pending={pending} selectTeam={selectTeam} selectCaptain={selectCaptain} /> : null}
             {self?.isHost ? (
               <button className="primary-button host-start" disabled={!view.canStart || pending} onClick={startGame}>
-                {view.canStart ? "Start the game" : isWordDuel ? "Invite your rival" : isStoryChain ? "Invite one more storyteller" : view.startBlockReason ?? "The room is not ready yet"} <b>→</b>
+                {view.canStart ? "Start the game" : isSecondSense ? "Invite at least one timekeeper" : isWordDuel ? "Invite your rival" : isStoryChain ? "Invite one more storyteller" : view.startBlockReason ?? "The room is not ready yet"} <b>→</b>
               </button>
             ) : <div className="waiting-card">{view.teamSetup ? "The host will start when every team is ready." : "The host will start when everyone is ready."}</div>}
           </div>
@@ -376,6 +378,7 @@ function GameStage({ view, isHost, pending, sendAction }: {
     if (view.title === "SoundCheck") return <SoundCheckStage view={view} pending={pending} sendAction={sendAction} />;
     if (view.title === "StoryChain") return <StoryChainStage view={view} pending={pending} sendAction={sendAction} />;
     if (view.title === "WordDuel") return <WordDuelStage view={view} pending={pending} sendAction={sendAction} />;
+    if (view.title === "Second Sense") return <SecondSenseStage view={view} isHost={isHost} pending={pending} sendAction={sendAction} />;
     return <ComposedStage view={view} pending={pending} sendAction={sendAction} />;
   }
 
@@ -980,6 +983,108 @@ function WordDuelStage({ view, pending, sendAction }: {
           <div className={wordDuelStyles.wordArea}><span>{board?.opponentName}&apos;s secret word · {board?.wordLength} letters</span><div className={wordDuelStyles.wordTiles}>{mask.map((letter, index) => <i className={letter !== "_" ? wordDuelStyles.revealed : ""} key={`${index}-${letter}`}>{letter === "_" ? "" : letter}</i>)}</div><div className={wordDuelStyles.misses}><small>Misses</small>{board?.misses?.length ? board.misses.map((letter) => <b key={letter}>{letter}</b>) : <span>None yet</span>}</div></div>
           <div className={wordDuelStyles.keyboardArea}><div className={wordDuelStyles.keyboardHeading}><div><span>Your keyboard</span><small>Every key can be played once</small></div><button disabled={!isMyTurn || pending || !solveAction} onClick={() => setSolveOpen(true)}>I know the word <b>↗</b></button></div><div className={wordDuelStyles.keyboard}>{rows.map((row) => <div key={row}>{[...row].map((letter) => { const key = keyboard.find((candidate) => candidate.letter === letter); return <button aria-label={`Play letter ${letter}`} className={key?.state === "correct" ? wordDuelStyles.correctKey : key?.state === "wrong" ? wordDuelStyles.wrongKey : ""} disabled={!isMyTurn || pending || key?.state !== "available"} key={letter} onClick={() => letterAction && perform(letterAction.id, letter)}><span>{letter}</span>{key?.state === "correct" ? <i>✓</i> : key?.state === "wrong" ? <i>×</i> : null}</button>; })}</div>)}</div><p>{isMyTurn ? "Tap a key or use your physical keyboard." : `Your keyboard unlocks after ${activePlayer?.name ?? "your rival"} plays.`}</p></div>
           {solveOpen ? <div className={wordDuelStyles.solveBackdrop} onClick={() => setSolveOpen(false)}><form className={wordDuelStyles.solveCard} onClick={(event) => event.stopPropagation()} onSubmit={submitSolve}><span>Risk the whole word</span><h2>Think you&apos;ve cracked it?</h2><p>A wrong answer ends your turn. No extra letters will be revealed.</p><input autoFocus maxLength={board?.maxLength ?? 12} minLength={board?.minLength ?? 4} onChange={(event) => setSolveGuess(event.target.value.toUpperCase().replace(/[^A-Z]/g, ""))} placeholder={`${board?.wordLength ?? "?"} LETTER WORD`} value={solveGuess} /><div><button onClick={() => setSolveOpen(false)} type="button">Not yet</button><button disabled={pending || solveGuess.length !== board?.wordLength} type="submit">Solve it <b>→</b></button></div></form></div> : null}
+        </section>
+      )}
+    </GameSurface>
+  );
+}
+
+function SecondSenseStage({ view, isHost, pending, sendAction }: {
+  view: ComposedGameView;
+  isHost: boolean;
+  pending: boolean;
+  sendAction: (action: GameAction) => void;
+}) {
+  const [localTiming, setLocalTiming] = useState(false);
+  const startedAtRef = useRef<number | null>(null);
+  const theme = themeForRoom(view.theme);
+  const board = view.components.find((component) => component.kind === "second_sense")?.data as {
+    stage?: number; stageStatus?: "open" | "reveal"; targetMs?: number; previousTargetMs?: number | null;
+    activePlayerIds?: string[]; startedPlayerIds?: string[]; lockedPlayerIds?: string[]; ownAttemptMs?: number;
+    playerStates?: Array<{ playerId: string; name: string; status: "ready" | "timing" | "locked" | "qualified" | "eliminated" }>;
+    lastRound?: { stage: number; targetMs: number; entries: Array<{ playerId: string; elapsedMs: number; errorMs: number; rank: number }>; qualifiedPlayerIds: string[]; finalTie: boolean } | null;
+  } | undefined;
+  const stage = board?.stage ?? 1;
+  const activeIds = board?.activePlayerIds ?? [];
+  const isActive = activeIds.includes(view.selfPlayerId);
+  const serverStarted = board?.startedPlayerIds?.includes(view.selfPlayerId) ?? false;
+  const locked = board?.lockedPlayerIds?.includes(view.selfPlayerId) ?? false;
+  const timing = localTiming || (serverStarted && !locked);
+  const targetMs = board?.targetMs ?? 2_000;
+  const winnerId = view.winner?.kind === "players" ? view.winner.ids[0] : undefined;
+  const winner = view.players.find((player) => player.id === winnerId);
+  const formatTime = (milliseconds: number) => (milliseconds / 1_000).toFixed(2);
+  const attemptStorageKey = `boardforge:${view.code}:second-sense:${stage}:startedAt`;
+
+  useEffect(() => {
+    if (!serverStarted || locked) {
+      if (locked) sessionStorage.removeItem(attemptStorageKey);
+      if (!serverStarted) setLocalTiming(false);
+      return;
+    }
+    const saved = Number(sessionStorage.getItem(attemptStorageKey));
+    if (Number.isFinite(saved) && saved > 0) {
+      startedAtRef.current = saved;
+      setLocalTiming(true);
+    }
+  }, [attemptStorageKey, locked, serverStarted]);
+
+  function startClock() {
+    if (!isActive || board?.stageStatus !== "open" || locked || timing) return;
+    const startedAt = Date.now();
+    startedAtRef.current = startedAt;
+    sessionStorage.setItem(attemptStorageKey, String(startedAt));
+    setLocalTiming(true);
+    sendAction({ type: "COMPOSED_ACTION", actionId: "start_clock" });
+  }
+
+  function stopClock() {
+    const startedAt = startedAtRef.current ?? Number(sessionStorage.getItem(attemptStorageKey));
+    if (!timing || !Number.isFinite(startedAt) || startedAt <= 0) return;
+    setLocalTiming(false);
+    sendAction({ type: "COMPOSED_ACTION", actionId: "stop_clock" });
+  }
+
+  function advanceRound() {
+    sendAction({ type: "COMPOSED_ACTION", actionId: "next_stage" });
+  }
+
+  const states = board?.playerStates ?? [];
+  const lockedCount = board?.lockedPlayerIds?.length ?? 0;
+  const results = board?.lastRound?.entries ?? [];
+
+  return (
+    <GameSurface theme={theme} className={secondSenseStyles.stage}>
+      <header className={secondSenseStyles.header}><div><span>BoardForge Original No. 07</span><strong>Second Sense</strong></div><div className={secondSenseStyles.stageMark}><small>{activeIds.length === 2 ? "Final" : "Stage"}</small><b>{String(stage).padStart(2, "0")}</b></div></header>
+
+      {view.status === "completed" ? (
+        <section className={secondSenseStyles.final}>
+          <div className={secondSenseStyles.finalHalo}><i /><i /><span>◉</span></div><small>One pulse remains</small><h1>{winnerId === view.selfPlayerId ? "Your timing was immaculate." : `${winner?.name ?? "The champion"} owns the moment.`}</h1>
+          <div className={secondSenseStyles.winningTime}><span>Final target</span><strong>{formatTime(board?.lastRound?.targetMs ?? targetMs)}</strong><small>seconds</small></div>
+          <div className={secondSenseStyles.finalResult}>{results.map((entry) => <div className={entry.playerId === winnerId ? secondSenseStyles.champion : ""} key={entry.playerId}><span>{view.players.find((player) => player.id === entry.playerId)?.name}</span><b>{formatTime(entry.elapsedMs)}</b><small>±{formatTime(entry.errorMs)}</small></div>)}</div>
+          <p>The clock was invisible. The instinct was real.</p><a href="/games/second-sense">Play another round <b>→</b></a>
+        </section>
+      ) : board?.stageStatus === "reveal" ? (
+        <section className={secondSenseStyles.reveal}>
+          <div className={secondSenseStyles.revealLead}><span>{board.lastRound?.finalTie ? "Perfect dead heat" : "The cut is in"}</span><h1>{board.lastRound?.finalTie ? "Time refuses to choose." : "Closest instincts survive."}</h1><p>{board.lastRound?.finalTie ? "The two finalists landed at the same distance. A fresh target will decide it." : `${board.lastRound?.qualifiedPlayerIds.length ?? 0} players move forward. Everyone else joins the gallery.`}</p></div>
+          <div className={secondSenseStyles.targetStamp}><small>Target</small><strong>{formatTime(board.lastRound?.targetMs ?? targetMs)}</strong><span>seconds</span></div>
+          <div className={secondSenseStyles.leaderboard}>{results.map((entry) => { const qualified = board.lastRound?.qualifiedPlayerIds.includes(entry.playerId); return <div className={qualified ? secondSenseStyles.qualified : secondSenseStyles.out} key={entry.playerId}><b>{String(entry.rank).padStart(2, "0")}</b><i>{view.players.find((player) => player.id === entry.playerId)?.name.slice(0, 1).toUpperCase()}</i><span><strong>{view.players.find((player) => player.id === entry.playerId)?.name}</strong><small>{qualified ? "Through to the next pulse" : "Eliminated"}</small></span><em>{formatTime(entry.elapsedMs)}<small>{entry.elapsedMs >= (board.lastRound?.targetMs ?? 0) ? "+" : "−"}{formatTime(entry.errorMs)}</small></em></div>; })}</div>
+          {isHost ? <button className={secondSenseStyles.nextButton} disabled={pending} onClick={advanceRound}><span>{board.lastRound?.finalTie ? "Run the tiebreaker" : "Reveal the next target"}</span><b>→</b></button> : <div className={secondSenseStyles.hostWait}>Waiting for the host to reveal the next target <i /><i /><i /></div>}
+        </section>
+      ) : (
+        <section className={`${secondSenseStyles.arena} ${timing ? secondSenseStyles.isTiming : ""}`}>
+          <div className={secondSenseStyles.roundMeta}><span>{activeIds.length === 2 ? "Final pulse" : `${activeIds.length} players remain`}</span><small>{lockedCount}/{activeIds.length} times locked</small></div>
+          {!isActive ? (
+            <div className={secondSenseStyles.spectator}><div>◌</div><span>Gallery mode</span><h1>You&apos;re out.<br />The tension isn&apos;t.</h1><p>Watch the remaining players trust their internal clocks. Results appear when every time is locked.</p><div className={secondSenseStyles.statusGrid}>{states.filter((state) => activeIds.includes(state.playerId)).map((state) => <span key={state.playerId}><i className={secondSenseStyles[state.status]} />{state.name}<small>{state.status}</small></span>)}</div></div>
+          ) : locked ? (
+            <div className={secondSenseStyles.lockedView}><span>Your instinct</span><strong>{formatTime(board?.ownAttemptMs ?? 0)}</strong><small>seconds</small><div className={secondSenseStyles.lockSeal}>✓</div><h2>Time locked.</h2><p>Your exact result stays private until every surviving player has stopped.</p><div className={secondSenseStyles.statusGrid}>{states.filter((state) => activeIds.includes(state.playerId)).map((state) => <span key={state.playerId}><i className={secondSenseStyles[state.status]} />{state.name}<small>{state.status}</small></span>)}</div></div>
+          ) : timing ? (
+            <button aria-label="Stop your invisible clock" className={secondSenseStyles.stopZone} onClick={stopClock}><div className={secondSenseStyles.motionField}><i /><i /><i /><i /><i /></div><span>Trust the feeling</span><h1>NOW?</h1><p>Touch anywhere to stop</p><small>The clock is running. Nothing here marks time.</small></button>
+          ) : (
+            <div className={secondSenseStyles.target}>
+              <span>Your target</span><div className={secondSenseStyles.targetNumber}><small>0</small><strong>{formatTime(targetMs)}</strong></div><p>seconds</p><button disabled={pending} onClick={startClock}><i>◉</i><span>Touch to begin</span><b>→</b></button><small>The number disappears the instant you touch.</small>
+            </div>
+          )}
         </section>
       )}
     </GameSurface>

@@ -89,7 +89,7 @@ export default function HomePage() {
             <p className={styles.eyebrow}><span /> The BoardForge collection</p>
             <h2>Choose tonight&apos;s<br />main event.</h2>
           </div>
-          <p>Six games, six completely different moods. Choose your favorite, add your people, and let the night take it from there.</p>
+          <p>Seven games, seven completely different moods. Choose your favorite, add your people, and let the night take it from there.</p>
         </div>
 
         <div className={styles.gamesGrid}>
@@ -167,6 +167,18 @@ export default function HomePage() {
             <p>Two players · Secret words</p><h3>WordDuel</h3>
             <span>Lock in a word, play the keyboard, and crack your rival&apos;s answer before they crack yours.</span>
             <div><b>Start the duel</b><strong>→</strong></div>
+          </div>
+        </Link>
+        <Link className={`${styles.gameCard} ${styles.secondSenseCard}`} href="/games/second-sense">
+          <div className={`${styles.gameArtwork} ${styles.secondSenseArtwork}`}>
+            <span className={styles.gameNumber}>No. 07</span>
+            <div className={styles.senseOrbit}><i /><i /><i /><div><small>YOUR TARGET</small><strong>02.00</strong><span>SECONDS</span></div></div>
+            <div className={styles.senseCut}><span>8</span><i>→</i><span>4</span><i>→</i><span>2</span><i>→</i><b>1</b></div>
+          </div>
+          <div className={styles.gameInfo}>
+            <p>2–12 players · Knockout timing</p><h3>Second Sense</h3>
+            <span>See the target, hide the clock, and stop on instinct. Only the closest players survive the cut.</span>
+            <div><b>Trust your timing</b><strong>→</strong></div>
           </div>
         </Link>
         </div>

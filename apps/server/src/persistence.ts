@@ -80,6 +80,7 @@ export type CompilationJobUpdate = {
 export type RoomEventRecord = {
   id: string;
   roomCode: string;
+  createdAt: string;
   sequence: number;
   actorId: string;
   actorIsHost: boolean;
@@ -393,6 +394,7 @@ type RoomSessionRow = {
 type RoomEventRow = {
   id: string;
   room_code: string;
+  created_at: Date;
   sequence: number;
   actor_id: string;
   actor_is_host: boolean;
@@ -406,6 +408,7 @@ function roomEventFromRow(row: RoomEventRow): RoomEventRecord {
   return {
     id: row.id,
     roomCode: row.room_code,
+    createdAt: row.created_at.toISOString(),
     sequence: row.sequence,
     actorId: row.actor_id,
     actorIsHost: row.actor_is_host,
@@ -794,7 +797,7 @@ class PostgresBlueprintStore implements BlueprintStore {
        ORDER BY created_at`,
     );
     const events = await this.pool.query<RoomEventRow>(
-      `SELECT id, room_code, sequence, actor_id, actor_is_host, expected_revision,
+      `SELECT id, room_code, created_at, sequence, actor_id, actor_is_host, expected_revision,
               resulting_revision, idempotency_key, action
        FROM room_events
        ORDER BY room_code, sequence`,
@@ -857,12 +860,13 @@ class PostgresBlueprintStore implements BlueprintStore {
       await client.query("BEGIN");
       await client.query(
         `INSERT INTO room_events (
-           id, room_code, sequence, actor_id, actor_is_host, expected_revision,
+           id, room_code, created_at, sequence, actor_id, actor_is_host, expected_revision,
            resulting_revision, idempotency_key, action
-         ) VALUES ($1::uuid, $2, $3, $4::uuid, $5, $6, $7, $8, $9::jsonb)`,
+         ) VALUES ($1::uuid, $2, $3, $4, $5::uuid, $6, $7, $8, $9, $10::jsonb)`,
         [
           event.id,
           event.roomCode,
+          event.createdAt,
           event.sequence,
           event.actorId,
           event.actorIsHost,
@@ -907,7 +911,7 @@ class PostgresBlueprintStore implements BlueprintStore {
 
   async findRoomEvent(roomCode: string, idempotencyKey: string): Promise<RoomEventRecord | undefined> {
     const result = await this.pool.query<RoomEventRow>(
-      `SELECT id, room_code, sequence, actor_id, actor_is_host, expected_revision,
+      `SELECT id, room_code, created_at, sequence, actor_id, actor_is_host, expected_revision,
               resulting_revision, idempotency_key, action
        FROM room_events
        WHERE room_code = $1 AND idempotency_key = $2`,

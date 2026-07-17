@@ -101,7 +101,7 @@ export type ComposedTheme =
 
 export type ResolvedGameComponent = {
   id: string;
-  kind: "header" | "prompt" | "deck" | "choices" | "text_input" | "drawing" | "timer" | "turn" | "round" | "teams" | "players" | "scores" | "clues" | "challenge" | "reveal" | "outcome" | "board" | "card_zone" | "resources" | "randomizer" | "buzzer" | "ordering" | "matching" | "media" | "story" | "word_duel";
+  kind: "header" | "prompt" | "deck" | "choices" | "text_input" | "drawing" | "timer" | "turn" | "round" | "teams" | "players" | "scores" | "clues" | "challenge" | "reveal" | "outcome" | "board" | "card_zone" | "resources" | "randomizer" | "buzzer" | "ordering" | "matching" | "media" | "story" | "word_duel" | "second_sense";
   data: Record<string, unknown>;
 };
 
@@ -126,7 +126,7 @@ export type ComposedGameView = {
   availableActions: Array<{
     id: string;
     label: string;
-    kind: "advance" | "choose" | "text" | "draw" | "play_card" | "move" | "resource" | "randomize" | "buzz" | "order" | "match" | "complete_challenge" | "select_player" | "sketch" | "secret_word" | "letter_guess" | "word_guess";
+    kind: "advance" | "choose" | "text" | "draw" | "play_card" | "move" | "resource" | "randomize" | "buzz" | "order" | "match" | "complete_challenge" | "select_player" | "sketch" | "secret_word" | "letter_guess" | "word_guess" | "timing_start" | "timing_stop" | "timing_advance";
     options?: Array<{ id: string; label: string; description?: string | undefined; icon?: string | undefined }> | undefined;
     deckId?: string | undefined;
     boardId?: string | undefined;
@@ -149,6 +149,7 @@ export type ComposedActionPayload = {
   targetPlayerId?: string | undefined;
   stroke?: { id: string; points: Array<{ x: number; y: number }> } | undefined;
   clear?: boolean | undefined;
+  elapsedMs?: number | undefined;
 };
 
 export type GameAction =

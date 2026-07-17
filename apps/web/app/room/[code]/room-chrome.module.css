@@ -15,6 +15,8 @@
 .movieRoom[data-original-game='sound-check'] :global(.join-panel)::before { content: '◖'; }
 .movieRoom[data-original-game='story-chain'] :global(.join-panel)::before { content: '✦'; }
 .movieRoom[data-original-game='word-duel'] :global(.join-panel)::before { content: 'W'; font-family: 'Space Grotesk'; font-weight: 800; }
+.movieRoom[data-original-game='second-sense'] { --cinema-gold: #ff4328; background: radial-gradient(circle at 50% -8%, rgba(255,67,40,.16), transparent 31%), radial-gradient(circle at 11% 72%, rgba(104,49,128,.17), transparent 27%), #09070b; }
+.movieRoom[data-original-game='second-sense'] :global(.join-panel)::before { content: '02.00'; right: -60px; font: 800 92px 'Space Grotesk'; letter-spacing: -7px; }
 .movieRoom :global(.join-panel)::after { content: ''; position: absolute; top: 0; bottom: 0; left: calc(100% - 352px); border-left: 2px dashed rgba(35,29,22,.18); }
 .ticketPunch { position: absolute; left: 24px; top: 24px; padding: 7px 10px; color: #a04431; border: 1px solid #a04431; border-radius: 50%; font-size: 7px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; transform: rotate(-8deg); }
 .movieRoom :global(.join-panel .eyebrow) { color: #9b4431; }
@@ -34,6 +36,7 @@
 .movieRoom[data-original-game='sound-check'] :global(.lobby-hero)::after { content: 'SOUNDCHECK'; }
 .movieRoom[data-original-game='story-chain'] :global(.lobby-hero)::after { content: 'STORYCHAIN'; }
 .movieRoom[data-original-game='word-duel'] :global(.lobby-hero)::after { content: 'WORDDUEL'; }
+.movieRoom[data-original-game='second-sense'] :global(.lobby-hero)::after { content: 'SECOND SENSE'; }
 .lobbyEdition { display: flex; justify-content: space-between; margin-bottom: 50px; padding-bottom: 13px; border-bottom: 1px solid rgba(25,21,16,.16); color: #82796e; font-size: 7px; font-weight: 900; letter-spacing: 1.3px; text-transform: uppercase; }
 .movieRoom :global(.lobby-hero .eyebrow) { color: #9b4431; }
 .movieRoom :global(.lobby-hero h1) { max-width: 680px; margin-top: 12px; font-size: clamp(62px,8vw,96px); line-height: .85; letter-spacing: -7px; }

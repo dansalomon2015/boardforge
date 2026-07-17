@@ -18,12 +18,14 @@ import {
   createRandomSoundCheckPack,
   createStoryChainSpec,
   createWordDuelSpec,
+  createSecondSenseSpec,
   defaultMovieMimeSpec,
   defaultWordTrapSpec,
   defaultDrawBattleSpec,
   defaultSoundCheckSpec,
   defaultStoryChainSpec,
   defaultWordDuelSpec,
+  defaultSecondSenseSpec,
   demoGameSpecs,
   movieMimeSetupSchema,
   wordTrapSetupSchema,
@@ -31,6 +33,7 @@ import {
   soundCheckSetupSchema,
   storyChainSetupSchema,
   wordDuelSetupSchema,
+  secondSenseSetupSchema,
   partyPulseSpec,
   spaceHeistSpec,
   systemsLabSpec,
@@ -57,6 +60,7 @@ import {
   type ComposedBalanceEvidence,
 } from "@boardforge/llm";
 import type {
+  GameAction,
   GameActionEnvelope,
   GameSummary,
   JoinRoomPayload,
@@ -110,11 +114,12 @@ type Room = {
   seed: string | null;
   eventSequence: number;
   operationQueue: Promise<void>;
+  timingStartedAtByPlayer: Map<string, number>;
   state: GameState | ComposedGameState | null;
 };
 
 const rooms = new Map<string, Room>();
-const availableDemoSpecs: BoardGameSpec[] = [...demoGameSpecs, cinemaCharadesSpec, defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec, defaultStoryChainSpec, defaultWordDuelSpec, systemsLabSpec];
+const availableDemoSpecs: BoardGameSpec[] = [...demoGameSpecs, cinemaCharadesSpec, defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec, defaultStoryChainSpec, defaultWordDuelSpec, defaultSecondSenseSpec, systemsLabSpec];
 const llm = createLlmProvider({
   provider: config.llmProvider,
   apiKey: config.openAiApiKey,
@@ -132,6 +137,51 @@ const seededBlueprints: BlueprintRecord[] = availableDemoSpecs.map((spec) => {
     ...(playtest ? { playtest } : {}),
   };
 });
+
+type TimingActionKind = "timing_start" | "timing_stop" | "timing_advance";
+
+function timingActionKind(spec: BoardGameSpec, action: GameAction): TimingActionKind | null {
+  if (spec.template !== "composed" || action.type !== "COMPOSED_ACTION") return null;
+  const kind = spec.actions.find((candidate) => candidate.id === action.actionId)?.kind;
+  return kind === "timing_start" || kind === "timing_stop" || kind === "timing_advance" ? kind : null;
+}
+
+function actionWithoutServerTiming(spec: BoardGameSpec, action: GameAction): GameAction {
+  if (timingActionKind(spec, action) !== "timing_stop" || action.type !== "COMPOSED_ACTION") return action;
+  const { elapsedMs: _elapsedMs, ...clientPayload } = action.payload ?? {};
+  return {
+    ...action,
+    ...(Object.keys(clientPayload).length > 0 ? { payload: clientPayload } : { payload: undefined }),
+  };
+}
+
+function sameRequestedAction(spec: BoardGameSpec, received: GameAction, persisted: GameAction): boolean {
+  return JSON.stringify(actionWithoutServerTiming(spec, received)) === JSON.stringify(actionWithoutServerTiming(spec, persisted));
+}
+
+function restoreTimingStarts(spec: BoardGameSpec, events: RoomEventRecord[]): Map<string, number> {
+  const starts = new Map<string, number>();
+  for (const event of events) {
+    const kind = timingActionKind(spec, event.action);
+    if (kind === "timing_start") starts.set(event.actorId, Date.parse(event.createdAt));
+    if (kind === "timing_stop") starts.delete(event.actorId);
+    if (kind === "timing_advance") starts.clear();
+  }
+  return starts;
+}
+
+function checkpointChecksumMatches(state: GameState | ComposedGameState, storedCheckpoint: unknown, storedChecksum: string): boolean {
+  if (stateChecksum(state) === storedChecksum) return true;
+  if (typeof storedCheckpoint !== "object" || storedCheckpoint === null || Array.isArray(storedCheckpoint)) return false;
+  // Preserve checksum protection while allowing newer engines to add top-level state buckets.
+  const current = state as unknown as Record<string, unknown>;
+  const legacyProjection: Record<string, unknown> = {};
+  for (const key of Object.keys(storedCheckpoint)) {
+    if (!(key in current)) return false;
+    legacyProjection[key] = current[key];
+  }
+  return stateChecksum(legacyProjection as unknown as GameState) === storedChecksum;
+}
 const blueprintStore = await createBlueprintStore({
   databaseUrl: config.databaseUrl,
   requireDatabase: config.requireDatabase,
@@ -526,7 +576,7 @@ app.get("/health", async () => ({
 }));
 
 app.get("/api/games", async () => ({
-  games: [defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec, defaultStoryChainSpec, defaultWordDuelSpec].map((spec) => ({ id: spec.id, ...summary(spec) })),
+  games: [defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec, defaultStoryChainSpec, defaultWordDuelSpec, defaultSecondSenseSpec].map((spec) => ({ id: spec.id, ...summary(spec) })),
   provider: llm.name,
 }));
 
@@ -825,6 +875,32 @@ app.post("/api/word-duel/blueprints", async (request, reply) => {
     releaseStatus,
     themeId: setupResult.data.themeId,
     difficulty: setupResult.data.difficulty,
+    game: summary(spec),
+    playtest: { status: playtest.status, simulations: playtest.simulations, completedSimulations: playtest.completedSimulations },
+  });
+});
+
+const secondSenseBodySchema = z.object({
+  themeId: composedThemeIdSchema.default("cyberpunk"),
+  tempo: z.enum(["quickfire", "classic", "mindbreaker"]).default("classic"),
+}).strict();
+
+app.post("/api/second-sense/blueprints", async (request, reply) => {
+  const parsed = secondSenseBodySchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ error: "Invalid Second Sense setup.", issues: parsed.error.issues });
+  const setupResult = secondSenseSetupSchema.safeParse(parsed.data);
+  if (!setupResult.success) return reply.code(400).send({ error: "Invalid Second Sense setup.", issues: setupResult.error.issues });
+  const spec = createSecondSenseSpec(setupResult.data);
+  const blueprintId = `${spec.id}-${crypto.randomUUID().slice(0, 8)}`;
+  await blueprintStore.saveBlueprint({ id: blueprintId, spec, status: "playtesting", provider: "boardforge-rules" });
+  const playtest = runComposedPlaytest(spec, { simulations: 24, seed: `release:${blueprintId}` });
+  const releaseStatus = playtest.status === "passed" ? "release_ready" : "needs_review";
+  await blueprintStore.savePlaytest(blueprintId, releaseStatus, playtest);
+  return reply.code(201).send({
+    blueprintId,
+    releaseStatus,
+    themeId: setupResult.data.themeId,
+    tempo: setupResult.data.tempo,
     game: summary(spec),
     playtest: { status: playtest.status, simulations: playtest.simulations, completedSimulations: playtest.completedSimulations },
   });
@@ -1191,6 +1267,7 @@ app.post("/api/rooms", async (request, reply) => {
     seed: null,
     eventSequence: 0,
     operationQueue: Promise.resolve(),
+    timingStartedAtByPlayer: new Map(),
     state: null,
   };
   await blueprintStore.saveRoom(persistedRoom(room));
@@ -1239,6 +1316,7 @@ const actionSchema = z.discriminatedUnion("type", [
         points: z.array(z.object({ x: z.number().min(0).max(600), y: z.number().min(0).max(340) }).strict()).min(2).max(160),
       }).strict().optional(),
       clear: z.boolean().optional(),
+      elapsedMs: z.number().int().min(100).max(30_000).optional(),
     }).strict().optional(),
   }).strict(),
 ]);
@@ -1265,6 +1343,7 @@ const persistedStringMapSchema = z.record(z.string(), z.string());
 const persistedEventSchema = z.object({
   id: z.string().uuid(),
   roomCode: z.string().regex(/^[A-Z2-9]{6}$/),
+  createdAt: z.string().datetime(),
   sequence: z.number().int().positive(),
   actorId: z.string().uuid(),
   actorIsHost: z.boolean(),
@@ -1345,7 +1424,7 @@ async function restorePersistedRooms(): Promise<void> {
       if (state && record.checkpointRevision !== null && state.revision !== record.checkpointRevision) {
         throw new Error(`Checkpoint revision mismatch: replay=${state.revision}, stored=${record.checkpointRevision}.`);
       }
-      if (state && record.checkpointChecksum && stateChecksum(state) !== record.checkpointChecksum) {
+      if (state && record.checkpointChecksum && !checkpointChecksumMatches(state, record.checkpoint, record.checkpointChecksum)) {
         throw new Error("Checkpoint checksum does not match deterministic replay.");
       }
       const room: Room = {
@@ -1360,12 +1439,13 @@ async function restorePersistedRooms(): Promise<void> {
         seed: record.seed,
         eventSequence: events.length,
         operationQueue: Promise.resolve(),
+        timingStartedAtByPlayer: restoreTimingStarts(blueprint.spec, events),
         state,
       };
       rooms.set(room.code, room);
       await blueprintStore.saveRoom(persistedRoom(room));
     } catch (error) {
-      app.log.error({ roomCode: record.code, error }, "Persisted room failed validation and was not restored");
+      app.log.error({ roomCode: record.code, err: error }, "Persisted room failed validation and was not restored");
     }
   }
 }
@@ -1546,6 +1626,7 @@ io.on("connection", (socket: Socket) => {
       ack?: (response: SocketAck<{ revision: number }>) => void,
     ) => {
       try {
+        const receivedAt = Date.now();
         const parsed = actionEnvelopeSchema.parse(payload);
         const code = parsed.code;
         const room = rooms.get(code);
@@ -1556,7 +1637,7 @@ io.on("connection", (socket: Socket) => {
         const result = await enqueueRoom(room, async () => {
           const duplicate = await blueprintStore.findRoomEvent(room.code, parsed.idempotencyKey);
           if (duplicate) {
-            if (duplicate.actorId !== player.id || JSON.stringify(duplicate.action) !== JSON.stringify(parsed.action)) {
+            if (duplicate.actorId !== player.id || !sameRequestedAction(room.spec, parsed.action, duplicate.action)) {
               throw new GameRuleError("This idempotency key belongs to a different action.");
             }
             return { revision: duplicate.resultingRevision, changed: false };
@@ -1566,12 +1647,20 @@ io.on("connection", (socket: Socket) => {
           if (currentState.revision !== parsed.expectedRevision) {
             throw new GameRuleError(`Stale room revision. Expected ${currentState.revision}.`);
           }
+          const timingKind = timingActionKind(room.spec, parsed.action);
+          let effectiveAction = parsed.action;
+          if (timingKind === "timing_stop" && parsed.action.type === "COMPOSED_ACTION") {
+            const startedAt = room.timingStartedAtByPlayer.get(player.id);
+            if (startedAt === undefined) throw new GameRuleError("Start the server clock before stopping it.");
+            const elapsedMs = Math.max(100, Math.min(30_000, receivedAt - startedAt));
+            effectiveAction = { ...parsed.action, payload: { elapsedMs } };
+          }
           let nextState: GameState | ComposedGameState;
           if (currentState.template === "composed" && room.spec.template === "composed") {
-            if (parsed.action.type !== "COMPOSED_ACTION") throw new ComposedGameRuleError("This action is not supported by the composed engine.");
+            if (effectiveAction.type !== "COMPOSED_ACTION") throw new ComposedGameRuleError("This action is not supported by the composed engine.");
             nextState = reduceComposedGame(
               currentState,
-              { ...parsed.action, idempotencyKey: parsed.idempotencyKey },
+              { ...effectiveAction, idempotencyKey: parsed.idempotencyKey },
               player.id,
               player.isHost,
               room.spec,
@@ -1585,17 +1674,21 @@ io.on("connection", (socket: Socket) => {
           const event: RoomEventRecord = {
             id: crypto.randomUUID(),
             roomCode: room.code,
+            createdAt: new Date(receivedAt).toISOString(),
             sequence: room.eventSequence + 1,
             actorId: player.id,
             actorIsHost: player.isHost,
             expectedRevision: parsed.expectedRevision,
             resultingRevision: nextState.revision,
             idempotencyKey: parsed.idempotencyKey,
-            action: parsed.action,
+            action: effectiveAction,
           };
           await blueprintStore.appendRoomEvent(persistedRoom(room, nextState), event);
           room.state = nextState;
           room.eventSequence = event.sequence;
+          if (timingKind === "timing_start") room.timingStartedAtByPlayer.set(player.id, receivedAt);
+          if (timingKind === "timing_stop") room.timingStartedAtByPlayer.delete(player.id);
+          if (timingKind === "timing_advance") room.timingStartedAtByPlayer.clear();
           return { revision: nextState.revision, changed: true };
         });
         if (result.changed) emitRoom(room);

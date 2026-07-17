@@ -83,6 +83,7 @@ export const composedComponentSchema = z.discriminatedUnion("kind", [
   z.object({ ...componentBase, kind: z.literal("media"), mediaId: idSchema }).strict(),
   z.object({ ...componentBase, kind: z.literal("story"), opening: textSourceSchema, actionId: idSchema, label: shortTextSchema.optional() }).strict(),
   z.object({ ...componentBase, kind: z.literal("word_duel"), minLength: z.number().int().min(3).max(12), maxLength: z.number().int().min(4).max(16) }).strict(),
+  z.object({ ...componentBase, kind: z.literal("second_sense"), minTargetMs: z.number().int().min(500).max(10_000), maxTargetMs: z.number().int().min(1_000).max(15_000), precisionMs: z.number().int().min(10).max(100) }).strict(),
 ]);
 
 const choiceSchema = z.object({ id: idSchema, label: shortTextSchema, description: shortTextSchema.optional(), icon: z.string().max(8).optional(), correct: z.boolean().optional() }).strict();
@@ -148,6 +149,9 @@ export const effectSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("register_secret_word"), wordDuelId: idSchema }).strict(),
   z.object({ kind: z.literal("guess_letter"), wordDuelId: idSchema }).strict(),
   z.object({ kind: z.literal("guess_word"), wordDuelId: idSchema }).strict(),
+  z.object({ kind: z.literal("start_timing"), secondSenseId: idSchema }).strict(),
+  z.object({ kind: z.literal("stop_timing"), secondSenseId: idSchema }).strict(),
+  z.object({ kind: z.literal("advance_timing_round"), secondSenseId: idSchema }).strict(),
   z.object({ kind: z.literal("draw_cards"), deckId: idSchema, count: z.number().int().min(1).max(12), target: z.enum(["actor", "active_player"]) }).strict(),
   z.object({ kind: z.literal("discard_selected_card"), deckId: idSchema, target: z.enum(["actor", "active_player"]).default("actor") }).strict(),
   z.object({ kind: z.literal("move_selected_token"), boardId: idSchema }).strict(),
@@ -164,7 +168,7 @@ export const actionDefinitionSchema = z
   .object({
     id: idSchema,
     label: shortTextSchema,
-    kind: z.enum(["advance", "choose", "text", "draw", "play_card", "move", "resource", "randomize", "buzz", "order", "match", "complete_challenge", "select_player", "sketch", "secret_word", "letter_guess", "word_guess"]),
+    kind: z.enum(["advance", "choose", "text", "draw", "play_card", "move", "resource", "randomize", "buzz", "order", "match", "complete_challenge", "select_player", "sketch", "secret_word", "letter_guess", "word_guess", "timing_start", "timing_stop", "timing_advance"]),
     actor: z.enum(["host", "active_player", "any_player", "all_players", "team", "team_captain", "opponents", "guessers"]),
     oncePerPhase: z.boolean().default(false),
     optionIds: z.array(idSchema).min(2).max(12).optional(),
@@ -175,6 +179,7 @@ export const actionDefinitionSchema = z
     answerDeckId: idSchema.optional(),
     requiredWordDeckId: idSchema.optional(),
     wordDuelId: idSchema.optional(),
+    secondSenseId: idSchema.optional(),
     effects: z.array(effectSchema).max(12).default([]),
   })
   .strict();
@@ -318,6 +323,7 @@ function semanticIssues(spec: ComposedGameSpec): ComposedValidationIssue[] {
   const variableIds = ids(spec.variables);
   const componentById = new Map(spec.components.map((component) => [component.id, component]));
   const wordDuelIds = new Set(spec.components.filter((component) => component.kind === "word_duel").map((component) => component.id));
+  const secondSenseIds = new Set(spec.components.filter((component) => component.kind === "second_sense").map((component) => component.id));
   const actionById = new Map(spec.actions.map((action) => [action.id, action]));
 
   if (!phaseIds.has(spec.setup.startingPhaseId)) add("UNKNOWN_PHASE", "setup.startingPhaseId", "Starting phase does not exist.");
@@ -330,6 +336,7 @@ function semanticIssues(spec: ComposedGameSpec): ComposedValidationIssue[] {
     if (effect.kind === "reveal" && !revealIds.has(effect.revealId) && !clueIds.has(effect.revealId)) add("UNKNOWN_REVEAL", path, `Unknown reveal or clue: ${effect.revealId}.`);
     if (effect.kind === "set_variable" && !variableIds.has(effect.variableId)) add("UNKNOWN_VARIABLE", path, `Unknown variable: ${effect.variableId}.`);
     if ((effect.kind === "register_secret_word" || effect.kind === "guess_letter" || effect.kind === "guess_word") && !wordDuelIds.has(effect.wordDuelId)) add("UNKNOWN_WORD_DUEL", path, `Unknown word duel: ${effect.wordDuelId}.`);
+    if ((effect.kind === "start_timing" || effect.kind === "stop_timing" || effect.kind === "advance_timing_round") && !secondSenseIds.has(effect.secondSenseId)) add("UNKNOWN_SECOND_SENSE", path, `Unknown Second Sense board: ${effect.secondSenseId}.`);
   };
 
   spec.decks.forEach((deck, index) => {
@@ -358,6 +365,7 @@ function semanticIssues(spec: ComposedGameSpec): ComposedValidationIssue[] {
     if (component.kind === "media" && !mediaIds.has(component.mediaId)) add("UNKNOWN_MEDIA", path, `Unknown media: ${component.mediaId}.`);
     if (component.kind === "story" && !actionIds.has(component.actionId)) add("UNKNOWN_ACTION", path, `Unknown story action: ${component.actionId}.`);
     if (component.kind === "word_duel" && component.minLength > component.maxLength) add("WORD_DUEL_LENGTH_INVALID", path, "Word duel minLength must not exceed maxLength.");
+    if (component.kind === "second_sense" && component.minTargetMs >= component.maxTargetMs) add("SECOND_SENSE_RANGE_INVALID", path, "Second Sense minTargetMs must be lower than maxTargetMs.");
   });
 
   spec.actions.forEach((action, index) => {
@@ -376,6 +384,8 @@ function semanticIssues(spec: ComposedGameSpec): ComposedValidationIssue[] {
     if (action.answerDeckId && action.requiredWordDeckId) add("ACTION_TEXT_VALIDATION_AMBIGUOUS", path, "A text action cannot use both exact-answer and required-word validation.");
     if (["secret_word", "letter_guess", "word_guess"].includes(action.kind) && (!action.wordDuelId || !wordDuelIds.has(action.wordDuelId))) add("ACTION_WORD_DUEL_INVALID", path, "Word duel actions require a known wordDuelId.");
     if (action.wordDuelId && !["secret_word", "letter_guess", "word_guess"].includes(action.kind)) add("ACTION_WORD_DUEL_NOT_ALLOWED", path, "wordDuelId is only valid for word duel actions.");
+    if (["timing_start", "timing_stop", "timing_advance"].includes(action.kind) && (!action.secondSenseId || !secondSenseIds.has(action.secondSenseId))) add("ACTION_SECOND_SENSE_INVALID", path, "Second Sense actions require a known secondSenseId.");
+    if (action.secondSenseId && !["timing_start", "timing_stop", "timing_advance"].includes(action.kind)) add("ACTION_SECOND_SENSE_NOT_ALLOWED", path, "secondSenseId is only valid for Second Sense actions.");
     action.effects.forEach((effect, effectIndex) => checkEffect(effect, `${path}.effects.${effectIndex}`));
   });
 
@@ -412,6 +422,7 @@ function semanticIssues(spec: ComposedGameSpec): ComposedValidationIssue[] {
       if (action.kind === "select_player") return phaseComponents.some((component) => component.kind === "teams" || component.kind === "players");
       if (action.kind === "sketch") return phaseComponents.some((component) => component.kind === "drawing");
       if (action.kind === "secret_word" || action.kind === "letter_guess" || action.kind === "word_guess") return phaseComponents.some((component) => component.kind === "word_duel" && component.id === action.wordDuelId);
+      if (action.kind === "timing_start" || action.kind === "timing_stop" || action.kind === "timing_advance") return phaseComponents.some((component) => component.kind === "second_sense" && component.id === action.secondSenseId);
       return false;
     };
     for (const id of phase.actionIds) {

@@ -87,6 +87,14 @@ function stringId(value: unknown): string | null {
 
 function payloadForAction(view: ComposedGameView, action: ViewAction, persona: VirtualAgentPersona, seed: string): ComposedActionPayload | null {
   const wordDuel = view.components.find((component) => component.kind === "word_duel");
+  const secondSense = view.components.find((component) => component.kind === "second_sense");
+  if (action.kind === "timing_stop") {
+    const targetMs = typeof secondSense?.data.targetMs === "number" ? secondSense.data.targetMs : 2_000;
+    const playerIndex = Math.max(0, view.players.findIndex((player) => player.id === view.selfPlayerId));
+    const personaOffset = persona === "careful" ? 0 : persona === "bold" ? 11 : persona === "cooperative" ? 23 : persona === "chaotic" ? 47 : 71;
+    return { elapsedMs: targetMs + playerIndex * 37 + personaOffset + numberHash(seed) % 13 };
+  }
+  if (action.kind === "timing_start" || action.kind === "timing_advance") return {};
   if (action.kind === "secret_word") {
     const minLength = typeof wordDuel?.data.minLength === "number" ? wordDuel.data.minLength : 4;
     const maxLength = typeof wordDuel?.data.maxLength === "number" ? wordDuel.data.maxLength : 12;
