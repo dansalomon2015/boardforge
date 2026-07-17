@@ -5,6 +5,7 @@ export const cinemaCharadesSpec: ComposedGameSpec = {
   schemaVersion: 2,
   id: "cinema_charades",
   template: "composed",
+  experienceId: "movie_mime",
   title: "Cinéma sans paroles",
   description:
     "Deux équipes font deviner des films en les mimant, avec une nouvelle carte et un temps limité à chaque manche.",
@@ -249,6 +250,7 @@ export const systemsLabSpec: ComposedGameSpec = {
   schemaVersion: 2,
   id: "systems_lab",
   template: "composed",
+  experienceId: "generic",
   title: "Laboratoire des mécaniques",
   description: "Une fixture jouable qui exerce chaque contrôle humain autorisé par le compilateur BoardForge.",
   theme: "laboratory",

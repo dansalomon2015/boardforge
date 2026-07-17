@@ -497,6 +497,7 @@ export function createWordTrapSpec(packInput: WordTrapPack): ComposedGameSpec {
     schemaVersion: 2,
     id: `word_trap_${suffix}`.slice(0, 48),
     template: "composed",
+    experienceId: "word_trap",
     title: "WordTrap",
     description: pack.preferences
       ? `A forbidden-word challenge tailored around ${pack.preferences}.`

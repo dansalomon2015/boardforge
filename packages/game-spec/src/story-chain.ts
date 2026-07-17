@@ -201,6 +201,7 @@ export function createStoryChainSpec(packInput: StoryChainPack): ComposedGameSpe
     schemaVersion: 2,
     id: `story_chain_${suffix}`.slice(0, 48),
     template: "composed",
+    experienceId: "story_chain",
     title: "StoryChain",
     description: pack.preferences
       ? `A shared story inspired by your idea: “${pack.preferences}”.`

@@ -37,6 +37,7 @@ export function createWordDuelSpec(setupInput: WordDuelSetupInput): ComposedGame
     schemaVersion: 2,
     id: `word_duel_${suffix}`.slice(0, 48),
     template: "composed",
+    experienceId: "word_duel",
     title: "WordDuel",
     description:
       "Lock in a secret word, test your opponent one letter at a time, and crack their word before they crack yours.",

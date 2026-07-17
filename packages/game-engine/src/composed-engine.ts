@@ -130,6 +130,7 @@ export type ResolvedComponentView = {
 export type ComposedGameView = {
   kind: "composed";
   code: string;
+  experienceId: ComposedGameSpec["experienceId"];
   title: string;
   description: string;
   theme: ComposedGameSpec["theme"];
@@ -1505,6 +1506,7 @@ export function projectComposedGameState(
   return {
     kind: "composed",
     code,
+    experienceId: spec.experienceId,
     title: spec.title,
     description: spec.description,
     theme: spec.theme,

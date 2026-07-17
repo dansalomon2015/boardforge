@@ -639,6 +639,7 @@ export function createMovieMimeSpec(packInput: MimeFilmPack): ComposedGameSpec {
     schemaVersion: 2,
     id: `movie_mime_${suffix}`.slice(0, 48),
     template: "composed",
+    experienceId: "movie_mime",
     title: "CineMimes",
     description: pack.preferences
       ? `A movie-charades game tailored around ${pack.preferences}.`

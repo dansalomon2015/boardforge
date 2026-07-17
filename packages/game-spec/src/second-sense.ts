@@ -37,6 +37,7 @@ export function createSecondSenseSpec(setupInput: SecondSenseSetupInput): Compos
     schemaVersion: 2,
     id: `second_sense_${suffix}`.slice(0, 48),
     template: "composed",
+    experienceId: "second_sense",
     title: "Second Sense",
     description:
       "Feel the target time without a clock, stop on instinct, and survive the cut until only one player remains.",

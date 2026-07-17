@@ -55,6 +55,7 @@ describe("composed deterministic engine", () => {
     expect(privateTitle).toBeTruthy();
 
     const actorView = projectComposedGameState(state, cinemaCharadesSpec, players, "MIME01", actorId);
+    expect(actorView.experienceId).toBe("movie_mime");
     const otherId = players.find((player) => player.id !== actorId)!.id;
     const otherView = projectComposedGameState(state, cinemaCharadesSpec, players, "MIME01", otherId);
     expect(JSON.stringify(actorView)).toContain(privateTitle!);
@@ -131,6 +132,7 @@ const systemsSpec: ComposedGameSpec = {
   schemaVersion: 2,
   id: "systems_lab",
   template: "composed",
+  experienceId: "generic",
   title: "Systems Lab",
   description: "A bounded fixture exercising reusable board-game systems.",
   theme: "laboratory",

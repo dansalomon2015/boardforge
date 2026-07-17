@@ -214,6 +214,7 @@ function summary(spec: BoardGameSpec): GameSummary {
     maxPlayers: spec.maxPlayers,
     durationMinutes: spec.template === "composed" ? (spec.suggestedDurationMinutes ?? 15) : spec.durationMinutes,
     accent: spec.template === "composed" ? (typeof spec.theme === "string" ? spec.theme : "violet") : spec.accent,
+    ...(spec.template === "composed" ? { experienceId: spec.experienceId } : {}),
   };
 }
 

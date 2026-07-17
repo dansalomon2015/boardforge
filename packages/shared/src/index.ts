@@ -1,5 +1,15 @@
 export type GameTemplate = "hidden_roles" | "quiz_vote" | "composed";
 
+export type ComposedExperienceId =
+  | "movie_mime"
+  | "word_trap"
+  | "draw_battle"
+  | "sound_check"
+  | "story_chain"
+  | "word_duel"
+  | "second_sense"
+  | "generic";
+
 export type PublicPlayer = {
   id: string;
   name: string;
@@ -15,6 +25,7 @@ export type GameSummary = {
   maxPlayers: number;
   durationMinutes: number;
   accent: string;
+  experienceId?: ComposedExperienceId | undefined;
 };
 
 export type LobbyView = {
@@ -168,6 +179,7 @@ export type ResolvedGameComponent = {
 export type ComposedGameView = {
   kind: "composed";
   code: string;
+  experienceId: ComposedExperienceId;
   title: string;
   description: string;
   theme: ComposedTheme;

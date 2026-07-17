@@ -213,6 +213,7 @@ export function createSoundCheckSpec(packInput: SoundCheckPack): ComposedGameSpe
     schemaVersion: 2,
     id: `sound_check_${suffix}`.slice(0, 48),
     template: "composed",
+    experienceId: "sound_check",
     title: "SoundCheck",
     description: pack.preferences
       ? `A voice-only sound showdown tailored around ${pack.preferences}.`

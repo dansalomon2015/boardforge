@@ -209,6 +209,7 @@ export function createDrawBattleSpec(packInput: DrawBattlePack): ComposedGameSpe
     schemaVersion: 2,
     id: `draw_battle_${suffix}`.slice(0, 48),
     template: "composed",
+    experienceId: "draw_battle",
     title: "DrawBattle",
     description: pack.preferences
       ? `A live drawing showdown tailored around ${pack.preferences}.`
