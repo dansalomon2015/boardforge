@@ -1,28 +1,45 @@
 # BoardForge
 
-> Not a rule generator — a playable game compiler.
+> A premium collection of social games, ready to play together.
 
-BoardForge turns one natural-language game idea into a validated `GameSpec`, tests it with virtual players, and runs it in a deterministic multiplayer room.
+BoardForge is a mobile-first multiplayer game night platform built for the OpenAI Build Week hackathon. Players choose a designed game, customize its visual theme and content, create a room, form teams when the game calls for them, and play from their own devices.
 
-This repository contains a working local slice for the OpenAI Build Week hackathon. The public product is prompt-first: the creator does not select a predefined game family, player count or duration. A model infers those properties and combines audited primitives—phases, actions, rules, cards, boards, resources, randomizers, private views, buzzers, ordering and matching—without ever generating executable behavior.
+The public product is a curated game collection—not a universal game generator. Every game mechanic is implemented and tested in deterministic TypeScript. OpenAI is used only for bounded creative content, virtual-playtest critique and allowlisted balance suggestions; it never writes or executes game logic.
 
-Historical hidden-role and quiz/vote engines remain only as internal compatibility fixtures and are no longer exposed on the landing page. `Cinema Charades` is the seeded version-2 `ComposedGameSpec` fallback.
+## Included games
 
-## Non-negotiable product invariants
+- Movie Mime — team charades with AI-curated movie cards.
+- Word Trap — describe a secret word without using its forbidden clues.
+- Draw Battle — fast team drawing rounds.
+- Sound Check — imitate sounds and let your team guess.
+- Story Chain — build a shared story around private twists.
+- Word Duel — discover your opponent's hidden word one letter at a time.
+- Second Sense — an elimination game of timing and intuition.
 
-- GPT-5.6 returns structured data only; generated code is never evaluated or executed.
-- Every `GameSpec` is validated before the engine can load it.
-- The authoritative game engine is deterministic TypeScript running on the server.
-- Multiplayer rooms update in real time.
-- A player receives public state plus only that player's private view.
-- The complete project starts locally with Docker Compose.
+Twenty visual themes can be applied across the collection.
 
-## Planning documents
+## Safety and architecture
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Implementation backlog](docs/BACKLOG.md)
-- [Delivery plan](docs/DELIVERY_PLAN.md)
-- [Implementation progress](docs/PROGRESS.md)
+- Strict Zod schemas reject unknown or invalid structured content.
+- The server-authoritative engine owns state transitions, timers, scores and winners.
+- LLM output is data only; generated code, formulas and scripts are never evaluated.
+- Each player receives a server-built view containing only the information they may see.
+- Actions are revisioned and idempotent.
+- Explicit seeds and append-only events support deterministic replay.
+- Virtual agents exercise each game before a blueprint becomes room-ready.
+
+## Repository
+
+```text
+apps/web             Next.js mobile-first UI
+apps/server          Fastify API and Socket.IO gateway
+packages/game-spec   strict schemas, curated specs and content catalogues
+packages/game-engine deterministic reducers, projections, simulations and replay
+packages/llm         bounded content and review provider abstraction
+packages/shared      transport contracts and shared utilities
+```
+
+Design and delivery notes live in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/BACKLOG.md](docs/BACKLOG.md), [docs/DELIVERY_PLAN.md](docs/DELIVERY_PLAN.md) and [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## Run locally
 
@@ -30,76 +47,42 @@ Requirements: Node.js 22+ and pnpm 11.7+.
 
 ```bash
 pnpm install
+cp .env.example .env
 pnpm dev
 ```
 
-Then open:
+Open the web app at `http://localhost:3000`; API health is available at `http://localhost:4000/health`.
 
-- web app: `http://localhost:3000`
-- API health: `http://localhost:4000/health`
+The provider is explicit:
 
-The app supports two explicitly labeled providers:
+- `LLM_PROVIDER=openai` uses the OpenAI Responses API for bounded game content and review.
+- `LLM_PROVIDER=fake` uses deterministic local catalogues for offline development and repeatable tests.
 
-- `LLM_PROVIDER=openai`: live GPT-5.6 generation through the Responses API, JSON-constrained output and strict local validation;
-- `LLM_PROVIDER=fake`: deterministic offline compiler for demos without API access.
+Set `OPENAI_API_KEY` only in your local `.env`; environment files remain outside Git. `OPENAI_MODEL` selects the content model and `OPENAI_REVIEW_MODEL` can select a separate critique model. The app falls back safely to audited catalogue content when live content generation fails.
 
-Copy `.env.example` to `.env`, set `OPENAI_API_KEY`, and keep that local file out of version control. `OPENAI_MODEL` controls GameSpec generation while `OPENAI_REVIEW_MODEL` can route compact critique and patch work to a lower-cost GPT-5.6 family model. The local defaults use `gpt-5.6-terra` for generation and `gpt-5.6-luna` for review.
-
-Run the complete verification gate:
+## Verify
 
 ```bash
 pnpm check
 ```
 
-With the dev servers running, complete all three demo engines through real WebSocket clients:
+With both development servers running, exercise the real multiplayer protocol:
 
 ```bash
 pnpm smoke:multiplayer
 ```
 
-Docker Compose is also available:
+Run the reproducible stack with PostgreSQL:
 
 ```bash
 docker compose up --build
 ```
 
-The Compose stack waits for PostgreSQL and the API health check before starting the standalone Next.js server. Generated rooms and accepted actions are restored from PostgreSQL when the server container restarts.
-
-## Current implementation
-
-- strict Zod `GameSpec` validation with unknown-field rejection;
-- prompt-only creator surface plus one composed `Cinema Charades` fallback blueprint;
-- deterministic server-side TypeScript reducers for both legacy templates and the composed engine;
-- 20 parameterized visual themes and a reusable game-component library;
-- closed schemas for flows, actions, rules, private cards, boards, resources, randomizers, buzzers, ordering and matching;
-- semantic human-playability gate: every generated action must resolve to a compatible, audited room control before a spec can be released;
-- generic room controls for choices, text, decks, hands, boards, resources, dice/spinners, buzzers, ordering, matching, challenges, drawing and media;
-- AI-authored team slots and explicit policies supporting one or several people per team; real players choose their own team in the lobby;
-- per-player hidden-state projection;
-- Fastify API and Socket.IO room service;
-- PostgreSQL-backed immutable blueprint revisions, playtest reports, structured AI critiques and balance patches, with idempotent startup migrations;
-- durable asynchronous compilation jobs: the creator receives `202 Accepted`, follows progress through Server-Sent Events with polling fallback, and can refresh while the server continues the OpenAI workflow;
-- animated compilation screen exposing generation, strict validation, virtual playtest and structured-review stages without holding a browser request open;
-- rotating reconnect credentials: the browser stores the token, while the server keeps only its SHA-256 hash and rejects stale or cross-player sessions;
-- revision-aware action envelopes with one idempotency key across every engine;
-- append-only PostgreSQL room events, deterministic replay checksums and server-start room restoration;
-- live GPT-5.6 provider plus deterministic offline provider behind `LlmProvider`;
-- deterministic virtual-agent release gate: 24 simulations across valid player and team configurations before room creation;
-- strict GPT critique with a verdict, evidence-backed issue categories and bounded recommendations for every generated revision;
-- combined `ReviewBundle` output: critique and optional bounded patch are produced in one call from compact structural telemetry;
-- stable prompt-cache keys for generation, review, critique and compatibility patch workflows, with token/cache/latency telemetry in server logs;
-- allowlisted `BalancePatch` revisions that are revalidated, replayed, critiqued and explicitly accepted before release;
-- creator-facing immutable revision history with accepted, proposed and rejected branches plus safe selection of any prior `release_ready` version;
-- visible GameSpec, phase, component, critique and before/after playtest evidence before room creation;
-- mobile-first creator, lobby and game-room UI, verified without horizontal overflow at 390 × 844;
-- unit tests and an automated multi-client WebSocket smoke test;
-- production builds for web and server.
-
-Blueprints, playtest reports, critiques, balance decisions, room snapshots and accepted actions survive server restarts in PostgreSQL. The server reconstructs each started room from its seed and append-only event stream, then verifies the stored checkpoint checksum before exposing it. Docker exposes BoardForge PostgreSQL on local port `5433` to avoid conflicts with an existing PostgreSQL on the conventional port.
+PostgreSQL is exposed on local port `5433`. Blueprints, rooms, rotating reconnect credentials, accepted actions and append-only room events survive server restarts.
 
 ## Status
 
-Local P0 prototype with durable asynchronous compilation, deterministic room recovery, optimized structured review, constrained balance revisions, revision history and CI. Hosted deployment, server timers, browser regression coverage and submission evidence remain.
+The seven-game local collection, deterministic simulations, real-time rooms, persistence, reconnect flow and production builds are operational. The remaining hackathon work is quality hardening, browser regression coverage, hosted deployment and submission evidence.
 
 ## License
 

@@ -10,13 +10,16 @@ describe("MemoryBlueprintStore", () => {
     await store.saveBlueprint({ id: "cinema-test", spec: cinemaCharadesSpec, status: "playtesting", provider: "test", prompt: "test prompt" });
     const report = runComposedPlaytest(cinemaCharadesSpec, { simulations: 2, seed: "persistence-test" });
     await store.savePlaytest("cinema-test", "release_ready", report);
-    const review = await new FakeLlmProvider().reviewComposedGameSpec(cinemaCharadesSpec, {
+    const provider = new FakeLlmProvider();
+    const evidence = {
       simulations: report.simulations,
       completionRate: report.completionRate,
       averageActions: report.averageActions,
       failures: report.failures,
-    });
-    await store.saveReview("cinema-test", "test", review.critique, review.suggestedPatch);
+    };
+    const critique = await provider.critiqueComposedGameSpec(cinemaCharadesSpec, evidence);
+    const suggestedPatch = await provider.proposeComposedBalancePatch(cinemaCharadesSpec, evidence, critique);
+    await store.saveReview("cinema-test", "test", critique, suggestedPatch);
 
     const stored = await store.get("cinema-test");
     expect(stored?.status).toBe("release_ready");
@@ -46,42 +49,6 @@ describe("MemoryBlueprintStore", () => {
       provider: "test",
     })).rejects.toThrow("immutable");
     expect((await store.get("immutable"))?.spec.title).toBe(cinemaCharadesSpec.title);
-  });
-
-  it("persists compilation progress and only recovers unfinished jobs", async () => {
-    const store = new MemoryBlueprintStore();
-    const now = new Date().toISOString();
-    const jobId = "00000000-0000-4000-8000-000000000200";
-    await store.createCompilationJob({
-      id: jobId,
-      prompt: "Un jeu coopératif de dessin et de déduction",
-      provider: "test",
-      status: "queued",
-      progress: 0,
-      message: "Queued",
-      attempts: 0,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    expect(await store.listRecoverableCompilationJobs()).toHaveLength(1);
-    const generating = await store.updateCompilationJob(jobId, {
-      status: "generating",
-      progress: 12,
-      message: "Generating",
-      incrementAttempts: true,
-    });
-    expect(generating.attempts).toBe(1);
-    expect(generating.progress).toBe(12);
-
-    const completed = await store.updateCompilationJob(jobId, {
-      status: "needs_review",
-      progress: 100,
-      message: "Completed",
-    });
-    expect(completed.completedAt).toBeDefined();
-    expect(await store.listRecoverableCompilationJobs()).toEqual([]);
-    expect((await store.getCompilationJob(jobId))?.status).toBe("needs_review");
   });
 
   it("persists room snapshots and append-only idempotent events", async () => {

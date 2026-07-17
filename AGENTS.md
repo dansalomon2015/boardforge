@@ -4,9 +4,9 @@ These instructions apply to the entire repository.
 
 ## Product scope
 
-Build a prompt-first, hackathon-grade compiler for social and tabletop games. The model assembles games from a closed catalogue of audited components expressed as a strictly validated `ComposedGameSpec`; it never defines executable code.
+Build a hackathon-grade, curated collection of premium social and tabletop games. Each public game has designed, deterministic mechanics expressed as a strictly validated `ComposedGameSpec`; the model may supply only bounded creative content, structured playtest critique and allowlisted balance suggestions. It never defines executable behavior.
 
-The original `hidden_roles` and `quiz_vote` templates remain compatibility fixtures while the composed engine becomes the primary architecture. Do not introduce arbitrary scripting, formulas, a marketplace, payments, accounts, or horizontal scaling before all P0 release gates pass.
+The original `hidden_roles` and `quiz_vote` templates remain compatibility fixtures while the composed engine powers the curated collection. Do not reintroduce a universal prompt-to-game compiler, arbitrary scripting, formulas, a marketplace, payments, accounts, or horizontal scaling before all P0 release gates pass.
 
 ## Safety and architecture invariants
 

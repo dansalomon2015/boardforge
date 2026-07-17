@@ -1,8 +1,18 @@
 # Implementation progress
 
-## 16 July 2026 — Durable asynchronous game compilation
+## 17 July 2026 — Curated game collection pivot
 
 Completed and verified:
+
+- retired the universal prompt-to-game journey and its asynchronous compilation API;
+- narrowed `LlmProvider` to bounded content generation, structured simulation critique and allowlisted balance patches;
+- removed the obsolete compilation progress page and its global styling;
+- repositioned BoardForge around seven authored multiplayer games with theme and content customization;
+- retained the strict composed schema, deterministic engine, virtual-agent release gate, private projections and replay architecture.
+
+## 16 July 2026 — Retired asynchronous game compilation experiment
+
+Historical implementation, removed on 17 July after the product pivot:
 
 - prompt submission now creates a persisted compilation job and immediately returns `202 Accepted` instead of holding the browser connection open during model generation;
 - PostgreSQL stores stage, progress, attempt count, user-facing status, terminal error and final blueprint link;
@@ -103,9 +113,9 @@ Completed and verified:
 - responsive room verified at 390 × 844 with no horizontal overflow;
 - full lint, typecheck, 28-unit-test, production-build and three-engine multiplayer smoke gates passing.
 
-## 15 July 2026 — Prompt-first creator and release gate
+## 15 July 2026 — Retired universal creator experiment
 
-Completed and verified:
+Historical implementation, removed on 17 July after the product pivot:
 
 - landing page rebuilt around one natural-language prompt; historical template, player-count and duration controls removed;
 - GPT-5.6 composed-spec generation through the Responses API with JSON-constrained output, strict Zod parsing and semantic validation before engine use;

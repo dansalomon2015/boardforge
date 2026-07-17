@@ -1,62 +1,54 @@
-# BoardForge MVP architecture
+# BoardForge architecture
 
-## 1. Architectural goal
+## 1. Product model
 
-BoardForge is a constrained compiler pipeline, not a free-form game-code generator:
+BoardForge is a curated multiplayer game-night platform:
 
 ```text
-Natural-language brief
-        |
-        v
-GPT-5.6 structured GameSpec proposal
-        |
-        v
-Schema + semantic validation
-        |
-        v
-Bounded playtest and critique
-        |
-        v
-Validated balance patch
-        |
-        v
-Deterministic server-side engine
-        |
-        v
-Player-specific real-time room views
+Curated game + player customization
+                 |
+                 v
+Strict setup and content validation
+                 |
+                 v
+Deterministic virtual-agent release gate
+                 |
+                 v
+Server-authoritative multiplayer room
+                 |
+                 v
+Player-specific real-time views
 ```
 
-The primary engine interprets a closed catalogue of composed mechanics. GPT-5.6 selects, configures and connects those audited mechanics but cannot add executable behavior. The two historical engines remain available during migration.
+Game mechanics are designed in the repository and interpreted by fixed TypeScript reducers. OpenAI does not invent games or executable behavior. It may select or generate bounded creative content, critique summarized deterministic playtests, and propose changes through a closed balance-patch schema.
 
-## 2. Chosen stack
+## 2. Stack
 
 | Area | Choice | Rationale |
 | --- | --- | --- |
-| Language | TypeScript, strict mode | Shared contracts and safe discriminated unions |
-| Monorepo | pnpm workspaces | Fast, simple package boundaries |
-| Web app | Next.js | Mobile-first UI and straightforward deployment |
-| Server | Fastify + Socket.IO | Explicit HTTP/WebSocket backend with room support |
-| Validation | Zod with generated JSON Schema where required | One runtime contract used by API, engine and LLM boundary |
-| Database | PostgreSQL + parameterized `pg` repository | Small auditable persistence boundary and explicit SQL migrations |
-| Active rooms | In-memory, one server instance for MVP | Removes Redis and distributed-lock complexity |
-| Tests | Vitest + Playwright | Pure engine tests and real multi-browser flows |
+| Language | TypeScript strict mode | Shared contracts and discriminated unions |
+| Monorepo | pnpm workspaces | Explicit package boundaries |
+| Web | Next.js | Mobile-first setup, lobby and room UI |
+| Server | Fastify + Socket.IO | HTTP application API and authoritative rooms |
+| Validation | Zod | One strict runtime contract at every boundary |
+| Database | PostgreSQL | Durable blueprints, players, events and checkpoints |
+| Engine | Pure TypeScript reducers | Determinism, testing and replay |
+| Tests | Vitest plus multiplayer smoke clients | Unit, integration and protocol coverage |
 | Local runtime | Docker Compose | Reproducible judge setup |
-| LLM API | OpenAI Responses API behind `LlmProvider` | Structured-output boundary and replaceable model ID |
+| AI | OpenAI Responses API behind `LlmProvider` | Replaceable, typed and bounded workflows |
 
-The deployed MVP intentionally runs one backend instance. Scaling Socket.IO across instances, shared presence and Redis adapters are post-MVP work.
+The MVP runs one backend instance. Redis, distributed presence and horizontal scaling remain out of scope.
 
 ## 3. Repository boundaries
 
 ```text
-apps/
-  web/                 creator flow, playtest report, lobby, game room
-  server/              HTTP API, WebSocket gateway, application services
-packages/
-  game-spec/           Zod schemas, JSON schema, types, version migrations
-  game-engine/         reducers, legal actions, projections, bots, replay
-  llm/                 provider interface, prompts, structured workflows
-  shared/              IDs, API DTOs, Socket.IO event contracts
-  config/              validated environment configuration
+apps/web             setup, lobby and player room views
+apps/server          HTTP routes, Socket.IO gateway and persistence orchestration
+packages/game-spec   strict schemas, curated specs and content catalogues
+packages/game-engine reducers, legal actions, projections, simulation and replay
+packages/llm         bounded content/review workflows
+packages/shared      versioned transport contracts
+packages/config      validated environment configuration
 ```
 
 Dependency direction:
@@ -64,305 +56,146 @@ Dependency direction:
 ```text
 web -> shared
 server -> shared + game-spec + game-engine + llm + config
-llm -> game-spec + shared
+llm -> game-spec
 game-engine -> game-spec + shared
 game-spec -> shared
 ```
 
-`game-engine` must not import server, database, Socket.IO or OpenAI clients.
+The engine never imports server, database, Socket.IO or OpenAI code.
 
-## 4. GameSpec contract
+## 4. Game contracts
 
-### 4.1 Common envelope
+### 4.1 Curated composed games
 
-Every persisted specification has:
+The primary `ComposedGameSpec` is strict and closed. It describes presentation components, phases, legal actions, atomic conditions and fixed effects. Optional systems cover decks, private hands, board spaces, tokens, scoped resources, seeded randomizers, teams, buzzers, ordering, matching and media prompts.
 
-- `schemaVersion`;
-- stable `id` and editable `revision`;
-- `template`: `composed` for the primary version-2 contract; `hidden_roles` and `quiz_vote` remain legacy values;
-- title, short description and rules summary;
-- player minimum and maximum;
-- duration target and round limit;
-- presentation theme tokens from a closed palette;
-- safety/moderation status;
-- creation metadata that records model, prompt version and validation result.
+A spec may request an allowlisted effect such as `add_score`, `draw_cards`, `move_selected_token` or `advance_phase`. The engine owns the implementation. Specs cannot contain JavaScript, regular expressions, arbitrary formulas, dynamic templates or property paths.
 
-No field may contain JavaScript, regular expressions supplied by users, arbitrary formulas, executable templates or dynamic property paths. Version 2 uses only strict enums for component kinds, actor policies, conditions and effects.
+Every public game has a stable authored mechanic. Player customization changes only approved setup values, theme tokens and bounded content.
 
-### 4.2 Composed specification
+### 4.2 Legacy compatibility
 
-The composed contract contains bounded definitions for presentation components, phases, legal actions, atomic conditions and fixed effects. Optional systems cover decks and private hands, board spaces and tokens, scoped resources, seeded dice/spinners, teams, buzzers, ordering, matching and media prompts. Semantic validation resolves every ID reference before the specification can reach the engine.
+`hidden_roles` and `quiz_vote` remain internal compatibility fixtures. They do not appear in the public catalogue and cannot be selected through the main journey.
 
-The engine owns all interpretation. A spec may request `add_score`, `draw_cards`, `move_selected_token`, `advance_phase` or another allowlisted effect, but it cannot supply the implementation of that effect.
+### 4.3 Validation
 
-### 4.3 Hidden roles specification (legacy)
+Schema and semantic validation reject:
 
-The fixed engine supports:
-
-- teams and role definitions;
-- exact or bounded role counts based on room size;
-- public versus owner-only role text;
-- a fixed phase vocabulary such as `briefing`, `discussion`, `mission`, `vote`, `reveal`, `resolution`;
-- bounded timers;
-- prompt/event card decks;
-- mission success thresholds;
-- voting and elimination options;
-- allowlisted win-condition variants implemented by the engine.
-
-The spec configures values and content; it does not define state-transition code.
-
-### 4.4 Quiz/vote specification (legacy)
-
-The fixed engine supports rounds containing allowlisted question modes:
-
-- multiple-choice trivia;
-- anonymous poll;
-- `most_likely_to` player vote;
-- audience ranking or preference vote.
-
-The specification may configure questions, answers, explanations, timers, reveal behavior and allowlisted scoring modes. Scoring formulas are selected from engine-owned enums and bounded parameters.
-
-### 4.5 Semantic validation
-
-Schema validation is necessary but not sufficient. Semantic validators must reject:
-
-- unsupported schema versions or template names;
-- player bounds outside the MVP limits;
-- impossible role distributions;
-- missing or unreachable win conditions;
+- unsupported versions, components, actions, conditions or effects;
+- impossible player or team distributions;
 - phases with no legal action or terminal path;
-- timers and round counts outside safe bounds;
-- duplicate IDs or broken references;
-- trivia questions without exactly one valid answer where required;
-- secret data marked public;
-- content failing moderation policy;
-- a patch touching non-allowlisted paths.
+- timers, rounds and content outside safe bounds;
+- duplicate IDs and broken references;
+- private data marked public;
+- actions with no compatible audited room control;
+- balance patches targeting a non-allowlisted parameter.
 
-Validation produces machine-readable issues with a code, path, severity and remediation hint.
+Validation produces machine-readable codes, paths, severities and remediation hints.
 
-## 5. Deterministic game engine
+## 5. Deterministic engine
 
 The core contract is pure:
 
 ```ts
-reduceGameState(spec, state, action, context) -> {
-  state,
-  events
-}
+reduceGameState(spec, state, action, context) -> { state, events }
 ```
 
-Determinism requires:
+Determinism requires an explicit seed, no wall-clock reads inside reducers, stable ordering, server-issued timer commands, revisioned actions and append-only events. Identical specs, seeds, initial states and accepted actions produce identical states and checksums.
 
-- an explicit pseudo-random seed stored with the room;
-- no wall-clock reads inside reducers;
-- time represented by validated commands from the server scheduler;
-- stable action ordering and event IDs;
-- replayable append-only events;
-- identical output for identical spec, seed, initial state and actions.
+The server validates the actor, phase, legal-action set, revision and idempotency key before reduction. Clients may animate optimistically but never decide scores, phase changes, timers or winners.
 
-Template modules implement initial state, legal actions, reduction, terminal detection, score/winner calculation and player projections behind one interface.
+## 6. Private state
 
-## 6. Secret-state model
-
-Internal room state may contain all roles and private cards. It is never used as a transport payload.
-
-For every outbound update, the server calls:
+Internal room state may contain all cards, words and team information. It is never sent directly.
 
 ```text
 projectForPlayer(fullState, playerId) -> PlayerView
 ```
 
-Security requirements:
+Room updates are projected separately for each socket. Reconnect tokens are random, stored as hashes and rotated on reconnect. Logs redact private payloads. Virtual players receive the same projected view and legal action IDs as humans.
 
-- role and team membership are owner-only unless explicitly revealed by an engine event;
-- room broadcasts are generated per socket/player, not by broadcasting one full object;
-- logs and error telemetry redact private payloads;
-- GPT playtest agents receive only the same projected view and legal actions available to their simulated player;
-- reconnect tokens are random, hashed at rest where persisted, and never accepted for another player;
-- tests assert the absence of every known secret field for unauthorized viewers.
+## 7. Multiplayer lifecycle
 
-## 7. Real-time room protocol
+1. A setup endpoint validates game-specific customization and creates an immutable blueprint.
+2. Deterministic virtual agents simulate valid player/team configurations.
+3. The blueprint becomes `release_ready` only when its gate passes.
+4. The host creates a room from that exact revision.
+5. Players join with a short code, choose teams when applicable and mark themselves ready.
+6. The host starts once the game constraints are satisfied.
+7. Socket actions are authenticated, revision-checked, persisted, reduced and projected.
+8. Checkpoints plus append-only events restore and verify started rooms after a restart.
 
-### 7.1 Session model
+The deployed MVP intentionally uses an in-memory active-room registry backed by durable PostgreSQL records.
 
-- A host creates a room from a validated blueprint.
-- Players join using a short room code and display name.
-- The server returns a player ID plus reconnect token.
-- The host starts the game once the template's player constraints are satisfied.
-- Every action includes room ID, player ID, expected revision and idempotency key.
+## 8. AI boundary
 
-### 7.2 Authoritative flow
-
-```text
-client action
-  -> authenticate socket/player
-  -> validate payload
-  -> check room revision and legal action
-  -> reduce state
-  -> append events
-  -> persist checkpoint when required
-  -> project a tailored view for each player
-  -> emit revisioned updates
-```
-
-Clients may optimistically animate but never decide scores, roles, phase changes or winners.
-
-### 7.3 MVP resilience
-
-- bounded in-memory room registry;
-- idle room cleanup;
-- reconnect within a defined grace period;
-- periodic database checkpoint and append-only event persistence;
-- host reassignment or explicit room termination when the host disconnects;
-- seeded demo blueprints available when the LLM is unavailable.
-
-## 8. LLM boundary and workflows
-
-The provider interface must make model access replaceable:
+The replaceable provider exposes only bounded workflows:
 
 ```ts
 interface LlmProvider {
-  generateGameSpec(input: GameBrief): Promise<GameSpecCandidate>;
-  designPlaytest(input: PlaytestDesignInput): Promise<PlaytestPlan>;
-  critiquePlaytest(input: PlaytestEvidence): Promise<GameCritique>;
-  proposeBalancePatch(input: BalanceInput): Promise<BalancePatch>;
+  generateMovieMimePack(input): Promise<MimeFilmPack>;
+  generateWordTrapPack(input): Promise<WordTrapPack>;
+  generateDrawBattlePack(input): Promise<DrawBattlePack>;
+  generateSoundCheckPack(input): Promise<SoundCheckPack>;
+  generateStoryChainPack(input): Promise<StoryChainPack>;
+  critiqueComposedGameSpec(spec, evidence): Promise<ComposedGameCritique>;
+  proposeComposedBalancePatch(spec, evidence, critique): Promise<ComposedBalancePatch>;
 }
 ```
 
-`OpenAiLlmProvider` uses separate environment configuration for generation and review, with local defaults `OPENAI_MODEL=gpt-5.6-terra` and `OPENAI_REVIEW_MODEL=gpt-5.6-luna`; a deterministic fake provider supports tests and the offline demo path.
+Content calls cannot change rules. Their outputs pass strict content schemas and are converted into an authored game spec by repository code. Invalid or unavailable model output falls back to audited local catalogues with honest source labels.
 
-All outputs use strict structured schemas. The application rejects refusal, truncation, invalid structure, unknown fields and unsafe content explicitly.
+After deterministic simulations, critique receives a compact redacted structure and telemetry—not private room state. A balance patch may modify only allowlisted numeric parameters. The server applies it to a new immutable revision, validates the complete spec, reruns simulations and requires explicit acceptance.
 
-### 8.1 Generation
+`OPENAI_MODEL` controls content work and `OPENAI_REVIEW_MODEL` may route critique and patch work separately. `FakeLlmProvider` provides repeatable offline behavior.
 
-1. Normalize the brief.
-2. Ask the model to select one of the two templates and fill the corresponding schema.
-3. Parse structured output.
-4. Run schema and semantic validation.
-5. Allow one bounded repair attempt using validation issues.
-6. Persist only a valid candidate.
+## 9. Persistence
 
-### 8.2 AI-assisted playtest
+Core tables store:
 
-The playtest combines GPT-5.6 test design with deterministic simulation:
+- immutable game blueprint revisions and provenance;
+- playtest runs, critiques and balance decisions;
+- room identity, lifecycle, seed and timestamps;
+- player public identity and reconnect-token hashes;
+- ordered append-only room events and checkpoints.
 
-- GPT-5.6 returns a structured playtest plan containing bounded player personas, hypotheses and scenario weights;
-- the server maps those personas to fixed heuristic policies and runs seeded batch simulations;
-- heuristic agents receive only the same `PlayerView` and legal actions available to their simulated player;
-- GPT-5.6 receives summarized, redacted telemetry after the simulations and critiques the results;
-- an optional P1 showcase may let GPT select from explicit legal action IDs for a few turns, but this is not on the critical path;
-- telemetry records turns, scores, win rates, stalls, repeated actions and duration.
+Historical compilation-job migrations remain forward-only database history; no public compilation API or generic creation workflow uses them.
 
-### 8.3 Critique and patch
+## 10. HTTP and Socket.IO surfaces
 
-- GPT receives the validated spec plus summarized playtest evidence.
-- The critique uses issue categories and evidence references.
-- The proposed `BalancePatch` can modify only allowlisted content and bounded numeric fields.
-- The server applies the patch, revalidates the full spec, reruns simulation and compares metrics.
-- The creator sees before/after changes and explicitly accepts the patch before publication.
+HTTP covers health, game catalogue discovery, one setup endpoint per curated game, blueprint history and bounded balance decisions, plus room creation.
 
-## 9. Persistence model
+Socket.IO covers join, reconnect, readiness, team selection, game start, revisioned action submission and player-specific state updates. Transport DTOs are versioned and validated separately from internal state.
 
-Minimum tables:
+## 11. UX
 
-- `game_blueprints`: identity, ownerless creator session, template, status;
-- `game_blueprint_revisions`: immutable spec JSON, validation report, provenance;
-- `playtest_runs`: seed, provider/model, metrics, critique and status;
-- `balance_patches`: source revision, patch, validation and acceptance;
-- `rooms`: room code, blueprint revision, lifecycle, seed and timestamps;
-- `room_players`: public identity, reconnect-token hash and status;
-- `room_events`: ordered append-only event payloads;
-- `room_checkpoints`: periodic internal-state snapshots.
+The mobile-first journey is:
 
-For the no-account MVP, creator ownership uses an unguessable browser token. Public blueprint sharing is out of scope.
+1. discover the curated collection;
+2. select a game;
+3. choose a visual theme and game-specific options;
+4. create a tested blueprint and room;
+5. share the code or link;
+6. form teams when the selected game needs them;
+7. play through a game-specific premium interface;
+8. see results and start another round.
 
-## 10. HTTP and WebSocket surfaces
+Developer-only component galleries must not be linked from production navigation.
 
-Core HTTP endpoints:
-
-- health/readiness;
-- `POST /api/compilations` to persist a prompt-first job and return `202 Accepted`;
-- `GET /api/compilations/:id` as the refresh-safe source of truth for progress and the terminal compiled result;
-- `GET /api/compilations/:id/events` for Server-Sent Event progress updates;
-- launch and retrieve playtests;
-- accept or reject a balance patch;
-- create a room from a valid revision;
-- retrieve a seeded demo game.
-
-Minimum socket events:
-
-- join/reconnect/leave;
-- lobby snapshot and presence update;
-- start game;
-- submit action;
-- player-specific state update;
-- timer/phase update;
-- recoverable and fatal error;
-- room completed.
-
-All transport contracts are versioned and validated on both sides.
-
-## 11. UX surfaces
-
-The mobile-first happy path contains:
-
-1. Landing page with the compiler promise.
-2. One prompt-only brief composer; players, duration, team structure and mechanics are inferred from the requested experience.
-3. Durable generation progress showing model assembly, strict validation, deterministic playtest and structured review.
-4. Validated spec preview with clear template and mechanics.
-5. Playtest report with detected issue, evidence and proposed patch.
-6. Before/after patch approval.
-7. Room creation with code, link and QR code.
-8. Lobby with connected players and readiness.
-9. Template-specific game room with private role/question view.
-10. Result screen and replay/restart action.
-
-The demo must remain usable on a laptop plus at least two phone-sized browser windows.
-
-## 12. Failure and fallback policy
+## 12. Failure policy
 
 | Failure | Product behavior |
 | --- | --- |
-| Missing API key | Explain configuration and offer seeded demo blueprints |
-| Model unavailable/rate limited | Retry with bounded backoff, then seeded demo path |
-| Invalid structured output | One repair attempt, then actionable validation report |
-| Playtest timeout | Keep deterministic results and mark GPT analysis unavailable |
-| Invalid patch | Reject, show the failed constraints, keep original revision |
-| Socket disconnect | Reconnect using token and current revision |
-| Server restart | Restore checkpoint/event history where possible; demo has a seeded restart path |
+| Missing API key | Use clearly identified audited local content |
+| Model unavailable or rate limited | Bounded retry, then catalogue fallback |
+| Invalid structured content | One repair attempt where supported, then catalogue fallback |
+| Virtual playtest failure | Keep the blueprint unavailable for rooms and report evidence |
+| Invalid balance patch | Reject it and preserve the source revision |
+| Socket disconnect | Reconnect with the rotating token and current revision |
+| Server restart | Restore and checksum-verify persisted room history |
 
-No fallback may silently claim that GPT-5.6 ran when it did not. The UI labels seeded or simulated data.
+No fallback may claim that OpenAI ran when it did not.
 
-## 13. Deployment topology
+## 13. Deployment
 
-### Local
-
-Docker Compose starts:
-
-- web;
-- server;
-- PostgreSQL;
-- optional migration/seed job.
-
-### Hosted MVP
-
-- static/server-rendered frontend may run separately;
-- the backend must run on a platform supporting long-lived WebSockets;
-- managed PostgreSQL is required;
-- exactly one backend replica is configured;
-- health checks, migrations, secrets and CORS origins are explicit.
-
-The final provider remains a delivery decision until account availability is confirmed.
-
-## 14. Explicitly deferred
-
-- universal game mechanics or user-authored scripting;
-- arbitrary code generation/execution;
-- marketplace, accounts, payments or public social graph;
-- complex board maps, physics or card-engine DSLs;
-- Redis-based horizontal scaling;
-- native mobile applications;
-- asset generation pipeline;
-- analytics beyond demo-safe operational telemetry;
-- moderation workflows beyond prompt/spec screening;
-- export as a standalone generated application.
+Local and judge environments use Docker Compose for Next.js, Fastify and PostgreSQL. A hosted version may deploy the web app separately from the stateful WebSocket backend, but the MVP keeps one authoritative backend instance and one PostgreSQL database.

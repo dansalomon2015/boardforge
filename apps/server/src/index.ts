@@ -1,7 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { config as loadEnv } from "dotenv";
-import type { ServerResponse } from "node:http";
 import { Server as SocketServer, type Socket } from "socket.io";
 import { z } from "zod";
 import {
@@ -74,8 +73,6 @@ import {
   createBlueprintStore,
   type BalancePatchRecord,
   type BlueprintRecord,
-  type CompilationJobRecord,
-  type CompilationJobStatus,
   type RoomEventRecord,
   type RoomSessionRecord,
 } from "./persistence";
@@ -237,169 +234,6 @@ function balanceEvidence(report: ReturnType<typeof runComposedPlaytest>): Compos
       evidence: failure.evidence,
     })),
   };
-}
-
-function compiledPayload(blueprint: BlueprintRecord) {
-  if (blueprint.spec.template !== "composed" || !blueprint.playtest || !blueprint.critique) return undefined;
-  return {
-    blueprintId: blueprint.id,
-    releaseStatus: blueprint.status,
-    game: summary(blueprint.spec),
-    preview: preview(blueprint.spec),
-    provider: blueprint.provider,
-    validation: { ok: true },
-    playtest: blueprint.playtest,
-    critique: blueprint.critique,
-    balanceSuggestionAvailable: Boolean(blueprint.suggestedPatch),
-  };
-}
-
-type ActiveCompilationStatus = Extract<
-  CompilationJobStatus,
-  "generating" | "validating" | "playtesting" | "reviewing"
->;
-
-async function compilePrompt(
-  prompt: string,
-  onStage: (status: ActiveCompilationStatus, progress: number, message: string) => Promise<void> = async () => {},
-): Promise<BlueprintRecord> {
-  await onStage("generating", 12, "AI is assembling the game components and rules…");
-  const spec = await llm.generateComposedGameSpec(prompt);
-  await onStage("validating", 42, "The GameSpec is being validated before execution…");
-  const blueprintId = `${spec.id}-${crypto.randomUUID().slice(0, 8)}`;
-  await blueprintStore.saveBlueprint({
-    id: blueprintId,
-    spec,
-    status: "playtesting",
-    provider: llm.name,
-    prompt,
-  });
-
-  await onStage("playtesting", 58, "24 virtual agents are testing player and team configurations…");
-  const playtest = runComposedPlaytest(spec, { simulations: 24, seed: `release:${blueprintId}` });
-  await onStage("reviewing", 82, "AI is reviewing pacing, balance, and simulation evidence…");
-  const review = await llm.reviewComposedGameSpec(spec, balanceEvidence(playtest));
-  let suggestedPatch = review.suggestedPatch;
-  if (suggestedPatch) {
-    const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 6);
-    const validationId = `${spec.id.slice(0, 32).replace(/_+$/, "")}_review_${suffix}`;
-    const patchValidation = applyComposedBalancePatch(spec, suggestedPatch, validationId);
-    if (!patchValidation.ok) {
-      app.log.warn({ issues: patchValidation.issues }, "Discarding invalid review patch suggestion");
-      suggestedPatch = null;
-    }
-  }
-  const releaseStatus = playtest.status === "passed" && review.critique.verdict === "release_ready"
-    ? "release_ready"
-    : "needs_review";
-  await blueprintStore.savePlaytest(blueprintId, releaseStatus, playtest);
-  await blueprintStore.saveReview(blueprintId, llm.name, review.critique, suggestedPatch);
-  const blueprint = await blueprintStore.get(blueprintId);
-  if (!blueprint) throw new Error(`Compiled blueprint ${blueprintId} could not be loaded.`);
-  return blueprint;
-}
-
-const activeCompilationJobs = new Set<string>();
-const compilationStreams = new Map<string, Set<ServerResponse>>();
-
-function compilationJobView(job: CompilationJobRecord) {
-  return {
-    id: job.id,
-    status: job.status,
-    progress: job.progress,
-    message: job.message,
-    provider: job.provider,
-    attempts: job.attempts,
-    createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
-    ...(job.blueprintId ? { blueprintId: job.blueprintId } : {}),
-    ...(job.errorCode ? { errorCode: job.errorCode } : {}),
-    ...(job.errorMessage ? { errorMessage: job.errorMessage } : {}),
-  };
-}
-
-function emitCompilationJob(job: CompilationJobRecord): void {
-  const payload = `event: status\ndata: ${JSON.stringify(compilationJobView(job))}\n\n`;
-  const terminal = job.status === "release_ready" || job.status === "needs_review" || job.status === "failed";
-  for (const stream of compilationStreams.get(job.id) ?? []) {
-    if (!stream.destroyed) {
-      stream.write(payload);
-      if (terminal) stream.end();
-    }
-  }
-  if (terminal) compilationStreams.delete(job.id);
-}
-
-async function updateCompilationJob(
-  id: string,
-  status: CompilationJobStatus,
-  progress: number,
-  message: string,
-  extras: {
-    blueprintId?: string;
-    errorCode?: string;
-    errorMessage?: string;
-    incrementAttempts?: boolean;
-  } = {},
-): Promise<CompilationJobRecord> {
-  const updated = await blueprintStore.updateCompilationJob(id, {
-    status,
-    progress,
-    message,
-    ...extras,
-  });
-  emitCompilationJob(updated);
-  return updated;
-}
-
-function compilationErrorCode(error: unknown): string {
-  const status = typeof error === "object" && error !== null && "status" in error ? Number(error.status) : null;
-  const message = error instanceof Error ? error.message.toLowerCase() : "";
-  if (status === 401) return "OPENAI_AUTHENTICATION";
-  if (status === 429) return "OPENAI_QUOTA_OR_RATE_LIMIT";
-  if (status === 403 || status === 404) return "OPENAI_MODEL_ACCESS";
-  if (message.includes("timed out") || message.includes("timeout")) return "OPENAI_TIMEOUT";
-  return "COMPILATION_FAILED";
-}
-
-async function runCompilationJob(id: string): Promise<void> {
-  if (activeCompilationJobs.has(id)) return;
-  activeCompilationJobs.add(id);
-  try {
-    const job = await blueprintStore.getCompilationJob(id);
-    if (!job) return;
-    if (job.attempts >= 2) {
-      await updateCompilationJob(id, "failed", 100, "Compilation was interrupted too many times.", {
-        errorCode: "RETRY_LIMIT_REACHED",
-        errorMessage: "Restart compilation from the original prompt.",
-      });
-      return;
-    }
-    await updateCompilationJob(id, "generating", 8, "Preparing compilation…", {
-      incrementAttempts: true,
-    });
-    const blueprint = await compilePrompt(job.prompt, async (status, progress, message) => {
-      await updateCompilationJob(id, status, progress, message);
-    });
-    const terminalStatus = blueprint.status === "release_ready" ? "release_ready" : "needs_review";
-    await updateCompilationJob(
-      id,
-      terminalStatus,
-      100,
-      terminalStatus === "release_ready"
-        ? "The game is validated and ready to open a room."
-        : "The game compiled but needs review.",
-      { blueprintId: blueprint.id },
-    );
-  } catch (error) {
-    app.log.warn({ jobId: id, message: error instanceof Error ? error.message : "Unknown error" }, "Compilation job failed");
-    await updateCompilationJob(id, "failed", 100, "Compilation could not be completed.", {
-      errorCode: compilationErrorCode(error),
-      errorMessage: compilationErrorMessage(error),
-    }).catch((updateError) => app.log.error({ jobId: id, updateError }, "Failed to persist compilation failure"));
-  } finally {
-    activeCompilationJobs.delete(id);
-  }
 }
 
 async function revisionFamily(startBlueprintId: string): Promise<{
@@ -643,7 +477,7 @@ app.post("/api/movie-mime/blueprints", async (request, reply) => {
   } catch (error) {
     app.log.warn({ message: error instanceof Error ? error.message : "Unknown movie selection error" }, "Movie mime preparation failed");
     return reply.code(502).send({
-      error: compilationErrorMessage(error),
+      error: aiProviderErrorMessage(error),
       provider: llm.name,
     });
   }
@@ -698,7 +532,7 @@ app.post("/api/word-trap/blueprints", async (request, reply) => {
     });
   } catch (error) {
     app.log.warn({ message: error instanceof Error ? error.message : "Unknown WordTrap selection error" }, "WordTrap preparation failed");
-    return reply.code(502).send({ error: compilationErrorMessage(error), provider: llm.name });
+    return reply.code(502).send({ error: aiProviderErrorMessage(error), provider: llm.name });
   }
 });
 
@@ -751,7 +585,7 @@ app.post("/api/draw-battle/blueprints", async (request, reply) => {
     });
   } catch (error) {
     app.log.warn({ message: error instanceof Error ? error.message : "Unknown DrawBattle selection error" }, "DrawBattle preparation failed");
-    return reply.code(502).send({ error: compilationErrorMessage(error), provider: llm.name });
+    return reply.code(502).send({ error: aiProviderErrorMessage(error), provider: llm.name });
   }
 });
 
@@ -804,7 +638,7 @@ app.post("/api/sound-check/blueprints", async (request, reply) => {
     });
   } catch (error) {
     app.log.warn({ message: error instanceof Error ? error.message : "Unknown SoundCheck selection error" }, "SoundCheck preparation failed");
-    return reply.code(502).send({ error: compilationErrorMessage(error), provider: llm.name });
+    return reply.code(502).send({ error: aiProviderErrorMessage(error), provider: llm.name });
   }
 });
 
@@ -850,7 +684,7 @@ app.post("/api/story-chain/blueprints", async (request, reply) => {
     });
   } catch (error) {
     app.log.warn({ message: error instanceof Error ? error.message : "Unknown StoryChain generation error" }, "StoryChain preparation failed");
-    return reply.code(502).send({ error: compilationErrorMessage(error), provider: llm.name });
+    return reply.code(502).send({ error: aiProviderErrorMessage(error), provider: llm.name });
   }
 });
 
@@ -903,137 +737,6 @@ app.post("/api/second-sense/blueprints", async (request, reply) => {
     tempo: setupResult.data.tempo,
     game: summary(spec),
     playtest: { status: playtest.status, simulations: playtest.simulations, completedSimulations: playtest.completedSimulations },
-  });
-});
-
-const compileBodySchema = z
-  .object({
-    prompt: z.string().trim().min(8).max(500),
-  })
-  .strict();
-
-app.post("/api/compile", async (request, reply) => {
-  const parsed = compileBodySchema.safeParse(request.body);
-  if (!parsed.success) {
-    return reply.code(400).send({ error: "Invalid game brief.", issues: parsed.error.issues });
-  }
-
-  try {
-    const blueprint = await compilePrompt(parsed.data.prompt);
-    return compiledPayload(blueprint);
-  } catch (error) {
-    app.log.warn({ message: error instanceof Error ? error.message : "Unknown provider error" }, "Game compilation failed");
-    return reply.code(502).send({
-      error: compilationErrorMessage(error),
-      provider: llm.name,
-    });
-  }
-});
-
-const compilationParamsSchema = z.object({ id: z.string().uuid() }).strict();
-
-app.post("/api/compilations", async (request, reply) => {
-  const parsed = compileBodySchema.safeParse(request.body);
-  if (!parsed.success) {
-    return reply.code(400).send({ error: "Invalid game brief.", issues: parsed.error.issues });
-  }
-  const headerKey = request.headers["idempotency-key"];
-  const idempotency = typeof headerKey === "string" ? z.string().uuid().safeParse(headerKey) : null;
-  if (idempotency && !idempotency.success) {
-    return reply.code(400).send({ error: "Invalid idempotency key." });
-  }
-  const id = idempotency?.success ? idempotency.data : crypto.randomUUID();
-  const existing = await blueprintStore.getCompilationJob(id);
-  if (existing) {
-    if (existing.prompt !== parsed.data.prompt) {
-      return reply.code(409).send({ error: "This idempotency key is already bound to another game brief." });
-    }
-    return reply.code(202).send({
-      jobId: existing.id,
-      status: existing.status,
-      statusUrl: `/api/compilations/${existing.id}`,
-      eventsUrl: `/api/compilations/${existing.id}/events`,
-    });
-  }
-  const now = new Date().toISOString();
-  const job: CompilationJobRecord = {
-    id,
-    prompt: parsed.data.prompt,
-    provider: llm.name,
-    status: "queued",
-    progress: 0,
-    message: "Your idea has entered the forge.",
-    attempts: 0,
-    createdAt: now,
-    updatedAt: now,
-  };
-  try {
-    await blueprintStore.createCompilationJob(job);
-  } catch (error) {
-    const racedJob = await blueprintStore.getCompilationJob(id);
-    if (!racedJob) throw error;
-    if (racedJob.prompt !== parsed.data.prompt) {
-      return reply.code(409).send({ error: "This idempotency key is already bound to another game brief." });
-    }
-    return reply.code(202).send({
-      jobId: racedJob.id,
-      status: racedJob.status,
-      statusUrl: `/api/compilations/${racedJob.id}`,
-      eventsUrl: `/api/compilations/${racedJob.id}/events`,
-    });
-  }
-  emitCompilationJob(job);
-  void runCompilationJob(id);
-  return reply.code(202).send({
-    jobId: id,
-    status: job.status,
-    statusUrl: `/api/compilations/${id}`,
-    eventsUrl: `/api/compilations/${id}/events`,
-  });
-});
-
-app.get<{ Params: { id: string } }>("/api/compilations/:id", async (request, reply) => {
-  const params = compilationParamsSchema.safeParse(request.params);
-  if (!params.success) return reply.code(400).send({ error: "Invalid compilation job ID." });
-  const job = await blueprintStore.getCompilationJob(params.data.id);
-  if (!job) return reply.code(404).send({ error: "Compilation job not found." });
-  const blueprint = job.blueprintId ? await blueprintStore.get(job.blueprintId) : undefined;
-  const result = blueprint ? compiledPayload(blueprint) : undefined;
-  return {
-    ...compilationJobView(job),
-    ...(result ? { result } : {}),
-  };
-});
-
-app.get<{ Params: { id: string } }>("/api/compilations/:id/events", async (request, reply) => {
-  const params = compilationParamsSchema.safeParse(request.params);
-  if (!params.success) return reply.code(400).send({ error: "Invalid compilation job ID." });
-  const job = await blueprintStore.getCompilationJob(params.data.id);
-  if (!job) return reply.code(404).send({ error: "Compilation job not found." });
-
-  reply.hijack();
-  reply.raw.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-    "Access-Control-Allow-Origin": config.webOrigin,
-    "X-Accel-Buffering": "no",
-  });
-  reply.raw.write(`event: status\ndata: ${JSON.stringify(compilationJobView(job))}\n\n`);
-  if (job.status === "release_ready" || job.status === "needs_review" || job.status === "failed") {
-    reply.raw.end();
-    return;
-  }
-  const streams = compilationStreams.get(job.id) ?? new Set<ServerResponse>();
-  streams.add(reply.raw);
-  compilationStreams.set(job.id, streams);
-  const heartbeat = setInterval(() => {
-    if (!reply.raw.destroyed) reply.raw.write(": heartbeat\n\n");
-  }, 15_000);
-  request.raw.on("close", () => {
-    clearInterval(heartbeat);
-    streams.delete(reply.raw);
-    if (streams.size === 0) compilationStreams.delete(job.id);
   });
 });
 
@@ -1164,7 +867,7 @@ app.post<{ Params: { id: string } }>("/api/blueprints/:id/balance", async (reque
   } catch (error) {
     app.log.warn({ message: error instanceof Error ? error.message : "Unknown balance error" }, "Balance workflow failed");
     return reply.code(502).send({
-      error: compilationErrorMessage(error),
+      error: aiProviderErrorMessage(error),
       provider: llm.name,
     });
   }
@@ -1382,7 +1085,7 @@ function assertSocketOwnsPlayer(socket: Socket, room: Room, code: string, player
   }
 }
 
-function compilationErrorMessage(error: unknown): string {
+function aiProviderErrorMessage(error: unknown): string {
   const status = typeof error === "object" && error !== null && "status" in error
     ? Number(error.status)
     : null;
@@ -1451,11 +1154,6 @@ async function restorePersistedRooms(): Promise<void> {
 }
 
 await restorePersistedRooms();
-
-for (const job of await blueprintStore.listRecoverableCompilationJobs()) {
-  app.log.info({ jobId: job.id, previousStatus: job.status }, "Recovering interrupted compilation job");
-  void runCompilationJob(job.id);
-}
 
 io.on("connection", (socket: Socket) => {
   socket.on(

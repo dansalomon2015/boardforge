@@ -1,17 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { cinemaCharadesSpec, composedBalancePatchSchema, validateGameSpec } from "@boardforge/game-spec";
+import { cinemaCharadesSpec, composedBalancePatchSchema } from "@boardforge/game-spec";
 import {
   FakeLlmProvider,
   composedAdjustableParameters,
   composedGameCritiqueSchema,
-  composedGameReviewSchema,
   createLlmProvider,
-  type GameBrief,
 } from "./index.js";
 
 const provider = new FakeLlmProvider();
 
-describe("procedural local GameSpec compiler", () => {
+describe("bounded AI content provider", () => {
   it("selects providers explicitly without making a network request", () => {
     expect(createLlmProvider({ provider: "fake", apiKey: undefined, model: undefined }).name).toBe("procedural-local");
     expect(createLlmProvider({ provider: "openai", apiKey: "test-key", model: "gpt-5.6" }).name).toBe(
@@ -20,21 +18,6 @@ describe("procedural local GameSpec compiler", () => {
     expect(() => createLlmProvider({ provider: "openai", apiKey: undefined, model: "gpt-5.6" })).toThrow(
       "OPENAI_API_KEY",
     );
-  });
-
-  it("produces the same validated spec for the same brief", async () => {
-    const brief: GameBrief = {
-      template: "hidden_roles",
-      prompt: "Une enquête dans un manoir hanté avec un coupable infiltré",
-      players: 6,
-      durationMinutes: 20,
-    };
-
-    const first = await provider.generateGameSpec(brief);
-    const second = await provider.generateGameSpec(brief);
-
-    expect(second).toEqual(first);
-    expect(validateGameSpec(first).ok).toBe(true);
   });
 
   it("selects a bounded movie mime pack from the audited catalog", async () => {
@@ -81,53 +64,21 @@ describe("procedural local GameSpec compiler", () => {
     expect(new Set(pack.twists.map((twist) => twist.requiredWord.toLowerCase())).size).toBe(12);
   });
 
-  it("changes hidden-role content when the requested universe changes", async () => {
-    const common = { template: "hidden_roles" as const, players: 6, durationMinutes: 20 };
-    const pirate = await provider.generateGameSpec({ ...common, prompt: "Mutinerie pirate autour d'un trésor maudit" });
-    const fantasy = await provider.generateGameSpec({ ...common, prompt: "Royaume fantasy protégé par des dragons et de la magie" });
-
-    expect(pirate.title).not.toBe(fantasy.title);
-    expect(pirate.template).toBe("hidden_roles");
-    expect(fantasy.template).toBe("hidden_roles");
-    if (pirate.template === "hidden_roles" && fantasy.template === "hidden_roles") {
-      expect(pirate.roles.map((role) => role.name)).not.toEqual(fantasy.roles.map((role) => role.name));
-      expect(pirate.missionPrompt).not.toBe(fantasy.missionPrompt);
-    }
-  });
-
-  it("builds a prompt-themed quiz with a different deterministic question mix", async () => {
-    const common = { template: "quiz_vote" as const, players: 5, durationMinutes: 18 };
-    const cinema = await provider.generateGameSpec({ ...common, prompt: "Soirée cinéma et héros improbables" });
-    const travel = await provider.generateGameSpec({ ...common, prompt: "Tour du monde entre amis et aventures de voyage" });
-
-    expect(cinema.title).not.toBe(travel.title);
-    expect(cinema.template).toBe("quiz_vote");
-    expect(travel.template).toBe("quiz_vote");
-    if (cinema.template === "quiz_vote" && travel.template === "quiz_vote") {
-      expect(cinema.questions.map((question) => question.prompt)).not.toEqual(
-        travel.questions.map((question) => question.prompt),
-      );
-      expect(cinema.questions.some((question) => question.type === "player_vote")).toBe(true);
-      expect(cinema.questions.some((question) => question.type === "trivia")).toBe(true);
-    }
-  });
-
-  it("returns one deterministic review bundle with an allowlisted patch", async () => {
+  it("returns an allowlisted critique and balance patch", async () => {
     const evidence = {
       simulations: 24,
       completionRate: 1,
       averageActions: 14,
       failures: [],
     };
-    const review = await provider.reviewComposedGameSpec(cinemaCharadesSpec, evidence);
-    const patch = review.suggestedPatch;
+    const critique = await provider.critiqueComposedGameSpec(cinemaCharadesSpec, evidence);
+    const patch = await provider.proposeComposedBalancePatch(cinemaCharadesSpec, evidence, critique);
 
-    expect(composedGameReviewSchema.safeParse(review).success).toBe(true);
-    expect(composedGameCritiqueSchema.safeParse(review.critique).success).toBe(true);
-    expect(review.critique.verdict).toBe("release_ready");
+    expect(composedGameCritiqueSchema.safeParse(critique).success).toBe(true);
+    expect(critique.verdict).toBe("release_ready");
     expect(composedBalancePatchSchema.safeParse(patch).success).toBe(true);
-    expect(patch?.sourceSpecId).toBe(cinemaCharadesSpec.id);
-    expect(patch?.changes).toEqual([
+    expect(patch.sourceSpecId).toBe(cinemaCharadesSpec.id);
+    expect(patch.changes).toEqual([
       { kind: "set_timer_seconds", componentId: "mime_timer", seconds: 55 },
     ]);
     expect(composedAdjustableParameters(cinemaCharadesSpec)).toContainEqual({
