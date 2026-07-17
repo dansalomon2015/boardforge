@@ -121,13 +121,19 @@ export type LlmUsageTelemetry = {
   latencyMs: number;
 };
 
-export interface LlmProvider {
+export interface NamedLlmProvider {
   readonly name: string;
+}
+
+export interface GameContentProvider extends NamedLlmProvider {
   generateMovieMimePack(setup: MovieMimeSetupInput): Promise<MimeFilmPack>;
   generateWordTrapPack(setup: WordTrapSetupInput): Promise<WordTrapPack>;
   generateDrawBattlePack(setup: DrawBattleSetupInput): Promise<DrawBattlePack>;
   generateSoundCheckPack(setup: SoundCheckSetupInput): Promise<SoundCheckPack>;
   generateStoryChainPack(setup: StoryChainSetupInput): Promise<StoryChainPack>;
+}
+
+export interface GameReviewProvider extends NamedLlmProvider {
   critiqueComposedGameSpec(spec: ComposedGameSpec, evidence: ComposedBalanceEvidence): Promise<ComposedGameCritique>;
   proposeComposedBalancePatch(
     spec: ComposedGameSpec,
@@ -135,6 +141,8 @@ export interface LlmProvider {
     critique: ComposedGameCritique,
   ): Promise<ComposedBalancePatch>;
 }
+
+export interface LlmProvider extends GameContentProvider, GameReviewProvider {}
 
 function adjustableEffects(
   parameters: ComposedAdjustableParameter[],

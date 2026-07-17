@@ -29,14 +29,14 @@ import {
   wordTrapSetupSchema,
 } from "@boardforge/game-spec";
 import { runComposedPlaytest } from "@boardforge/game-engine";
-import type { LlmProvider } from "@boardforge/llm";
-import type { BlueprintStore } from "./persistence";
+import type { GameContentProvider } from "@boardforge/llm";
+import type { GameCatalogStore } from "./persistence";
 import { gameSummary } from "./game-catalog";
 import { aiProviderErrorMessage } from "./provider-error";
 
 type GameRouteDependencies = {
-  llm: LlmProvider;
-  blueprintStore: BlueprintStore;
+  llm: GameContentProvider;
+  blueprintStore: GameCatalogStore;
 };
 
 export function registerGameRoutes(app: FastifyInstance, { llm, blueprintStore }: GameRouteDependencies): void {

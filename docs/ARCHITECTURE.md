@@ -35,7 +35,7 @@ Game mechanics are designed in the repository and interpreted by fixed TypeScrip
 | Engine | Pure TypeScript reducers | Determinism, testing and replay |
 | Tests | Vitest plus multiplayer smoke clients | Unit, integration and protocol coverage |
 | Local runtime | Docker Compose | Reproducible judge setup |
-| AI | OpenAI Responses API behind `LlmProvider` | Replaceable, typed and bounded workflows |
+| AI | OpenAI Responses API behind narrow provider interfaces | Replaceable, typed and bounded workflows |
 
 The MVP runs one backend instance. Redis, distributed presence and horizontal scaling remain out of scope.
 
@@ -132,12 +132,15 @@ The deployed MVP intentionally uses an in-memory active-room registry backed by 
 The replaceable provider exposes only bounded workflows:
 
 ```ts
-interface LlmProvider {
+interface GameContentProvider {
   generateMovieMimePack(input): Promise<MimeFilmPack>;
   generateWordTrapPack(input): Promise<WordTrapPack>;
   generateDrawBattlePack(input): Promise<DrawBattlePack>;
   generateSoundCheckPack(input): Promise<SoundCheckPack>;
   generateStoryChainPack(input): Promise<StoryChainPack>;
+}
+
+interface GameReviewProvider {
   critiqueComposedGameSpec(spec, evidence): Promise<ComposedGameCritique>;
   proposeComposedBalancePatch(spec, evidence, critique): Promise<ComposedBalancePatch>;
 }

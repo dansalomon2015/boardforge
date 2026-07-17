@@ -161,17 +161,17 @@ Target runtime: **2 minutes 50 seconds**.
 
 | Time | Evidence on screen | Narration goal |
 | --- | --- | --- |
-| 0:00–0:15 | Landing and one-sentence promise | BoardForge compiles a playable social game, not prose rules. |
-| 0:15–0:35 | Enter `Space Heist` brief | Show players, duration, theme and tone. |
-| 0:35–0:55 | Structured generation and validation | GPT-5.6 produces only a GameSpec; fixed engine boundaries are visible. |
-| 0:55–1:20 | Playtest evidence and detected imbalance | Demonstrate GPT-assisted playtest plus deterministic metrics. |
-| 1:20–1:35 | Before/after bounded patch | Show validation and explicit creator approval. |
-| 1:35–1:55 | Create room and join via two devices/windows | Prove shareable multiplayer rather than static output. |
-| 1:55–2:30 | Private role, legal action, vote and state update | Prove secret isolation and a real server-authoritative turn. |
-| 2:30–2:42 | Brief quiz/vote cut | Prove the second fixed template without replaying the entire flow. |
-| 2:42–2:50 | Architecture/Codex close | GPT designs within constraints; Codex accelerated engine, tests and UI. |
+| 0:00–0:15 | Landing and one-sentence promise | BoardForge turns phones into a premium shared game night. |
+| 0:15–0:35 | Select Movie Mime and a visual theme | Show a curated mechanic with meaningful, bounded customization. |
+| 0:35–0:50 | Generate the movie card pack | OpenAI creates typed creative content while authored code owns the rules. |
+| 0:50–1:05 | Virtual-agent release evidence | Show the deterministic release gate before a room can open. |
+| 1:05–1:25 | Create a room and join from two devices/windows | Prove real multiplayer, not a static rules document. |
+| 1:25–2:05 | Form teams, choose captains and play a turn | Prove private views and authoritative real-time state. |
+| 2:05–2:28 | Cut between Word Duel and Second Sense | Show two genuinely different designed experiences and interactions. |
+| 2:28–2:42 | Typed AI and deterministic architecture | Show bounded content, validated data, replay and private projection. |
+| 2:42–2:50 | Collection and closing line | Seven games today, one coherent platform for game night. |
 
-The recording may use a seeded brief to control latency, but it must not falsely label seeded output as a live GPT call.
+The recording may use audited fallback content to control latency, but it must not falsely label fallback output as a live OpenAI call.
 
 ## 5. Cut order when schedule slips
 

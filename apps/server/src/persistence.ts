@@ -90,6 +90,25 @@ export interface BlueprintStore {
   close(): Promise<void>;
 }
 
+export type GameCatalogStore = Pick<BlueprintStore, "saveBlueprint" | "savePlaytest">;
+
+export type BalanceWorkflowStore = Pick<
+  BlueprintStore,
+  | "get"
+  | "saveBlueprint"
+  | "savePlaytest"
+  | "saveCritique"
+  | "listBalancePatchesForBlueprint"
+  | "saveBalancePatch"
+  | "acceptBalancePatch"
+  | "rejectBalancePatch"
+>;
+
+export type RealtimeRoomStore = Pick<
+  BlueprintStore,
+  "get" | "loadRooms" | "saveRoom" | "appendRoomEvent" | "findRoomEvent"
+>;
+
 function parseSpec(input: unknown): BoardGameSpec {
   const template = typeof input === "object" && input !== null && "template" in input ? input.template : undefined;
   const validation = template === "composed" ? validateComposedGameSpec(input) : validateGameSpec(input);

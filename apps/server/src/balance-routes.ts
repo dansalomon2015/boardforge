@@ -2,14 +2,14 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { applyComposedBalancePatch } from "@boardforge/game-spec";
 import { runComposedPlaytest } from "@boardforge/game-engine";
-import type { ComposedBalanceEvidence, LlmProvider } from "@boardforge/llm";
-import type { BalancePatchRecord, BlueprintRecord, BlueprintStore } from "./persistence";
+import type { ComposedBalanceEvidence, GameReviewProvider } from "@boardforge/llm";
+import type { BalancePatchRecord, BalanceWorkflowStore, BlueprintRecord } from "./persistence";
 import { gamePreview, gameSummary } from "./game-catalog";
 import { aiProviderErrorMessage } from "./provider-error";
 
 type BalanceRouteDependencies = {
-  llm: LlmProvider;
-  blueprintStore: BlueprintStore;
+  llm: GameReviewProvider;
+  blueprintStore: BalanceWorkflowStore;
 };
 
 function balanceEvidence(report: ReturnType<typeof runComposedPlaytest>): ComposedBalanceEvidence {
@@ -22,7 +22,7 @@ function balanceEvidence(report: ReturnType<typeof runComposedPlaytest>): Compos
 }
 
 async function revisionFamily(
-  blueprintStore: BlueprintStore,
+  blueprintStore: BalanceWorkflowStore,
   startBlueprintId: string,
 ): Promise<{ blueprints: BlueprintRecord[]; patches: BalancePatchRecord[] }> {
   const blueprints = new Map<string, BlueprintRecord>();
