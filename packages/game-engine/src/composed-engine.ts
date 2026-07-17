@@ -54,6 +54,13 @@ export type ComposedActionRecord = {
   correct: boolean | null;
 };
 
+export type WordDuelState = {
+  secretWordsByPlayer: Record<string, string>;
+  guessedLettersByPlayer: Record<string, string[]>;
+  incorrectWordsByPlayer: Record<string, string[]>;
+  lastGuess: { actorId: string; kind: "letter" | "word"; value: string; correct: boolean; revealedCount: number } | null;
+};
+
 export type ComposedGameState = {
   template: "composed";
   status: "playing" | "completed";
@@ -79,6 +86,7 @@ export type ComposedGameState = {
   buzzes: Record<string, string>;
   itemOrders: Record<string, string[]>;
   sketches: Record<string, Array<{ id: string; points: Array<{ x: number; y: number }> }>>;
+  wordDuels: Record<string, WordDuelState>;
   actions: ComposedActionRecord[];
   acceptedIdempotencyKeys: string[];
   winner: { kind: "players" | "teams" | "none"; ids: string[] } | null;
@@ -337,6 +345,12 @@ export function initializeComposedGame(
     buzzes: {},
     itemOrders,
     sketches: {},
+    wordDuels: Object.fromEntries(spec.components.filter((component) => component.kind === "word_duel").map((component) => [component.id, {
+      secretWordsByPlayer: {},
+      guessedLettersByPlayer: Object.fromEntries(players.map((player) => [player.id, [] as string[]])),
+      incorrectWordsByPlayer: Object.fromEntries(players.map((player) => [player.id, [] as string[]])),
+      lastGuess: null,
+    } satisfies WordDuelState])),
     actions: [],
     acceptedIdempotencyKeys: [],
     winner: null,
@@ -372,7 +386,54 @@ function isActorAllowed(state: ComposedGameState, action: ActionDefinition, acto
   return state.playerOrder.includes(actorId);
 }
 
+function normalizeDuelWord(value: string): string {
+  return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+}
+
+function wordDuelComponent(spec: ComposedGameSpec, wordDuelId: string | undefined): Extract<ComposedComponent, { kind: "word_duel" }> {
+  const component = spec.components.find((candidate): candidate is Extract<ComposedComponent, { kind: "word_duel" }> => candidate.kind === "word_duel" && candidate.id === wordDuelId);
+  if (!component) throw new ComposedGameRuleError("This word duel is not configured.");
+  return component;
+}
+
+function opponentId(state: ComposedGameState, actorId: string): string {
+  const opponent = state.playerOrder.find((playerId) => playerId !== actorId);
+  if (!opponent || state.playerOrder.length !== 2) throw new ComposedGameRuleError("WordDuel requires exactly two players.");
+  return opponent;
+}
+
 function validatePayload(state: ComposedGameState, spec: ComposedGameSpec, action: ActionDefinition, actorId: string, payload: ComposedActionPayload): boolean | null {
+  if (action.kind === "secret_word") {
+    const component = wordDuelComponent(spec, action.wordDuelId);
+    const word = normalizeDuelWord(payload.text ?? "");
+    if (!/^[A-Z]+$/.test(word) || word.length < component.minLength || word.length > component.maxLength) {
+      throw new ComposedGameRuleError(`Choose one English word containing ${component.minLength} to ${component.maxLength} letters.`);
+    }
+    const duel = state.wordDuels[component.id];
+    if (!duel) throw new ComposedGameRuleError("This word duel is not ready.");
+    if (duel.secretWordsByPlayer[actorId]) throw new ComposedGameRuleError("Your secret word is already locked.");
+    return null;
+  }
+  if (action.kind === "letter_guess") {
+    const component = wordDuelComponent(spec, action.wordDuelId);
+    const letter = normalizeDuelWord(payload.text ?? "");
+    if (!/^[A-Z]$/.test(letter)) throw new ComposedGameRuleError("Choose exactly one letter.");
+    const duel = state.wordDuels[component.id];
+    const secretWord = duel?.secretWordsByPlayer[opponentId(state, actorId)];
+    if (!duel || !secretWord) throw new ComposedGameRuleError("Both secret words must be locked before guessing.");
+    if (duel.guessedLettersByPlayer[actorId]?.includes(letter)) throw new ComposedGameRuleError("That letter has already been played.");
+    return secretWord.includes(letter);
+  }
+  if (action.kind === "word_guess") {
+    const component = wordDuelComponent(spec, action.wordDuelId);
+    const guess = normalizeDuelWord(payload.text ?? "");
+    if (!/^[A-Z]+$/.test(guess) || guess.length < component.minLength || guess.length > component.maxLength) throw new ComposedGameRuleError("Enter one complete word within the allowed length.");
+    const duel = state.wordDuels[component.id];
+    const secretWord = duel?.secretWordsByPlayer[opponentId(state, actorId)];
+    if (!duel || !secretWord) throw new ComposedGameRuleError("Both secret words must be locked before guessing.");
+    if (duel.incorrectWordsByPlayer[actorId]?.includes(guess)) throw new ComposedGameRuleError("That word has already been attempted.");
+    return guess === secretWord;
+  }
   if (action.kind === "choose") {
     if (!payload.choiceId || !action.optionIds?.includes(payload.choiceId)) throw new ComposedGameRuleError("Choose actions require a known choiceId.");
     return spec.choices.find((choice) => choice.id === payload.choiceId)?.correct ?? null;
@@ -516,6 +577,42 @@ function applyEffect(state: ComposedGameState, spec: ComposedGameSpec, effect: E
     if (owner.kind === "team" && owner.id) state.resources.teams[owner.id]![effect.resourceId] = clampResource(spec, effect.resourceId, (state.resources.teams[owner.id]?.[effect.resourceId] ?? 0) + effect.amount);
   } else if (effect.kind === "set_variable") state.variables[effect.variableId] = effect.value;
   else if (effect.kind === "record_input") state.variables[effect.channelId] = payload.text ?? payload.choiceId ?? payload.cardId ?? "submitted";
+  else if (effect.kind === "register_secret_word") {
+    const duel = state.wordDuels[effect.wordDuelId];
+    const word = normalizeDuelWord(payload.text ?? "");
+    if (!duel || !word) throw new ComposedGameRuleError("No secret word is available to lock.");
+    duel.secretWordsByPlayer[actorId] = word;
+  }
+  else if (effect.kind === "guess_letter") {
+    const duel = state.wordDuels[effect.wordDuelId];
+    const letter = normalizeDuelWord(payload.text ?? "");
+    const secretWord = duel?.secretWordsByPlayer[opponentId(state, actorId)];
+    if (!duel || !secretWord || !letter) throw new ComposedGameRuleError("No letter guess is available to resolve.");
+    duel.guessedLettersByPlayer[actorId] = [...(duel.guessedLettersByPlayer[actorId] ?? []), letter];
+    const revealedCount = [...secretWord].filter((candidate) => candidate === letter).length;
+    const correct = revealedCount > 0;
+    duel.lastGuess = { actorId, kind: "letter", value: letter, correct, revealedCount };
+    const guessed = new Set(duel.guessedLettersByPlayer[actorId]);
+    if ([...secretWord].every((candidate) => guessed.has(candidate))) {
+      state.status = "completed";
+      state.winner = { kind: "players", ids: [actorId] };
+    }
+  }
+  else if (effect.kind === "guess_word") {
+    const duel = state.wordDuels[effect.wordDuelId];
+    const guess = normalizeDuelWord(payload.text ?? "");
+    const secretWord = duel?.secretWordsByPlayer[opponentId(state, actorId)];
+    if (!duel || !secretWord || !guess) throw new ComposedGameRuleError("No word guess is available to resolve.");
+    const correct = guess === secretWord;
+    duel.lastGuess = { actorId, kind: "word", value: guess, correct, revealedCount: correct ? secretWord.length : 0 };
+    if (correct) {
+      state.status = "completed";
+      state.winner = { kind: "players", ids: [actorId] };
+    } else {
+      const attempts = duel.incorrectWordsByPlayer[actorId] ?? [];
+      duel.incorrectWordsByPlayer[actorId] = [...attempts.slice(-7), guess];
+    }
+  }
   else if (effect.kind === "draw_cards") drawCards(state, effect.deckId, effect.target === "actor" ? actorId : state.activePlayerId, effect.count);
   else if (effect.kind === "discard_selected_card") {
     const deck = state.decks[effect.deckId];
@@ -629,7 +726,7 @@ export function reduceComposedGame(state: ComposedGameState, actionInput: Compos
     }
   }
   if (action.kind === "buzz") next.buzzes[next.phaseId] = actorId;
-  next.actions.push({ sequence: next.actions.length + 1, phaseId: next.phaseId, phaseVisit: next.phaseVisit, round: next.round, actionId: action.id, actorId, payload: action.kind === "sketch" ? {} : payload, correct });
+  next.actions.push({ sequence: next.actions.length + 1, phaseId: next.phaseId, phaseVisit: next.phaseVisit, round: next.round, actionId: action.id, actorId, payload: action.kind === "sketch" || action.kind === "secret_word" ? {} : payload, correct });
   next.acceptedIdempotencyKeys.push(actionInput.idempotencyKey);
   if (next.acceptedIdempotencyKeys.length > 500) next.acceptedIdempotencyKeys.shift();
 
@@ -710,6 +807,37 @@ function componentView(component: ComposedComponent, state: ComposedGameState, s
       .filter((record) => record.actionId === component.actionId && typeof record.payload.text === "string")
       .map((record) => ({ sequence: record.sequence, round: record.round, actorId: record.actorId, actorName: players.find((player) => player.id === record.actorId)?.name ?? "Player", text: record.payload.text })),
   } };
+  if (component.kind === "word_duel") {
+    const duel = state.wordDuels[component.id];
+    const opponentPlayerId = opponentId(state, viewerId);
+    const secretWord = duel?.secretWordsByPlayer[opponentPlayerId];
+    const guessedLetters = duel?.guessedLettersByPlayer[viewerId] ?? [];
+    const guessedSet = new Set(guessedLetters);
+    const opponentMask = secretWord ? [...secretWord].map((letter) => state.status === "completed" || guessedSet.has(letter) ? letter : "_") : [];
+    const keyboard = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].map((letter) => ({
+      letter,
+      state: !guessedSet.has(letter) ? "available" : secretWord?.includes(letter) ? "correct" : "wrong",
+    }));
+    const lastGuess = duel?.lastGuess ? {
+      ...duel.lastGuess,
+      value: duel.lastGuess.kind === "letter" || duel.lastGuess.correct || duel.lastGuess.actorId === viewerId ? duel.lastGuess.value : undefined,
+    } : null;
+    return { ...base, data: {
+      minLength: component.minLength,
+      maxLength: component.maxLength,
+      hasSubmitted: Boolean(duel?.secretWordsByPlayer[viewerId]),
+      submittedPlayerIds: Object.keys(duel?.secretWordsByPlayer ?? {}),
+      ownWord: duel?.secretWordsByPlayer[viewerId],
+      opponentId: opponentPlayerId,
+      opponentName: players.find((player) => player.id === opponentPlayerId)?.name ?? "Opponent",
+      opponentMask,
+      wordLength: secretWord?.length ?? null,
+      keyboard,
+      misses: guessedLetters.filter((letter) => !secretWord?.includes(letter)),
+      incorrectWordAttempts: duel?.incorrectWordsByPlayer[viewerId] ?? [],
+      lastGuess,
+    } };
+  }
   return { ...base, data: {} };
 }
 

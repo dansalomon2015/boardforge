@@ -40,6 +40,7 @@ import movieMimeStyles from "./movie-mime.module.css";
 import roomChromeStyles from "./room-chrome.module.css";
 import soundCheckStyles from "./sound-check.module.css";
 import storyChainStyles from "./story-chain.module.css";
+import wordDuelStyles from "./word-duel.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -206,10 +207,11 @@ export default function RoomPage() {
   const isDrawBattle = currentTitle === "DrawBattle";
   const isSoundCheck = currentTitle === "SoundCheck";
   const isStoryChain = currentTitle === "StoryChain";
-  const isOriginal = isMovieMime || isWordTrap || isDrawBattle || isSoundCheck || isStoryChain;
+  const isWordDuel = currentTitle === "WordDuel";
+  const isOriginal = isMovieMime || isWordTrap || isDrawBattle || isSoundCheck || isStoryChain || isWordDuel;
 
   return (
-    <main className={`room-shell ${isOriginal ? roomChromeStyles.movieRoom : ""}`} data-original-game={isStoryChain ? "story-chain" : isSoundCheck ? "sound-check" : isDrawBattle ? "draw-battle" : isWordTrap ? "word-trap" : isMovieMime ? "cinemimes" : undefined}>
+    <main className={`room-shell ${isOriginal ? roomChromeStyles.movieRoom : ""}`} data-original-game={isWordDuel ? "word-duel" : isStoryChain ? "story-chain" : isSoundCheck ? "sound-check" : isDrawBattle ? "draw-battle" : isWordTrap ? "word-trap" : isMovieMime ? "cinemimes" : undefined}>
       <header className="room-topbar">
         <a className="brand" href="/"><span className="brand-mark">BF</span><span>BoardForge</span></a>
         <div className="room-code"><span>ROOM</span><strong>{code}</strong><button onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/room/${code}`)}>Copy invite</button></div>
@@ -222,7 +224,7 @@ export default function RoomPage() {
           <p className="eyebrow">{isOriginal ? "Your private game night" : "You are invited"}</p>
           <h1>{isOriginal ? "Step into the room." : "Join the room"}</h1>
           <p>{isOriginal ? "Choose the player name that will appear throughout this game." : "Choose the name your friends will see during the game."}</p>
-          {isOriginal ? <div className={roomChromeStyles.joinCode}><span>Invitation</span><strong>{code}</strong><small>{isStoryChain ? "StoryChain" : isSoundCheck ? "SoundCheck" : isDrawBattle ? "DrawBattle" : isWordTrap ? "WordTrap" : "CineMimes"} · BoardForge Original</small></div> : null}
+          {isOriginal ? <div className={roomChromeStyles.joinCode}><span>Invitation</span><strong>{code}</strong><small>{isWordDuel ? "WordDuel" : isStoryChain ? "StoryChain" : isSoundCheck ? "SoundCheck" : isDrawBattle ? "DrawBattle" : isWordTrap ? "WordTrap" : "CineMimes"} · BoardForge Original</small></div> : null}
           <form onSubmit={join}>
             <label htmlFor="player-name">Your player name</label>
             <input id="player-name" autoFocus placeholder="e.g. Alex" maxLength={24} value={name} onChange={(event) => setName(event.target.value)} />
@@ -232,17 +234,17 @@ export default function RoomPage() {
       ) : view.kind === "lobby" ? (
         <section className="lobby-layout">
           <div className="lobby-hero">
-            {isOriginal ? <div className={roomChromeStyles.lobbyEdition}><span>BoardForge Original</span><b>No. {isStoryChain ? "05" : isSoundCheck ? "04" : isDrawBattle ? "03" : isWordTrap ? "02" : "01"}</b></div> : null}
-            <p className="eyebrow">{isStoryChain ? "The first page is waiting" : isSoundCheck ? "The studio is warming up" : isDrawBattle ? "The gallery is opening" : isWordTrap ? "Teams are entering the trap" : isMovieMime ? "Casting in progress" : "The table is getting ready"}</p>
+            {isOriginal ? <div className={roomChromeStyles.lobbyEdition}><span>BoardForge Original</span><b>No. {isWordDuel ? "06" : isStoryChain ? "05" : isSoundCheck ? "04" : isDrawBattle ? "03" : isWordTrap ? "02" : "01"}</b></div> : null}
+            <p className="eyebrow">{isWordDuel ? "The challenger is waiting" : isStoryChain ? "The first page is waiting" : isSoundCheck ? "The studio is warming up" : isDrawBattle ? "The gallery is opening" : isWordTrap ? "Teams are entering the trap" : isMovieMime ? "Casting in progress" : "The table is getting ready"}</p>
             <h1>{view.game.title}</h1>
             <p>{view.game.description}</p>
-            {isOriginal ? <div className={roomChromeStyles.lobbyFacts}>{isStoryChain ? <><span>✦ One shared story</span><span>⌁ Secret twists</span><span>♡ No teams, no score</span></> : <><span>{isSoundCheck ? "◖ Voice-only sounds" : isDrawBattle ? "✎ Live drawing" : isWordTrap ? "⚡ Forbidden words" : "🎬 Movie charades"}</span><span>⏱ {isDrawBattle ? "75" : "60"} seconds</span><span>✦ {view.teamSetup?.teams.length ?? 2} teams</span></>}</div> : null}
+            {isOriginal ? <div className={roomChromeStyles.lobbyFacts}>{isWordDuel ? <><span>W Secret words</span><span>⌨ Playable keyboard</span><span>⚔ Exactly 2 players</span></> : isStoryChain ? <><span>✦ One shared story</span><span>⌁ Secret twists</span><span>♡ No teams, no score</span></> : <><span>{isSoundCheck ? "◖ Voice-only sounds" : isDrawBattle ? "✎ Live drawing" : isWordTrap ? "⚡ Forbidden words" : "🎬 Movie charades"}</span><span>⏱ {isDrawBattle ? "75" : "60"} seconds</span><span>✦ {view.teamSetup?.teams.length ?? 2} teams</span></>}</div> : null}
             <div className="lobby-progress"><span style={{ width: `${Math.min(100, (view.players.length / view.game.minPlayers) * 100)}%` }} /></div>
             <small>{view.players.length} {view.players.length === 1 ? "friend is" : "friends are"} here · {view.game.minPlayers} needed to play</small>
             {view.teamSetup ? <TeamSetup view={view} pending={pending} selectTeam={selectTeam} selectCaptain={selectCaptain} /> : null}
             {self?.isHost ? (
               <button className="primary-button host-start" disabled={!view.canStart || pending} onClick={startGame}>
-                {view.canStart ? "Start the game" : isStoryChain ? "Invite one more storyteller" : view.startBlockReason ?? "The room is not ready yet"} <b>→</b>
+                {view.canStart ? "Start the game" : isWordDuel ? "Invite your rival" : isStoryChain ? "Invite one more storyteller" : view.startBlockReason ?? "The room is not ready yet"} <b>→</b>
               </button>
             ) : <div className="waiting-card">{view.teamSetup ? "The host will start when every team is ready." : "The host will start when everyone is ready."}</div>}
           </div>
@@ -373,6 +375,7 @@ function GameStage({ view, isHost, pending, sendAction }: {
     if (view.title === "DrawBattle") return <DrawBattleStage view={view} pending={pending} sendAction={sendAction} />;
     if (view.title === "SoundCheck") return <SoundCheckStage view={view} pending={pending} sendAction={sendAction} />;
     if (view.title === "StoryChain") return <StoryChainStage view={view} pending={pending} sendAction={sendAction} />;
+    if (view.title === "WordDuel") return <WordDuelStage view={view} pending={pending} sendAction={sendAction} />;
     return <ComposedStage view={view} pending={pending} sendAction={sendAction} />;
   }
 
@@ -884,6 +887,100 @@ function StoryChainStage({ view, pending, sendAction }: {
             )}
           </aside>
         </div>
+      )}
+    </GameSurface>
+  );
+}
+
+function WordDuelStage({ view, pending, sendAction }: {
+  view: ComposedGameView;
+  pending: boolean;
+  sendAction: (action: GameAction) => void;
+}) {
+  const [secretWord, setSecretWord] = useState("");
+  const [solveGuess, setSolveGuess] = useState("");
+  const [solveOpen, setSolveOpen] = useState(false);
+  const [celebration, setCelebration] = useState(false);
+  const theme = themeForRoom(view.theme);
+  const board = view.components.find((component) => component.kind === "word_duel")?.data as {
+    minLength?: number; maxLength?: number; hasSubmitted?: boolean; submittedPlayerIds?: string[]; ownWord?: string;
+    opponentId?: string; opponentName?: string; opponentMask?: string[]; wordLength?: number | null;
+    keyboard?: Array<{ letter: string; state: "available" | "correct" | "wrong" }>;
+    misses?: string[]; incorrectWordAttempts?: string[];
+    lastGuess?: { actorId: string; kind: "letter" | "word"; value?: string; correct: boolean; revealedCount: number } | null;
+  } | undefined;
+  const lockAction = view.availableActions.find((action) => action.id === "lock_word");
+  const letterAction = view.availableActions.find((action) => action.id === "guess_letter");
+  const solveAction = view.availableActions.find((action) => action.id === "solve_word");
+  const isMyTurn = view.activePlayerId === view.selfPlayerId;
+  const activePlayer = view.players.find((player) => player.id === view.activePlayerId);
+  const winnerId = view.winner?.kind === "players" ? view.winner.ids[0] : undefined;
+  const winner = view.players.find((player) => player.id === winnerId);
+  const keyboard = board?.keyboard ?? [];
+  const mask = board?.opponentMask ?? [];
+
+  function perform(actionId: string, text: string) {
+    sendAction({ type: "COMPOSED_ACTION", actionId, payload: { text } });
+  }
+
+  useEffect(() => {
+    if (!board?.lastGuess?.correct || board.lastGuess.kind !== "letter") return;
+    setCelebration(true);
+    const timeout = window.setTimeout(() => setCelebration(false), 950);
+    return () => window.clearTimeout(timeout);
+  }, [view.revision, board?.lastGuess?.correct, board?.lastGuess?.kind]);
+
+  useEffect(() => {
+    if (!isMyTurn || pending || solveOpen || !letterAction) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      const letter = event.key.toUpperCase();
+      if (!/^[A-Z]$/.test(letter) || keyboard.find((key) => key.letter === letter)?.state !== "available") return;
+      perform(letterAction.id, letter);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [isMyTurn, pending, solveOpen, letterAction, keyboard]);
+
+  function lockWord(event: FormEvent) {
+    event.preventDefault();
+    if (lockAction && secretWord.length >= (board?.minLength ?? 4) && secretWord.length <= (board?.maxLength ?? 12)) perform(lockAction.id, secretWord);
+  }
+
+  function submitSolve(event: FormEvent) {
+    event.preventDefault();
+    if (!solveAction || !solveGuess.trim()) return;
+    perform(solveAction.id, solveGuess);
+    setSolveGuess("");
+    setSolveOpen(false);
+  }
+
+  const rows = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
+  const playerReady = (playerId: string) => board?.submittedPlayerIds?.includes(playerId) ?? false;
+
+  return (
+    <GameSurface theme={theme} className={wordDuelStyles.stage}>
+      <header className={wordDuelStyles.header}><div><span>BoardForge Original No. 06</span><strong>WordDuel</strong></div><div className={wordDuelStyles.versus}><span>{view.players[0]?.name ?? "Player 1"}</span><b>VS</b><span>{view.players[1]?.name ?? "Player 2"}</span></div></header>
+
+      {view.status === "completed" ? (
+        <section className={wordDuelStyles.final}>
+          <div className={wordDuelStyles.finalBurst}><i>W</i><span /><span /><span /></div><small>The word has been cracked</small><h1>{winnerId === view.selfPlayerId ? "You win the duel." : `${winner?.name ?? "Your rival"} wins.`}</h1>
+          <div className={wordDuelStyles.finalWords}><div><span>{board?.opponentName}&apos;s word</span><strong>{mask.join("")}</strong></div><b>VS</b><div><span>Your word</span><strong>{board?.ownWord}</strong></div></div>
+          <p>{winnerId === view.selfPlayerId ? "Every key led you here. Beautifully played." : "A sharp duel deserves a rematch."}</p><a href="/games/word-duel">Play another duel <b>→</b></a>
+        </section>
+      ) : view.phase.id === "choose_words" ? (
+        <section className={wordDuelStyles.vault}>
+          <div className={wordDuelStyles.vaultIntro}><span>Private word vault</span><h1>Choose your secret.</h1><p>Pick one English word with {board?.minLength} to {board?.maxLength} letters. No spaces, names, or abbreviations. Your rival will only see the number of tiles.</p><div className={wordDuelStyles.readyPlayers}>{view.players.map((player) => <div className={playerReady(player.id) ? wordDuelStyles.ready : ""} key={player.id}><i>{player.name.slice(0, 1).toUpperCase()}</i><span><strong>{player.name}</strong><small>{playerReady(player.id) ? "Word locked" : "Choosing a word…"}</small></span><b>{playerReady(player.id) ? "✓" : "•••"}</b></div>)}</div></div>
+          <div className={wordDuelStyles.vaultCard}>{board?.hasSubmitted ? <><div className={wordDuelStyles.lockedIcon}>✓</div><span>Your word is safe</span><h2>{board.ownWord?.replace(/./g, "•")}</h2><p>Only the server knows what you chose. The duel begins when your rival locks theirs.</p><small>Waiting inside the vault…</small></> : <form onSubmit={lockWord}><span>Your secret word</span><div className={wordDuelStyles.secretInput}><input autoComplete="off" autoFocus maxLength={board?.maxLength ?? 12} onChange={(event) => setSecretWord(event.target.value.toUpperCase().replace(/[^A-Z]/g, ""))} placeholder="TYPE YOUR WORD" type="password" value={secretWord} /><b>{secretWord.length}/{board?.maxLength}</b></div><div className={wordDuelStyles.secretTiles}>{Array.from({ length: Math.max(secretWord.length, board?.minLength ?? 4) }, (_, index) => <i className={secretWord[index] ? wordDuelStyles.filled : ""} key={index}>{secretWord[index] ? "•" : ""}</i>)}</div><button disabled={pending || secretWord.length < (board?.minLength ?? 4) || secretWord.length > (board?.maxLength ?? 12)}>Lock my word <b>→</b></button><small>Your word never appears on your opponent&apos;s device.</small></form>}</div>
+        </section>
+      ) : (
+        <section className={wordDuelStyles.arena}>
+          {celebration ? <div className={wordDuelStyles.celebration}><span>✦</span><strong>{board?.lastGuess?.revealedCount === 1 ? "Nice hit!" : `${board?.lastGuess?.revealedCount} letters found!`}</strong><i /><i /><i /></div> : null}
+          <div className={wordDuelStyles.turnBar}><div className={isMyTurn ? wordDuelStyles.yourTurn : ""}><i>{activePlayer?.name.slice(0, 1).toUpperCase()}</i><span><small>{isMyTurn ? "Your move" : "Now playing"}</small><strong>{isMyTurn ? "Choose a letter" : `${activePlayer?.name} is thinking`}</strong></span></div><p>{board?.lastGuess ? board.lastGuess.kind === "letter" ? board.lastGuess.correct ? `${view.players.find((player) => player.id === board.lastGuess?.actorId)?.name} found ${board.lastGuess.value}.` : `${board.lastGuess.value} was not in the word.` : board.lastGuess.correct ? "The full word was cracked." : "The full-word attempt missed." : "The first key is waiting."}</p></div>
+          <div className={wordDuelStyles.wordArea}><span>{board?.opponentName}&apos;s secret word · {board?.wordLength} letters</span><div className={wordDuelStyles.wordTiles}>{mask.map((letter, index) => <i className={letter !== "_" ? wordDuelStyles.revealed : ""} key={`${index}-${letter}`}>{letter === "_" ? "" : letter}</i>)}</div><div className={wordDuelStyles.misses}><small>Misses</small>{board?.misses?.length ? board.misses.map((letter) => <b key={letter}>{letter}</b>) : <span>None yet</span>}</div></div>
+          <div className={wordDuelStyles.keyboardArea}><div className={wordDuelStyles.keyboardHeading}><div><span>Your keyboard</span><small>Every key can be played once</small></div><button disabled={!isMyTurn || pending || !solveAction} onClick={() => setSolveOpen(true)}>I know the word <b>↗</b></button></div><div className={wordDuelStyles.keyboard}>{rows.map((row) => <div key={row}>{[...row].map((letter) => { const key = keyboard.find((candidate) => candidate.letter === letter); return <button aria-label={`Play letter ${letter}`} className={key?.state === "correct" ? wordDuelStyles.correctKey : key?.state === "wrong" ? wordDuelStyles.wrongKey : ""} disabled={!isMyTurn || pending || key?.state !== "available"} key={letter} onClick={() => letterAction && perform(letterAction.id, letter)}><span>{letter}</span>{key?.state === "correct" ? <i>✓</i> : key?.state === "wrong" ? <i>×</i> : null}</button>; })}</div>)}</div><p>{isMyTurn ? "Tap a key or use your physical keyboard." : `Your keyboard unlocks after ${activePlayer?.name ?? "your rival"} plays.`}</p></div>
+          {solveOpen ? <div className={wordDuelStyles.solveBackdrop} onClick={() => setSolveOpen(false)}><form className={wordDuelStyles.solveCard} onClick={(event) => event.stopPropagation()} onSubmit={submitSolve}><span>Risk the whole word</span><h2>Think you&apos;ve cracked it?</h2><p>A wrong answer ends your turn. No extra letters will be revealed.</p><input autoFocus maxLength={board?.maxLength ?? 12} minLength={board?.minLength ?? 4} onChange={(event) => setSolveGuess(event.target.value.toUpperCase().replace(/[^A-Z]/g, ""))} placeholder={`${board?.wordLength ?? "?"} LETTER WORD`} value={solveGuess} /><div><button onClick={() => setSolveOpen(false)} type="button">Not yet</button><button disabled={pending || solveGuess.length !== board?.wordLength} type="submit">Solve it <b>→</b></button></div></form></div> : null}
+        </section>
       )}
     </GameSurface>
   );

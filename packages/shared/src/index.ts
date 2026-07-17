@@ -101,7 +101,7 @@ export type ComposedTheme =
 
 export type ResolvedGameComponent = {
   id: string;
-  kind: "header" | "prompt" | "deck" | "choices" | "text_input" | "drawing" | "timer" | "turn" | "round" | "teams" | "players" | "scores" | "clues" | "challenge" | "reveal" | "outcome" | "board" | "card_zone" | "resources" | "randomizer" | "buzzer" | "ordering" | "matching" | "media" | "story";
+  kind: "header" | "prompt" | "deck" | "choices" | "text_input" | "drawing" | "timer" | "turn" | "round" | "teams" | "players" | "scores" | "clues" | "challenge" | "reveal" | "outcome" | "board" | "card_zone" | "resources" | "randomizer" | "buzzer" | "ordering" | "matching" | "media" | "story" | "word_duel";
   data: Record<string, unknown>;
 };
 
@@ -126,7 +126,7 @@ export type ComposedGameView = {
   availableActions: Array<{
     id: string;
     label: string;
-    kind: "advance" | "choose" | "text" | "draw" | "play_card" | "move" | "resource" | "randomize" | "buzz" | "order" | "match" | "complete_challenge" | "select_player" | "sketch";
+    kind: "advance" | "choose" | "text" | "draw" | "play_card" | "move" | "resource" | "randomize" | "buzz" | "order" | "match" | "complete_challenge" | "select_player" | "sketch" | "secret_word" | "letter_guess" | "word_guess";
     options?: Array<{ id: string; label: string; description?: string | undefined; icon?: string | undefined }> | undefined;
     deckId?: string | undefined;
     boardId?: string | undefined;

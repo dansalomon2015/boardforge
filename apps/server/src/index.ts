@@ -17,17 +17,20 @@ import {
   createSoundCheckSpec,
   createRandomSoundCheckPack,
   createStoryChainSpec,
+  createWordDuelSpec,
   defaultMovieMimeSpec,
   defaultWordTrapSpec,
   defaultDrawBattleSpec,
   defaultSoundCheckSpec,
   defaultStoryChainSpec,
+  defaultWordDuelSpec,
   demoGameSpecs,
   movieMimeSetupSchema,
   wordTrapSetupSchema,
   drawBattleSetupSchema,
   soundCheckSetupSchema,
   storyChainSetupSchema,
+  wordDuelSetupSchema,
   partyPulseSpec,
   spaceHeistSpec,
   systemsLabSpec,
@@ -111,7 +114,7 @@ type Room = {
 };
 
 const rooms = new Map<string, Room>();
-const availableDemoSpecs: BoardGameSpec[] = [...demoGameSpecs, cinemaCharadesSpec, defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec, defaultStoryChainSpec, systemsLabSpec];
+const availableDemoSpecs: BoardGameSpec[] = [...demoGameSpecs, cinemaCharadesSpec, defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec, defaultStoryChainSpec, defaultWordDuelSpec, systemsLabSpec];
 const llm = createLlmProvider({
   provider: config.llmProvider,
   apiKey: config.openAiApiKey,
@@ -523,7 +526,7 @@ app.get("/health", async () => ({
 }));
 
 app.get("/api/games", async () => ({
-  games: [defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec, defaultStoryChainSpec].map((spec) => ({ id: spec.id, ...summary(spec) })),
+  games: [defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec, defaultStoryChainSpec, defaultWordDuelSpec].map((spec) => ({ id: spec.id, ...summary(spec) })),
   provider: llm.name,
 }));
 
@@ -799,6 +802,32 @@ app.post("/api/story-chain/blueprints", async (request, reply) => {
     app.log.warn({ message: error instanceof Error ? error.message : "Unknown StoryChain generation error" }, "StoryChain preparation failed");
     return reply.code(502).send({ error: compilationErrorMessage(error), provider: llm.name });
   }
+});
+
+const wordDuelBodySchema = z.object({
+  themeId: composedThemeIdSchema.default("minimal"),
+  difficulty: z.enum(["easy", "classic", "expert"]).default("classic"),
+}).strict();
+
+app.post("/api/word-duel/blueprints", async (request, reply) => {
+  const parsed = wordDuelBodySchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ error: "Invalid WordDuel setup.", issues: parsed.error.issues });
+  const setupResult = wordDuelSetupSchema.safeParse(parsed.data);
+  if (!setupResult.success) return reply.code(400).send({ error: "Invalid WordDuel setup.", issues: setupResult.error.issues });
+  const spec = createWordDuelSpec(setupResult.data);
+  const blueprintId = `${spec.id}-${crypto.randomUUID().slice(0, 8)}`;
+  await blueprintStore.saveBlueprint({ id: blueprintId, spec, status: "playtesting", provider: "boardforge-rules" });
+  const playtest = runComposedPlaytest(spec, { simulations: 24, seed: `release:${blueprintId}` });
+  const releaseStatus = playtest.status === "passed" ? "release_ready" : "needs_review";
+  await blueprintStore.savePlaytest(blueprintId, releaseStatus, playtest);
+  return reply.code(201).send({
+    blueprintId,
+    releaseStatus,
+    themeId: setupResult.data.themeId,
+    difficulty: setupResult.data.difficulty,
+    game: summary(spec),
+    playtest: { status: playtest.status, simulations: playtest.simulations, completedSimulations: playtest.completedSimulations },
+  });
 });
 
 const compileBodySchema = z

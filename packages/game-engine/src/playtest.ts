@@ -86,6 +86,25 @@ function stringId(value: unknown): string | null {
 }
 
 function payloadForAction(view: ComposedGameView, action: ViewAction, persona: VirtualAgentPersona, seed: string): ComposedActionPayload | null {
+  const wordDuel = view.components.find((component) => component.kind === "word_duel");
+  if (action.kind === "secret_word") {
+    const minLength = typeof wordDuel?.data.minLength === "number" ? wordDuel.data.minLength : 4;
+    const maxLength = typeof wordDuel?.data.maxLength === "number" ? wordDuel.data.maxLength : 12;
+    const candidates = ["amber", "planet", "garden", "rocket", "silver", "castle", "horizon", "lantern", "notebook", "waterfall", "adventure"]
+      .filter((word) => word.length >= minLength && word.length <= maxLength);
+    const playerIndex = view.players.findIndex((player) => player.id === view.selfPlayerId);
+    const word = candidates[(playerIndex < 0 ? numberHash(view.selfPlayerId) : playerIndex) % candidates.length];
+    return word ? { text: word } : null;
+  }
+  if (action.kind === "letter_guess") {
+    const keyboard = arrayValue(wordDuel?.data.keyboard).map(objectValue).filter((value): value is Record<string, unknown> => Boolean(value));
+    const key = keyboard.find((candidate) => candidate.state === "available" && typeof candidate.letter === "string");
+    return typeof key?.letter === "string" ? { text: key.letter } : null;
+  }
+  if (action.kind === "word_guess") {
+    const mask = arrayValue(wordDuel?.data.opponentMask);
+    return mask.length > 0 && mask.every((letter) => typeof letter === "string" && letter !== "_") ? { text: mask.join("") } : null;
+  }
   if (action.kind === "choose") {
     const options = action.options ?? [];
     const chosen = persona === "chaotic" || persona === "adversarial" ? options.at(-1) : rotate(options, seed)[0];
@@ -184,7 +203,7 @@ function createPlayers(count: number): PublicPlayer[] {
 
 function privateLeakEvidence(state: ComposedGameState, spec: ComposedGameSpec, players: PublicPlayer[], code: string): string | null {
   const privateDecks = spec.decks.filter((deck) => deck.visibility === "private");
-  if (!privateDecks.length) return null;
+  if (!privateDecks.length && !Object.keys(state.wordDuels).length) return null;
   const views = Object.fromEntries(players.map((player) => [player.id, JSON.stringify(projectComposedGameState(state, spec, players, code, player.id))]));
   for (const deckDefinition of privateDecks) {
     const deckState = state.decks[deckDefinition.id];
@@ -197,6 +216,15 @@ function privateLeakEvidence(state: ComposedGameState, spec: ComposedGameSpec, p
           if (viewer.id === owner.id) continue;
           if (views[viewer.id]?.includes(card.title)) return `${viewer.id} received the private card title owned by ${owner.id}.`;
           if (card.body && views[viewer.id]?.includes(card.body)) return `${viewer.id} received private card content owned by ${owner.id}.`;
+        }
+      }
+    }
+  }
+  if (state.status === "playing") {
+    for (const duel of Object.values(state.wordDuels)) {
+      for (const [ownerId, secretWord] of Object.entries(duel.secretWordsByPlayer)) {
+        for (const viewer of players) {
+          if (viewer.id !== ownerId && views[viewer.id]?.includes(secretWord)) return `${viewer.id} received the private word owned by ${ownerId}.`;
         }
       }
     }

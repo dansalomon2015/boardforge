@@ -89,7 +89,7 @@ export default function HomePage() {
             <p className={styles.eyebrow}><span /> The BoardForge collection</p>
             <h2>Choose tonight&apos;s<br />main event.</h2>
           </div>
-          <p>Five games, five completely different moods. Choose your favorite, add your people, and let the night take it from there.</p>
+          <p>Six games, six completely different moods. Choose your favorite, add your people, and let the night take it from there.</p>
         </div>
 
         <div className={styles.gamesGrid}>
@@ -155,6 +155,18 @@ export default function HomePage() {
             <p>Cooperative · Creative storytelling</p><h3>StoryChain</h3>
             <span>Take turns writing one shared tale, with a secret word waiting to twist every new chapter.</span>
             <div><b>Make it ours</b><strong>→</strong></div>
+          </div>
+        </Link>
+        <Link className={`${styles.gameCard} ${styles.wordDuelCard}`} href="/games/word-duel">
+          <div className={`${styles.gameArtwork} ${styles.wordDuelArtwork}`}>
+            <span className={styles.gameNumber}>No. 06</span>
+            <div className={styles.duelWord}><i>_</i><i className={styles.duelFound}>A</i><i>_</i><i>_</i><i className={styles.duelFound}>E</i></div>
+            <div className={styles.duelKeys}>{["QWERTY", "ASDFG", "ZXCVB"].map((row) => <div key={row}>{[...row].map((letter) => <i className={letter === "A" || letter === "E" ? styles.duelHit : letter === "T" ? styles.duelMiss : ""} key={letter}>{letter}</i>)}</div>)}</div>
+          </div>
+          <div className={styles.gameInfo}>
+            <p>Two players · Secret words</p><h3>WordDuel</h3>
+            <span>Lock in a word, play the keyboard, and crack your rival&apos;s answer before they crack yours.</span>
+            <div><b>Start the duel</b><strong>→</strong></div>
           </div>
         </Link>
         </div>
