@@ -80,7 +80,7 @@ export default function MovieMimeSetupPage() {
       }
       const prepared = await blueprintResponse.json() as PreparedGame;
       if (prepared.releaseStatus !== "release_ready") {
-        throw new Error("This selection did not pass the playability checks.");
+        throw new Error("That lineup needs a quick rethink. Try a different mix.");
       }
       const roomResponse = await fetch(`${apiUrl}/api/rooms`, {
         method: "POST",
@@ -110,12 +110,12 @@ export default function MovieMimeSetupPage() {
         <section className={styles.configuration}>
           <div className={styles.titleBlock}>
             <p>BoardForge Original Nº 01</p>
-            <h1>Build your<br /><em>CineMimes.</em></h1>
-            <span>The rules are locked and tested. You choose the atmosphere and the movie lineup.</span>
+            <h1>Make tonight&apos;s<br /><em>CineMimes.</em></h1>
+            <span>Set the mood, name your teams, and tell us what belongs on tonight&apos;s watchlist. We will handle the rest.</span>
           </div>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>01</b><span>Art direction</span><small>Choose the atmosphere at your table</small></legend>
+            <legend><b>01</b><span>Choose the mood</span><small>What should tonight feel like?</small></legend>
             <div className={styles.themeGrid}>
               {themeIds.map((themeId) => {
                 const item = gameThemes[themeId];
@@ -170,7 +170,7 @@ export default function MovieMimeSetupPage() {
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>03</b><span>Game length</span><small>One movie takes roughly one minute</small></legend>
+            <legend><b>03</b><span>How long are we playing?</span><small>Pick the pace for tonight</small></legend>
             <div className={styles.countGrid}>
               {filmCounts.map((count) => (
                 <button className={filmCount === count ? styles.selectedCount : ""} key={count} onClick={() => setFilmCount(count)} type="button">
@@ -181,7 +181,7 @@ export default function MovieMimeSetupPage() {
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>04</b><span>Your movie lineup</span><small>Optional · BoardForge picks a balanced mix otherwise</small></legend>
+            <legend><b>04</b><span>Make the lineup yours</span><small>Optional · leave it blank for a great surprise</small></legend>
             <textarea
               maxLength={240}
               onChange={(event) => setPreferences(event.target.value)}
@@ -199,16 +199,16 @@ export default function MovieMimeSetupPage() {
 
           {error ? <p className={styles.error} role="alert">{error}</p> : null}
           <button className={styles.submit} disabled={busy} type="submit">
-            <span>{busy ? "Preparing your game…" : "Open the screening room"}</span><b>{busy ? "•••" : "↗"}</b>
+            <span>{busy ? "Setting the scene…" : "Open the screening room"}</span><b>{busy ? "•••" : "↗"}</b>
           </button>
           <p className={styles.submitNote}>
-            {preferences.trim() ? "AI selects only audited movies from the BoardForge catalogue." : "Instant randomized selection with no AI request."}
+            {preferences.trim() ? "Your brief will shape tonight’s movie mix." : "No brief needed — the surprise is part of the fun."}
           </p>
         </section>
 
         <aside className={styles.previewColumn}>
           <div className={styles.sticky}>
-            <p className={styles.previewLabel}>Your edition preview</p>
+            <p className={styles.previewLabel}>Tonight&apos;s edition</p>
             <div className={styles.gamePreview} style={previewStyle}>
               <div className={styles.previewGlow} />
               <div className={styles.previewTop}>
@@ -226,9 +226,9 @@ export default function MovieMimeSetupPage() {
               </div>
             </div>
             <div className={styles.previewDetails}>
-              <div><span>Atmosphere</span><b>{activeTheme.name}</b></div>
-              <div><span>Selection</span><b>{preferences.trim() ? "AI-curated" : "Balanced surprise"}</b></div>
-              <div><span>Playability</span><b>24 simulations passed</b></div>
+              <div><span>Tonight&apos;s mood</span><b>{activeTheme.name}</b></div>
+              <div><span>Movie mix</span><b>{preferences.trim() ? "Made for your group" : "Surprise me"}</b></div>
+              <div><span>Best with</span><b>Big performances</b></div>
             </div>
           </div>
         </aside>
@@ -237,8 +237,8 @@ export default function MovieMimeSetupPage() {
       {busy ? (
         <div className={styles.loading} aria-live="polite">
           <div className={styles.loadingMark}><span>BF</span><i /></div>
-          <p>{preferences.trim() ? "The curator is building your lineup…" : "The reels are being prepared…"}</p>
-          <small>Validating the deck · testing the engine · opening the room</small>
+          <p>{preferences.trim() ? "Tonight’s lineup is taking shape…" : "The reels are starting to turn…"}</p>
+          <small>Picking the movies · setting the mood · opening the room</small>
         </div>
       ) : null}
     </main>

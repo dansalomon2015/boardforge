@@ -56,7 +56,7 @@ export default function DrawBattleSetupPage() {
         throw new Error(failure?.error ?? "The drawing deck could not be prepared.");
       }
       const prepared = await blueprintResponse.json() as { blueprintId: string; releaseStatus: "release_ready" | "needs_review" };
-      if (prepared.releaseStatus !== "release_ready") throw new Error("This deck did not pass the playability checks.");
+      if (prepared.releaseStatus !== "release_ready") throw new Error("That drawing mix needs a quick rethink. Try another theme.");
       const roomResponse = await fetch(`${apiUrl}/api/rooms`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ blueprintId: prepared.blueprintId }) });
       if (!roomResponse.ok) throw new Error("The room could not be opened.");
       const room = await roomResponse.json() as { code: string };
@@ -72,10 +72,10 @@ export default function DrawBattleSetupPage() {
       <nav className={styles.nav}><Link className={styles.brand} href="/"><span>BF</span><b>BoardForge</b></Link><Link className={styles.back} href="/">← Back to the collection</Link></nav>
       <form className={styles.layout} onSubmit={prepareGame}>
         <section className={styles.configuration}>
-          <div className={styles.titleBlock}><p>BoardForge Original No. 03</p><h1>Build your<br /><em>DrawBattle.</em></h1><span>The live canvas is ready. You direct the art style, the teams, and the prompt collection.</span></div>
+          <div className={styles.titleBlock}><p>BoardForge Original No. 03</p><h1>Make tonight&apos;s<br /><em>DrawBattle.</em></h1><span>Set the mood, name your teams, and choose what you would love — or hate — to draw.</span></div>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>01</b><span>Art direction</span><small>Choose the atmosphere around your canvas</small></legend>
+            <legend><b>01</b><span>Choose the mood</span><small>What should tonight feel like?</small></legend>
             <div className={styles.themeGrid}>{themeIds.map((themeId) => {
               const item = gameThemes[themeId];
               return <button className={theme === themeId ? styles.selectedTheme : ""} key={themeId} onClick={() => setTheme(themeId)} style={{ "--swatch-a": item.colors.primary, "--swatch-b": item.colors.secondary, "--swatch-c": item.colors.accent } as CSSProperties} type="button"><span><i /><i /><i /></span><b>{item.emoji}</b><strong>{item.name}</strong><small>{item.description}</small></button>;
@@ -96,28 +96,28 @@ export default function DrawBattleSetupPage() {
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>03</b><span>Gallery length</span><small>One prompt creates one live canvas</small></legend>
-            <div className={styles.countGrid}>{promptCounts.map((count) => <button className={promptCount === count ? styles.selectedCount : ""} key={count} onClick={() => setPromptCount(count)} type="button"><strong>{count}</strong><span>prompts</span><small>~{Math.ceil(count * 1.35)} min</small></button>)}</div>
+            <legend><b>03</b><span>How long are we playing?</span><small>Pick the pace for tonight</small></legend>
+            <div className={styles.countGrid}>{promptCounts.map((count) => <button className={promptCount === count ? styles.selectedCount : ""} key={count} onClick={() => setPromptCount(count)} type="button"><strong>{count}</strong><span>drawings</span><small>~{Math.ceil(count * 1.35)} min</small></button>)}</div>
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>04</b><span>Your prompt style</span><small>Optional · BoardForge creates a balanced mix otherwise</small></legend>
+            <legend><b>04</b><span>Make the ideas yours</span><small>Optional · leave it blank for a great surprise</small></legend>
             <textarea maxLength={240} onChange={(event) => setPreferences(event.target.value)} placeholder="e.g. Easy animals and fantasy for a family game night…" rows={4} value={preferences} />
             <div className={styles.suggestions}>{["Easy animals", "Fantasy worlds", "Everyday chaos", "Hard mode"].map((suggestion) => <button key={suggestion} onClick={() => setPreferences(suggestion)} type="button">{suggestion}</button>)}<span>{preferences.length}/240</span></div>
           </fieldset>
 
           {error ? <p className={styles.error} role="alert">{error}</p> : null}
-          <button className={styles.submit} disabled={busy} type="submit"><span>{busy ? "Preparing the gallery…" : "Open the DrawBattle room"}</span><b>{busy ? "•••" : "↗"}</b></button>
-          <p className={styles.submitNote}>{preferences.trim() ? "AI selects only audited prompts from the BoardForge catalogue." : "Instant randomized selection with no AI request."}</p>
+          <button className={styles.submit} disabled={busy} type="submit"><span>{busy ? "Hanging the first canvas…" : "Open the DrawBattle room"}</span><b>{busy ? "•••" : "↗"}</b></button>
+          <p className={styles.submitNote}>{preferences.trim() ? "Your brief will shape tonight’s drawing mix." : "No brief needed — the surprise is part of the fun."}</p>
         </section>
 
         <aside className={styles.previewColumn}><div className={styles.sticky}>
-          <p className={styles.previewLabel}>Your edition preview</p>
+          <p className={styles.previewLabel}>Tonight&apos;s edition</p>
           <div className={styles.gamePreview} style={previewStyle}><div className={styles.previewGlow} /><div className={styles.previewTop}><span>BoardForge Original</span><strong>✎</strong></div><div className={styles.previewCenter}><small>Live drawing showdown</small><h2>Draw<br />Battle</h2><p>{preferences.trim() || "Secret prompts, fearless lines, and a room racing to name the picture."}</p></div><div className={styles.previewStats}><span><b>{promptCount}</b> prompts</span><span><b>{teams.length}</b> teams</span><span><b>75</b> sec.</span></div></div>
-          <div className={styles.previewDetails}><div><span>Atmosphere</span><b>{activeTheme.name}</b></div><div><span>Selection</span><b>{preferences.trim() ? "AI-curated" : "Balanced surprise"}</b></div><div><span>Playability</span><b>24 simulations passed</b></div></div>
+          <div className={styles.previewDetails}><div><span>Tonight&apos;s mood</span><b>{activeTheme.name}</b></div><div><span>Drawing mix</span><b>{preferences.trim() ? "Made for your group" : "Surprise me"}</b></div><div><span>Best with</span><b>Fearless artists</b></div></div>
         </div></aside>
       </form>
-      {busy ? <div className={styles.loading} aria-live="polite"><div className={styles.loadingMark}><span>BF</span><i /></div><p>{preferences.trim() ? "The curator is choosing drawable ideas…" : "The prompts are being shuffled…"}</p><small>Validating the deck · testing the engine · opening the room</small></div> : null}
+      {busy ? <div className={styles.loading} aria-live="polite"><div className={styles.loadingMark}><span>BF</span><i /></div><p>{preferences.trim() ? "Tonight’s gallery is taking shape…" : "The sketchbook is opening…"}</p><small>Picking the ideas · setting the mood · opening the room</small></div> : null}
     </main>
   );
 }

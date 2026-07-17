@@ -36,21 +36,21 @@ export default function HomePage() {
 
       <section className={styles.hero}>
         <div className={styles.heroCopy}>
-          <p className={styles.eyebrow}><span /> One night. One game. Your edition.</p>
-          <h1>Game night,<br /><em>forged beautifully.</em></h1>
+          <p className={styles.eyebrow}><span /> Make tonight one to remember.</p>
+          <h1>Your game night,<br /><em>beautifully made.</em></h1>
           <p className={styles.lead}>
-            Premium social games, personalized for your group and designed like collectible objects worth bringing to the table.
+            Pick a game, make it yours, and invite everyone in. BoardForge sets the scene for laughter, rivalry, and the stories you will retell tomorrow.
           </p>
           <div className={styles.heroActions}>
             <Link className={styles.primaryAction} href="/games/movie-mime">
-              Build a game <b>↗</b>
+              Choose tonight&apos;s game <b>↗</b>
             </Link>
             <a className={styles.secondaryAction} href="#games">Explore the collection</a>
           </div>
           <div className={styles.proof}>
-            <span><b>24/24</b> playtests</span>
-            <span><b>234</b> audited cards</span>
-            <span><b>20</b> art directions</span>
+            <span><b>Pick</b> your mood</span>
+            <span><b>Invite</b> with one code</span>
+            <span><b>Play</b> together</span>
           </div>
         </div>
 
@@ -77,7 +77,7 @@ export default function HomePage() {
           <div className={styles.floatingCard}>
             <span>Secret movie</span>
             <strong>?</strong>
-            <small>Performer access only</small>
+            <small>For the performer&apos;s eyes only</small>
           </div>
           <div className={styles.timerChip}><i /> 00:42</div>
         </div>
@@ -87,9 +87,9 @@ export default function HomePage() {
         <div className={styles.catalogHeading}>
           <div>
             <p className={styles.eyebrow}><span /> The BoardForge collection</p>
-            <h2>Four real games.<br />No compromises.</h2>
+            <h2>Choose tonight&apos;s<br />main event.</h2>
           </div>
-          <p>Every title has its own tuned rule loop, art direction, private information model, and multiplayer experience.</p>
+          <p>Four games, four completely different moods. Choose your favorite, add your people, and let the night take it from there.</p>
         </div>
 
         <div className={styles.gamesGrid}>
@@ -104,7 +104,7 @@ export default function HomePage() {
             <h3>CineMimes</h3>
             <span>Act out famous movies without saying a word. Choose your atmosphere and let BoardForge prepare the lineup.</span>
             <div>
-              <b>Build my edition</b>
+              <b>Make it ours</b>
               <strong>→</strong>
             </div>
           </div>
@@ -118,7 +118,7 @@ export default function HomePage() {
           <div className={styles.gameInfo}>
             <p>Team game · Forbidden words</p><h3>WordTrap</h3>
             <span>Give brilliant clues, avoid five dangerous words, and beat the opposing team’s buzzer.</span>
-            <div><b>Build my edition</b><strong>→</strong></div>
+            <div><b>Make it ours</b><strong>→</strong></div>
           </div>
         </Link>
         <Link className={`${styles.gameCard} ${styles.drawBattleCard}`} href="/games/draw-battle">
@@ -129,8 +129,8 @@ export default function HomePage() {
           </div>
           <div className={styles.gameInfo}>
             <p>Team game · Live drawing</p><h3>DrawBattle</h3>
-            <span>Draw a secret prompt on a synchronized canvas while every other player races to name it.</span>
-            <div><b>Build my edition</b><strong>→</strong></div>
+            <span>Turn a secret idea into questionable art while the room races to work out what it is.</span>
+            <div><b>Make it ours</b><strong>→</strong></div>
           </div>
         </Link>
         <Link className={`${styles.gameCard} ${styles.soundCheckCard}`} href="/games/sound-check">
@@ -141,8 +141,8 @@ export default function HomePage() {
           </div>
           <div className={styles.gameInfo}>
             <p>Team game · Sound imitation</p><h3>SoundCheck</h3>
-            <span>Imitate a secret sound using only your voice while every other player races to identify it.</span>
-            <div><b>Build my edition</b><strong>→</strong></div>
+            <span>Make the sound. Keep a straight face. Hope someone understands what on earth you are doing.</span>
+            <div><b>Make it ours</b><strong>→</strong></div>
           </div>
         </Link>
         </div>

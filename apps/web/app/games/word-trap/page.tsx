@@ -63,7 +63,7 @@ export default function WordTrapSetupPage() {
         throw new Error(failure?.error ?? "The deck could not be prepared.");
       }
       const prepared = await blueprintResponse.json() as { blueprintId: string; releaseStatus: "release_ready" | "needs_review" };
-      if (prepared.releaseStatus !== "release_ready") throw new Error("This deck did not pass the playability checks.");
+      if (prepared.releaseStatus !== "release_ready") throw new Error("That word mix needs a quick rethink. Try another theme.");
       const roomResponse = await fetch(`${apiUrl}/api/rooms`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -89,12 +89,12 @@ export default function WordTrapSetupPage() {
         <section className={styles.configuration}>
           <div className={styles.titleBlock}>
             <p>BoardForge Original No. 02</p>
-            <h1>Build your<br /><em>WordTrap.</em></h1>
-            <span>The rules are locked and tested. You direct the mood, the teams, and the vocabulary.</span>
+            <h1>Make tonight&apos;s<br /><em>WordTrap.</em></h1>
+            <span>Set the mood, name your teams, and choose the kind of words that will keep everyone on their toes.</span>
           </div>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>01</b><span>Art direction</span><small>Choose the atmosphere at your table</small></legend>
+            <legend><b>01</b><span>Choose the mood</span><small>What should tonight feel like?</small></legend>
             <div className={styles.themeGrid}>
               {themeIds.map((themeId) => {
                 const item = gameThemes[themeId];
@@ -122,14 +122,14 @@ export default function WordTrapSetupPage() {
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>03</b><span>Deck length</span><small>One card takes roughly one minute</small></legend>
+            <legend><b>03</b><span>How long are we playing?</span><small>Pick the pace for tonight</small></legend>
             <div className={styles.countGrid}>
               {cardCounts.map((count) => <button className={cardCount === count ? styles.selectedCount : ""} key={count} onClick={() => setCardCount(count)} type="button"><strong>{count}</strong><span>cards</span><small>~{Math.ceil(count * 1.15)} min</small></button>)}
             </div>
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>04</b><span>Your vocabulary</span><small>Optional · BoardForge picks a balanced mix otherwise</small></legend>
+            <legend><b>04</b><span>Make the words yours</span><small>Optional · leave it blank for a great surprise</small></legend>
             <textarea maxLength={240} onChange={(event) => setPreferences(event.target.value)} placeholder="e.g. Easy pop culture, travel and food for a family game night…" rows={4} value={preferences} />
             <div className={styles.suggestions}>
               {["Pop culture", "Family night", "Food & travel", "Hard mode"].map((suggestion) => <button key={suggestion} onClick={() => setPreferences(suggestion)} type="button">{suggestion}</button>)}
@@ -138,13 +138,13 @@ export default function WordTrapSetupPage() {
           </fieldset>
 
           {error ? <p className={styles.error} role="alert">{error}</p> : null}
-          <button className={styles.submit} disabled={busy} type="submit"><span>{busy ? "Building your deck…" : "Open the WordTrap room"}</span><b>{busy ? "•••" : "↗"}</b></button>
-          <p className={styles.submitNote}>{preferences.trim() ? "AI selects only audited cards from the BoardForge catalogue." : "Instant randomized selection with no AI request."}</p>
+          <button className={styles.submit} disabled={busy} type="submit"><span>{busy ? "Setting the trap…" : "Open the WordTrap room"}</span><b>{busy ? "•••" : "↗"}</b></button>
+          <p className={styles.submitNote}>{preferences.trim() ? "Your brief will shape tonight’s word mix." : "No brief needed — the surprise is part of the fun."}</p>
         </section>
 
         <aside className={styles.previewColumn}>
           <div className={styles.sticky}>
-            <p className={styles.previewLabel}>Your edition preview</p>
+            <p className={styles.previewLabel}>Tonight&apos;s edition</p>
             <div className={styles.gamePreview} style={previewStyle}>
               <div className={styles.previewGlow} />
               <div className={styles.previewTop}><span>BoardForge Original</span><strong>⚡</strong></div>
@@ -155,15 +155,15 @@ export default function WordTrapSetupPage() {
               <div className={styles.previewStats}><span><b>{cardCount}</b> cards</span><span><b>{teams.length}</b> teams</span><span><b>60</b> sec.</span></div>
             </div>
             <div className={styles.previewDetails}>
-              <div><span>Atmosphere</span><b>{activeTheme.name}</b></div>
-              <div><span>Selection</span><b>{preferences.trim() ? "AI-curated" : "Balanced surprise"}</b></div>
-              <div><span>Playability</span><b>24 simulations passed</b></div>
+              <div><span>Tonight&apos;s mood</span><b>{activeTheme.name}</b></div>
+              <div><span>Word mix</span><b>{preferences.trim() ? "Made for your group" : "Surprise me"}</b></div>
+              <div><span>Best with</span><b>Fast talkers</b></div>
             </div>
           </div>
         </aside>
       </form>
 
-      {busy ? <div className={styles.loading} aria-live="polite"><div className={styles.loadingMark}><span>BF</span><i /></div><p>{preferences.trim() ? "The curator is tuning your vocabulary…" : "The cards are being shuffled…"}</p><small>Validating the deck · testing the engine · opening the room</small></div> : null}
+      {busy ? <div className={styles.loading} aria-live="polite"><div className={styles.loadingMark}><span>BF</span><i /></div><p>{preferences.trim() ? "Tonight’s word mix is taking shape…" : "The trap is being set…"}</p><small>Picking the words · setting the mood · opening the room</small></div> : null}
     </main>
   );
 }

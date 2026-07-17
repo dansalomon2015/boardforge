@@ -56,7 +56,7 @@ export default function SoundCheckSetupPage() {
         throw new Error(failure?.error ?? "The sound deck could not be prepared.");
       }
       const prepared = await blueprintResponse.json() as { blueprintId: string; releaseStatus: "release_ready" | "needs_review" };
-      if (prepared.releaseStatus !== "release_ready") throw new Error("This deck did not pass the playability checks.");
+      if (prepared.releaseStatus !== "release_ready") throw new Error("That sound mix needs a quick rethink. Try another theme.");
       const roomResponse = await fetch(`${apiUrl}/api/rooms`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ blueprintId: prepared.blueprintId }) });
       if (!roomResponse.ok) throw new Error("The room could not be opened.");
       const room = await roomResponse.json() as { code: string };
@@ -72,10 +72,10 @@ export default function SoundCheckSetupPage() {
       <nav className={styles.nav}><Link className={styles.brand} href="/"><span>BF</span><b>BoardForge</b></Link><Link className={styles.back} href="/">← Back to the collection</Link></nav>
       <form className={styles.layout} onSubmit={prepareGame}>
         <section className={styles.configuration}>
-          <div className={styles.titleBlock}><p>BoardForge Original No. 04</p><h1>Build your<br /><em>SoundCheck.</em></h1><span>The studio is live. Shape the atmosphere, assemble your teams, and tune the sound deck.</span></div>
+          <div className={styles.titleBlock}><p>BoardForge Original No. 04</p><h1>Make tonight&apos;s<br /><em>SoundCheck.</em></h1><span>Set the mood, name your teams, and choose the sounds most likely to bring the house down.</span></div>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>01</b><span>Studio atmosphere</span><small>Choose the visual world around your performance</small></legend>
+            <legend><b>01</b><span>Choose the mood</span><small>What should tonight feel like?</small></legend>
             <div className={styles.themeGrid}>{themeIds.map((themeId) => {
               const item = gameThemes[themeId];
               return <button className={theme === themeId ? styles.selectedTheme : ""} key={themeId} onClick={() => setTheme(themeId)} style={{ "--swatch-a": item.colors.primary, "--swatch-b": item.colors.secondary, "--swatch-c": item.colors.accent } as CSSProperties} type="button"><span><i /><i /><i /></span><b>{item.emoji}</b><strong>{item.name}</strong><small>{item.description}</small></button>;
@@ -96,28 +96,28 @@ export default function SoundCheckSetupPage() {
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>03</b><span>Set length</span><small>One prompt creates one live performance</small></legend>
+            <legend><b>03</b><span>How long are we playing?</span><small>Pick the pace for tonight</small></legend>
             <div className={styles.countGrid}>{promptCounts.map((count) => <button className={promptCount === count ? styles.selectedCount : ""} key={count} onClick={() => setPromptCount(count)} type="button"><strong>{count}</strong><span>sounds</span><small>~{Math.ceil(count * 1.1)} min</small></button>)}</div>
           </fieldset>
 
           <fieldset className={styles.fieldset}>
-            <legend><b>04</b><span>Your sound mix</span><small>Optional · BoardForge creates a balanced mix otherwise</small></legend>
+            <legend><b>04</b><span>Make the sounds yours</span><small>Optional · leave it blank for a great surprise</small></legend>
             <textarea maxLength={240} onChange={(event) => setPreferences(event.target.value)} placeholder="e.g. Easy animals and household sounds for a family game night…" rows={4} value={preferences} />
             <div className={styles.suggestions}>{["Easy animals", "Machines only", "Music studio", "Hard mode"].map((suggestion) => <button key={suggestion} onClick={() => setPreferences(suggestion)} type="button">{suggestion}</button>)}<span>{preferences.length}/240</span></div>
           </fieldset>
 
           {error ? <p className={styles.error} role="alert">{error}</p> : null}
-          <button className={styles.submit} disabled={busy} type="submit"><span>{busy ? "Tuning the studio…" : "Open the SoundCheck room"}</span><b>{busy ? "•••" : "↗"}</b></button>
-          <p className={styles.submitNote}>{preferences.trim() ? "AI selects only audited prompts from the BoardForge catalogue." : "Instant randomized selection with no AI request."}</p>
+          <button className={styles.submit} disabled={busy} type="submit"><span>{busy ? "Turning up the volume…" : "Open the SoundCheck room"}</span><b>{busy ? "•••" : "↗"}</b></button>
+          <p className={styles.submitNote}>{preferences.trim() ? "Your brief will shape tonight’s sound mix." : "No brief needed — the surprise is part of the fun."}</p>
         </section>
 
         <aside className={styles.previewColumn}><div className={styles.sticky}>
-          <p className={styles.previewLabel}>Your edition preview</p>
+          <p className={styles.previewLabel}>Tonight&apos;s edition</p>
           <div className={styles.gamePreview} style={previewStyle}><div className={styles.previewGlow} /><div className={styles.previewTop}><span>BoardForge Original</span><strong>◖</strong></div><div className={styles.previewCenter}><small>Voice-only sound showdown</small><h2>Sound<br />Check</h2><p>{preferences.trim() || "Secret sounds, fearless voices, and a room racing to identify every performance."}</p></div><div className={styles.previewStats}><span><b>{promptCount}</b> sounds</span><span><b>{teams.length}</b> teams</span><span><b>60</b> sec.</span></div></div>
-          <div className={styles.previewDetails}><div><span>Atmosphere</span><b>{activeTheme.name}</b></div><div><span>Selection</span><b>{preferences.trim() ? "AI-curated" : "Balanced surprise"}</b></div><div><span>Playability</span><b>24 simulations passed</b></div></div>
+          <div className={styles.previewDetails}><div><span>Tonight&apos;s mood</span><b>{activeTheme.name}</b></div><div><span>Sound mix</span><b>{preferences.trim() ? "Made for your group" : "Surprise me"}</b></div><div><span>Best with</span><b>Bold voices</b></div></div>
         </div></aside>
       </form>
-      {busy ? <div className={styles.loading} aria-live="polite"><div className={styles.loadingMark}><span>BF</span><i /></div><p>{preferences.trim() ? "The producer is curating your sound mix…" : "The sound deck is being shuffled…"}</p><small>Validating the deck · testing the engine · opening the studio</small></div> : null}
+      {busy ? <div className={styles.loading} aria-live="polite"><div className={styles.loadingMark}><span>BF</span><i /></div><p>{preferences.trim() ? "Tonight’s set is taking shape…" : "The studio lights are coming on…"}</p><small>Picking the sounds · setting the mood · opening the room</small></div> : null}
     </main>
   );
 }

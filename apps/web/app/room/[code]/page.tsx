@@ -236,7 +236,7 @@ export default function RoomPage() {
             <p>{view.game.description}</p>
             {isOriginal ? <div className={roomChromeStyles.lobbyFacts}><span>{isSoundCheck ? "◖ Voice-only sounds" : isDrawBattle ? "✎ Live drawing" : isWordTrap ? "⚡ Forbidden words" : "🎬 Movie charades"}</span><span>⏱ {isDrawBattle ? "75" : "60"} seconds</span><span>✦ {view.teamSetup?.teams.length ?? 2} teams</span></div> : null}
             <div className="lobby-progress"><span style={{ width: `${Math.min(100, (view.players.length / view.game.minPlayers) * 100)}%` }} /></div>
-            <small>{view.players.length} player(s) in the room · minimum {view.game.minPlayers}</small>
+            <small>{view.players.length} {view.players.length === 1 ? "friend is" : "friends are"} here · {view.game.minPlayers} needed to play</small>
             {view.teamSetup ? <TeamSetup view={view} pending={pending} selectTeam={selectTeam} selectCaptain={selectCaptain} /> : null}
             {self?.isHost ? (
               <button className="primary-button host-start" disabled={!view.canStart || pending} onClick={startGame}>
@@ -270,8 +270,8 @@ function TeamSetup({ view, pending, selectTeam, selectCaptain }: {
   return (
     <section className="team-setup" aria-labelledby="team-setup-title">
       <div className="team-setup-heading">
-        <div><p className="preview-label">Open team selection</p><h2 id="team-setup-title">Choose your team</h2></div>
-        <span>{view.teamSetup.allowUnevenTeams ? "Flexible teams" : "Balanced teams"}</span>
+        <div><p className="preview-label">Pick your side</p><h2 id="team-setup-title">Choose your team</h2></div>
+        <span>{view.teamSetup.allowUnevenTeams ? "Everyone is welcome" : "Keep it even"}</span>
       </div>
       <div className="team-choice-grid">
         {view.teamSetup.teams.map((team) => {
@@ -317,7 +317,7 @@ function PlayerRail({ view }: { view: RoomView }) {
           </div>
         ))}
       </div>
-      <div className="rail-footer"><span>Secure state</span><span>Private cards</span></div>
+      <div className="rail-footer"><span>One room</span><span>One great night</span></div>
     </aside>
   );
 }
@@ -338,7 +338,7 @@ function GameStage({ view, isHost, pending, sendAction }: {
         <div className="score-strip"><div><span>Crew</span><strong>{view.scores.crew}</strong></div><div><span>Saboteurs</span><strong>{view.scores.saboteur}</strong></div></div>
 
         {view.phase === "mission" ? (
-          <ActionBlock title="Mission decision" text="Choose privately. The server will reveal only the total number of sabotages.">
+          <ActionBlock title="Mission decision" text="Everyone chooses in secret. You will only discover how many sabotages slipped through.">
             <button disabled={pending || view.submitted} onClick={() => sendAction({ type: "SUBMIT_MISSION", choice: "success" })}>Secure mission</button>
             {view.ownRole.team === "saboteur" ? <button className="danger" disabled={pending || view.submitted} onClick={() => sendAction({ type: "SUBMIT_MISSION", choice: "sabotage" })}>Sabotage</button> : null}
             {view.submitted ? <p className="submitted">Decision locked. Waiting for the crew…</p> : null}
@@ -514,7 +514,7 @@ function MovieMimeStage({ view, pending, sendAction }: {
           <h1>{activePlayer?.name ?? "The next player"}</h1>
           <span>
             {isActivePlayer
-              ? "Reveal your movie privately. Your team will never receive the secret card."
+              ? "Only you can see the title. Keep the screen close and get ready to perform."
               : "Look away while the performer studies the secret movie."}
           </span>
           <div className={movieMimeStyles.secretCard}>
@@ -624,7 +624,7 @@ function WordTrapStage({ view, pending, sendAction }: {
         <section className={movieMimeStyles.drawStage}>
           <div className={movieMimeStyles.spotlight} /><p>{isActivePlayer ? "You are entering the trap" : "Next clue giver"}</p>
           <h1>{activePlayer?.name ?? "The next player"}</h1>
-          <span>{isActivePlayer ? "Reveal the card privately. No one else will receive the word or its forbidden clues." : "Look away while the clue giver studies the secret card."}</span>
+          <span>{isActivePlayer ? "Only you can see the card. Keep the screen close and choose every clue carefully." : "Look away while the clue giver studies the secret card."}</span>
           <div className={movieMimeStyles.secretCard}><small>Secret word</small><strong>⚡</strong><i>?</i></div>
           {drawAction ? <button disabled={pending} onClick={() => perform(drawAction.id)}><span>{pending ? "Opening the trap…" : "Reveal my card"}</span><b>↗</b></button> : <em>Waiting for {activePlayer?.name ?? "the clue giver"}…</em>}
         </section>
@@ -708,7 +708,7 @@ function DrawBattleStage({ view, pending, sendAction }: {
         <section className={movieMimeStyles.castingStage}>
           <div className={movieMimeStyles.spotlight} /><p>{activeTeam?.name ?? "The active team"} owns the next canvas</p>
           <h1>{isActiveCaptain ? "Choose your artist." : `${view.players.find((player) => player.id === activeCaptainId)?.name ?? "The captain"} is choosing.`}</h1>
-          <span>{isActiveCaptain ? "Pick the player who will receive and draw the next secret prompt." : "The next artist will take over the live canvas in a moment."}</span>
+          <span>{isActiveCaptain ? "Pick the player who will turn the next secret idea into art." : "The next artist will take over the canvas in a moment."}</span>
           <div className={movieMimeStyles.castGrid}>{activeTeam?.playerIds.map((id) => {
             const player = view.players.find((candidate) => candidate.id === id);
             return <button disabled={pending || !selectAction} key={id} onClick={() => selectAction && perform(selectAction.id, { targetPlayerId: id })}><i>{player?.name.slice(0, 1).toUpperCase() ?? "?"}</i><span><small>Ready to draw</small><strong>{player?.name ?? "Player"}</strong></span><b>{id === activeCaptainId ? "★ Captain" : "Choose →"}</b></button>;
@@ -718,9 +718,9 @@ function DrawBattleStage({ view, pending, sendAction }: {
       ) : view.phase.id === "draw_prompt" ? (
         <section className={movieMimeStyles.drawStage}>
           <div className={movieMimeStyles.spotlight} /><p>{isActivePlayer ? "Your canvas is ready" : "Next artist"}</p><h1>{activePlayer?.name ?? "The next player"}</h1>
-          <span>{isActivePlayer ? "Reveal your prompt privately. The answer never leaves your server-filtered view." : "Look away while the artist discovers the secret prompt."}</span>
-          <div className={movieMimeStyles.secretCard}><small>Secret prompt</small><strong>✎</strong><i>?</i></div>
-          {drawAction ? <button disabled={pending} onClick={() => perform(drawAction.id)}><span>{pending ? "Opening the sketchbook…" : "Reveal my prompt"}</span><b>↗</b></button> : <em>Waiting for {activePlayer?.name ?? "the artist"}…</em>}
+          <span>{isActivePlayer ? "Only you can see the idea. Tilt the screen away and get ready to draw." : "Look away while the artist discovers the secret idea."}</span>
+          <div className={movieMimeStyles.secretCard}><small>Secret idea</small><strong>✎</strong><i>?</i></div>
+          {drawAction ? <button disabled={pending} onClick={() => perform(drawAction.id)}><span>{pending ? "Opening the sketchbook…" : "Reveal my idea"}</span><b>↗</b></button> : <em>Waiting for {activePlayer?.name ?? "the artist"}…</em>}
         </section>
       ) : (
         <section className={movieMimeStyles.drawingRoom}>
@@ -728,11 +728,11 @@ function DrawBattleStage({ view, pending, sendAction }: {
           <div className={movieMimeStyles.drawingGrid}>
             <div className={movieMimeStyles.liveCanvas}>
               <DrawingCanvas theme={theme} strokes={strokes} onChange={updateCanvas} label={canvas?.label ?? "Live canvas"} disabled={pending || !sketchAction} />
-              <div className={movieMimeStyles.canvasStatus}><span><i /> Synchronized canvas</span><b>{strokes.length} stroke{strokes.length === 1 ? "" : "s"}</b></div>
+              <div className={movieMimeStyles.canvasStatus}><span><i /> Everyone sees every line</span><b>{strokes.length} stroke{strokes.length === 1 ? "" : "s"}</b></div>
             </div>
             <aside className={movieMimeStyles.drawingSidebar}>
-              {isActivePlayer && prompt?.prompt ? <div className={movieMimeStyles.artistPrompt}><small>Your secret prompt</small><h2>{prompt.prompt}</h2><span>{prompt.hint}</span><p>Draw only · No letters · No numbers · No gestures</p></div> : <div className={movieMimeStyles.guessPanel}><small>Open guessing</small><h2>Name the picture.</h2><p>The first exact answer earns one point for the guesser’s team.</p>{guessAction ? <TextAnswer theme={theme} label="Your guess" placeholder="What do you see?" value={guess} onChange={setGuess} submitLabel="Lock guess" disabled={pending} onSubmit={() => { perform(guessAction.id, { text: guess }); setGuess(""); }} /> : <span className={movieMimeStyles.waitingGuess}>The artist cannot submit a guess.</span>}</div>}
-              {passAction ? <button className={movieMimeStyles.pass} disabled={pending} onClick={() => perform(passAction.id)}>Pass this prompt</button> : null}
+              {isActivePlayer && prompt?.prompt ? <div className={movieMimeStyles.artistPrompt}><small>Your secret idea</small><h2>{prompt.prompt}</h2><span>{prompt.hint}</span><p>Draw only · No letters · No numbers · No gestures</p></div> : <div className={movieMimeStyles.guessPanel}><small>Shout it out</small><h2>Name the picture.</h2><p>Be the first to name it and win a point for your team.</p>{guessAction ? <TextAnswer theme={theme} label="Your guess" placeholder="What do you see?" value={guess} onChange={setGuess} submitLabel="That’s it" disabled={pending} onSubmit={() => { perform(guessAction.id, { text: guess }); setGuess(""); }} /> : <span className={movieMimeStyles.waitingGuess}>Artists leave the guessing to everyone else.</span>}</div>}
+              {passAction ? <button className={movieMimeStyles.pass} disabled={pending} onClick={() => perform(passAction.id)}>Try another idea</button> : null}
             </aside>
           </div>
         </section>
@@ -782,7 +782,7 @@ function SoundCheckStage({ view, pending, sendAction }: {
           <div className={soundCheckStyles.equalizer} aria-hidden="true">{Array.from({ length: 17 }, (_, index) => <i key={index} />)}</div>
           <p>{activeTeam?.name ?? "The active team"} owns the next track</p>
           <h1>{isActiveCaptain ? "Choose your performer." : `${view.players.find((player) => player.id === activeCaptainId)?.name ?? "The captain"} is choosing.`}</h1>
-          <span>{isActiveCaptain ? "Pick the player who will hear the next secret sound in their private view." : "The next voice will step into the spotlight in a moment."}</span>
+          <span>{isActiveCaptain ? "Pick the player brave enough to take on the next mystery sound." : "The next voice will step into the spotlight in a moment."}</span>
           <div className={movieMimeStyles.castGrid}>{activeTeam?.playerIds.map((id) => {
             const player = view.players.find((candidate) => candidate.id === id);
             return <button disabled={pending || !selectAction} key={id} onClick={() => selectAction && perform(selectAction.id, { targetPlayerId: id })}><i>{player?.name.slice(0, 1).toUpperCase() ?? "?"}</i><span><small>Ready on vocals</small><strong>{player?.name ?? "Player"}</strong></span><b>{id === activeCaptainId ? "★ Captain" : "Choose →"}</b></button>;
@@ -791,8 +791,8 @@ function SoundCheckStage({ view, pending, sendAction }: {
         </section>
       ) : view.phase.id === "draw_sound" ? (
         <section className={`${movieMimeStyles.drawStage} ${soundCheckStyles.reveal}`}>
-          <div className={soundCheckStyles.record}><i /><i /><strong>BF</strong></div><p>{isActivePlayer ? "Your private track is ready" : "Next performer"}</p><h1>{activePlayer?.name ?? "The next player"}</h1>
-          <span>{isActivePlayer ? "Reveal the sound privately. The answer never leaves your server-filtered view." : "Look away while the performer discovers the secret sound."}</span>
+          <div className={soundCheckStyles.record}><i /><i /><strong>BF</strong></div><p>{isActivePlayer ? "Your mystery track is ready" : "Next performer"}</p><h1>{activePlayer?.name ?? "The next player"}</h1>
+          <span>{isActivePlayer ? "Only you can see the sound. Keep the screen close, then give it everything." : "Look away while the performer discovers the secret sound."}</span>
           <div className={`${movieMimeStyles.secretCard} ${soundCheckStyles.secretSleeve}`}><small>Secret sound</small><strong>◖</strong><i>?</i></div>
           {drawAction ? <button disabled={pending} onClick={() => perform(drawAction.id)}><span>{pending ? "Dropping the needle…" : "Reveal my sound"}</span><b>↗</b></button> : <em>Waiting for {activePlayer?.name ?? "the performer"}…</em>}
         </section>
@@ -807,7 +807,7 @@ function SoundCheckStage({ view, pending, sendAction }: {
               <p>Voice only · No words · No gestures · No props</p>
             </div>
             <aside className={soundCheckStyles.controlPanel}>
-              {isActivePlayer && prompt?.prompt ? <div className={soundCheckStyles.performerPrompt}><small>Your secret sound</small><h2>{prompt.prompt}</h2><span>{prompt.hint}</span><p>Recreate it using only your voice. Do not say any part of the answer.</p></div> : <div className={soundCheckStyles.guessPanel}><small>Open guessing</small><h2>Name that sound.</h2><p>The first exact answer earns one point for the guesser’s team.</p>{guessAction ? <TextAnswer theme={theme} label="Your guess" placeholder="What do you hear?" value={guess} onChange={setGuess} submitLabel="Lock guess" disabled={pending} onSubmit={() => { perform(guessAction.id, { text: guess }); setGuess(""); }} /> : <span className={soundCheckStyles.waiting}>The performer cannot submit a guess.</span>}</div>}
+              {isActivePlayer && prompt?.prompt ? <div className={soundCheckStyles.performerPrompt}><small>Your secret sound</small><h2>{prompt.prompt}</h2><span>{prompt.hint}</span><p>Recreate it using only your voice. Do not say any part of the answer.</p></div> : <div className={soundCheckStyles.guessPanel}><small>Shout it out</small><h2>Name that sound.</h2><p>Be the first to name it and win a point for your team.</p>{guessAction ? <TextAnswer theme={theme} label="Your guess" placeholder="What do you hear?" value={guess} onChange={setGuess} submitLabel="That’s it" disabled={pending} onSubmit={() => { perform(guessAction.id, { text: guess }); setGuess(""); }} /> : <span className={soundCheckStyles.waiting}>Performers leave the guessing to everyone else.</span>}</div>}
               {passAction ? <button className={soundCheckStyles.pass} disabled={pending} onClick={() => perform(passAction.id)}>Pass this sound</button> : null}
             </aside>
           </div>
@@ -996,7 +996,7 @@ function ComposedStage({ view, pending, sendAction }: {
       ) : null}
 
       {view.status === "completed" && !hasVisibleOutcome ? (
-        <OutcomeBanner theme={theme} status="success" title="Game complete" description="The engine applied every validated GameSpec rule." actions={<a className="composed-new-game" href="/">Choose another game →</a>} />
+        <OutcomeBanner theme={theme} status="success" title="What a night." description="One winner, plenty of stories, and every reason to play again." actions={<a className="composed-new-game" href="/">Choose another game →</a>} />
       ) : null}
     </GameSurface>
   );

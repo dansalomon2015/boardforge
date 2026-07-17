@@ -3,8 +3,8 @@ import "./globals.css";
 import "../components/game-ui/game-components.css";
 
 export const metadata: Metadata = {
-  title: "BoardForge — Playable game compiler",
-  description: "Compile a social game idea into a validated, playable multiplayer room.",
+  title: "BoardForge — Make game night yours",
+  description: "Beautiful social games, personalized for your people and ready to play together.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
