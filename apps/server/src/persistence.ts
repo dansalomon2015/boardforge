@@ -371,6 +371,7 @@ class PostgresBlueprintStore implements BlueprintStore {
       "0005_review_suggestions.sql",
       "0006_compilation_jobs.sql",
       "0007_room_captains.sql",
+      "0008_composed_experience_ids.sql",
     ]) {
       const migration = await readFile(new URL(`../migrations/${filename}`, import.meta.url), "utf8");
       await this.pool.query(migration);
