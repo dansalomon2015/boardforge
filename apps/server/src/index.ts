@@ -16,15 +16,18 @@ import {
   createRandomDrawBattlePack,
   createSoundCheckSpec,
   createRandomSoundCheckPack,
+  createStoryChainSpec,
   defaultMovieMimeSpec,
   defaultWordTrapSpec,
   defaultDrawBattleSpec,
   defaultSoundCheckSpec,
+  defaultStoryChainSpec,
   demoGameSpecs,
   movieMimeSetupSchema,
   wordTrapSetupSchema,
   drawBattleSetupSchema,
   soundCheckSetupSchema,
+  storyChainSetupSchema,
   partyPulseSpec,
   spaceHeistSpec,
   systemsLabSpec,
@@ -108,7 +111,7 @@ type Room = {
 };
 
 const rooms = new Map<string, Room>();
-const availableDemoSpecs: BoardGameSpec[] = [...demoGameSpecs, cinemaCharadesSpec, defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec, systemsLabSpec];
+const availableDemoSpecs: BoardGameSpec[] = [...demoGameSpecs, cinemaCharadesSpec, defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec, defaultStoryChainSpec, systemsLabSpec];
 const llm = createLlmProvider({
   provider: config.llmProvider,
   apiKey: config.openAiApiKey,
@@ -520,7 +523,7 @@ app.get("/health", async () => ({
 }));
 
 app.get("/api/games", async () => ({
-  games: [defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec].map((spec) => ({ id: spec.id, ...summary(spec) })),
+  games: [defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec, defaultStoryChainSpec].map((spec) => ({ id: spec.id, ...summary(spec) })),
   provider: llm.name,
 }));
 
@@ -748,6 +751,52 @@ app.post("/api/sound-check/blueprints", async (request, reply) => {
     });
   } catch (error) {
     app.log.warn({ message: error instanceof Error ? error.message : "Unknown SoundCheck selection error" }, "SoundCheck preparation failed");
+    return reply.code(502).send({ error: compilationErrorMessage(error), provider: llm.name });
+  }
+});
+
+const storyChainBodySchema = z.object({
+  themeId: composedThemeIdSchema.default("cozy"),
+  mood: z.enum(["chaotic", "mystery", "fantasy", "spooky", "romantic", "family"]).default("chaotic"),
+  length: z.enum(["quick", "full", "epic"]).default("full"),
+  preferences: z.string().trim().max(240).optional(),
+}).strict();
+
+app.post("/api/story-chain/blueprints", async (request, reply) => {
+  const parsed = storyChainBodySchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ error: "Invalid StoryChain setup.", issues: parsed.error.issues });
+  const setupResult = storyChainSetupSchema.safeParse(parsed.data);
+  if (!setupResult.success) return reply.code(400).send({ error: "Invalid StoryChain setup.", issues: setupResult.error.issues });
+  const setup = setupResult.data;
+
+  try {
+    const pack = await llm.generateStoryChainPack(setup);
+    const spec = createStoryChainSpec(pack);
+    const blueprintId = `${spec.id}-${crypto.randomUUID().slice(0, 8)}`;
+    await blueprintStore.saveBlueprint({
+      id: blueprintId,
+      spec,
+      status: "playtesting",
+      provider: llm.name,
+      ...(setup.preferences ? { prompt: setup.preferences } : {}),
+    });
+    const playtest = runComposedPlaytest(spec, { simulations: 24, seed: `release:${blueprintId}` });
+    const releaseStatus = playtest.status === "passed" ? "release_ready" : "needs_review";
+    await blueprintStore.savePlaytest(blueprintId, releaseStatus, playtest);
+    return reply.code(201).send({
+      blueprintId,
+      releaseStatus,
+      source: pack.source,
+      themeId: pack.themeId,
+      mood: pack.mood,
+      length: pack.length,
+      title: pack.title,
+      twistCount: pack.twists.length,
+      game: summary(spec),
+      playtest: { status: playtest.status, simulations: playtest.simulations, completedSimulations: playtest.completedSimulations },
+    });
+  } catch (error) {
+    app.log.warn({ message: error instanceof Error ? error.message : "Unknown StoryChain generation error" }, "StoryChain preparation failed");
     return reply.code(502).send({ error: compilationErrorMessage(error), provider: llm.name });
   }
 });

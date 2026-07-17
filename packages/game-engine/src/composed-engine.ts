@@ -379,11 +379,22 @@ function validatePayload(state: ComposedGameState, spec: ComposedGameSpec, actio
   }
   if (action.kind === "text") {
     if (!payload.text?.trim() || payload.text.length > 600) throw new ComposedGameRuleError("Text actions require a non-empty response of at most 600 characters.");
+    const normalize = (value: string) => value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if (action.requiredWordDeckId) {
+      const cardId = state.activeCards[state.activePlayerId]?.[action.requiredWordDeckId];
+      const requiredWord = cardDefinition(spec, action.requiredWordDeckId, cardId)?.title;
+      if (!requiredWord) throw new ComposedGameRuleError("No secret writing constraint is available for this text action.");
+      const normalizedText = ` ${normalize(payload.text)} `;
+      const normalizedWord = normalize(requiredWord);
+      if (!normalizedWord || !normalizedText.includes(` ${normalizedWord} `)) {
+        throw new ComposedGameRuleError(`Your contribution must include the word “${requiredWord}”.`);
+      }
+      return true;
+    }
     if (!action.answerDeckId) return null;
     const cardId = state.activeCards[state.activePlayerId]?.[action.answerDeckId];
     const answer = cardDefinition(spec, action.answerDeckId, cardId)?.title;
     if (!answer) throw new ComposedGameRuleError("No secret answer is available for this text action.");
-    const normalize = (value: string) => value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     return normalize(payload.text) === normalize(answer);
   }
   if (action.kind === "play_card") {
@@ -692,6 +703,13 @@ function componentView(component: ComposedComponent, state: ComposedGameState, s
   if (component.kind === "ordering") return { ...base, data: { items: (state.itemOrders[component.id] ?? component.itemIds).map((id) => { const item = spec.orderingItems.find((candidate) => candidate.id === id); return item ? { id: item.id, label: item.label } : { id, label: id }; }) } };
   if (component.kind === "matching") return { ...base, data: { items: (state.itemOrders[component.id] ?? component.itemIds).map((id) => { const item = spec.matchingItems.find((candidate) => candidate.id === id); return item ? { id: item.id, label: item.label } : { id, label: id }; }) } };
   if (component.kind === "media") return { ...base, data: { media: spec.media.find((media) => media.id === component.mediaId) } };
+  if (component.kind === "story") return { ...base, data: {
+    label: component.label,
+    opening: resolveText(component.opening, state, spec),
+    entries: state.actions
+      .filter((record) => record.actionId === component.actionId && typeof record.payload.text === "string")
+      .map((record) => ({ sequence: record.sequence, round: record.round, actorId: record.actorId, actorName: players.find((player) => player.id === record.actorId)?.name ?? "Player", text: record.payload.text })),
+  } };
   return { ...base, data: {} };
 }
 

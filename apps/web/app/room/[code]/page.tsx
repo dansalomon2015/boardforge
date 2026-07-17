@@ -39,6 +39,7 @@ import {
 import movieMimeStyles from "./movie-mime.module.css";
 import roomChromeStyles from "./room-chrome.module.css";
 import soundCheckStyles from "./sound-check.module.css";
+import storyChainStyles from "./story-chain.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -204,10 +205,11 @@ export default function RoomPage() {
   const isWordTrap = currentTitle === "WordTrap";
   const isDrawBattle = currentTitle === "DrawBattle";
   const isSoundCheck = currentTitle === "SoundCheck";
-  const isOriginal = isMovieMime || isWordTrap || isDrawBattle || isSoundCheck;
+  const isStoryChain = currentTitle === "StoryChain";
+  const isOriginal = isMovieMime || isWordTrap || isDrawBattle || isSoundCheck || isStoryChain;
 
   return (
-    <main className={`room-shell ${isOriginal ? roomChromeStyles.movieRoom : ""}`} data-original-game={isSoundCheck ? "sound-check" : isDrawBattle ? "draw-battle" : isWordTrap ? "word-trap" : isMovieMime ? "cinemimes" : undefined}>
+    <main className={`room-shell ${isOriginal ? roomChromeStyles.movieRoom : ""}`} data-original-game={isStoryChain ? "story-chain" : isSoundCheck ? "sound-check" : isDrawBattle ? "draw-battle" : isWordTrap ? "word-trap" : isMovieMime ? "cinemimes" : undefined}>
       <header className="room-topbar">
         <a className="brand" href="/"><span className="brand-mark">BF</span><span>BoardForge</span></a>
         <div className="room-code"><span>ROOM</span><strong>{code}</strong><button onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/room/${code}`)}>Copy invite</button></div>
@@ -220,7 +222,7 @@ export default function RoomPage() {
           <p className="eyebrow">{isOriginal ? "Your private game night" : "You are invited"}</p>
           <h1>{isOriginal ? "Step into the room." : "Join the room"}</h1>
           <p>{isOriginal ? "Choose the player name that will appear throughout this game." : "Choose the name your friends will see during the game."}</p>
-          {isOriginal ? <div className={roomChromeStyles.joinCode}><span>Invitation</span><strong>{code}</strong><small>{isSoundCheck ? "SoundCheck" : isDrawBattle ? "DrawBattle" : isWordTrap ? "WordTrap" : "CineMimes"} · BoardForge Original</small></div> : null}
+          {isOriginal ? <div className={roomChromeStyles.joinCode}><span>Invitation</span><strong>{code}</strong><small>{isStoryChain ? "StoryChain" : isSoundCheck ? "SoundCheck" : isDrawBattle ? "DrawBattle" : isWordTrap ? "WordTrap" : "CineMimes"} · BoardForge Original</small></div> : null}
           <form onSubmit={join}>
             <label htmlFor="player-name">Your player name</label>
             <input id="player-name" autoFocus placeholder="e.g. Alex" maxLength={24} value={name} onChange={(event) => setName(event.target.value)} />
@@ -230,19 +232,19 @@ export default function RoomPage() {
       ) : view.kind === "lobby" ? (
         <section className="lobby-layout">
           <div className="lobby-hero">
-            {isOriginal ? <div className={roomChromeStyles.lobbyEdition}><span>BoardForge Original</span><b>No. {isSoundCheck ? "04" : isDrawBattle ? "03" : isWordTrap ? "02" : "01"}</b></div> : null}
-            <p className="eyebrow">{isSoundCheck ? "The studio is warming up" : isDrawBattle ? "The gallery is opening" : isWordTrap ? "Teams are entering the trap" : isMovieMime ? "Casting in progress" : "The table is getting ready"}</p>
+            {isOriginal ? <div className={roomChromeStyles.lobbyEdition}><span>BoardForge Original</span><b>No. {isStoryChain ? "05" : isSoundCheck ? "04" : isDrawBattle ? "03" : isWordTrap ? "02" : "01"}</b></div> : null}
+            <p className="eyebrow">{isStoryChain ? "The first page is waiting" : isSoundCheck ? "The studio is warming up" : isDrawBattle ? "The gallery is opening" : isWordTrap ? "Teams are entering the trap" : isMovieMime ? "Casting in progress" : "The table is getting ready"}</p>
             <h1>{view.game.title}</h1>
             <p>{view.game.description}</p>
-            {isOriginal ? <div className={roomChromeStyles.lobbyFacts}><span>{isSoundCheck ? "◖ Voice-only sounds" : isDrawBattle ? "✎ Live drawing" : isWordTrap ? "⚡ Forbidden words" : "🎬 Movie charades"}</span><span>⏱ {isDrawBattle ? "75" : "60"} seconds</span><span>✦ {view.teamSetup?.teams.length ?? 2} teams</span></div> : null}
+            {isOriginal ? <div className={roomChromeStyles.lobbyFacts}>{isStoryChain ? <><span>✦ One shared story</span><span>⌁ Secret twists</span><span>♡ No teams, no score</span></> : <><span>{isSoundCheck ? "◖ Voice-only sounds" : isDrawBattle ? "✎ Live drawing" : isWordTrap ? "⚡ Forbidden words" : "🎬 Movie charades"}</span><span>⏱ {isDrawBattle ? "75" : "60"} seconds</span><span>✦ {view.teamSetup?.teams.length ?? 2} teams</span></>}</div> : null}
             <div className="lobby-progress"><span style={{ width: `${Math.min(100, (view.players.length / view.game.minPlayers) * 100)}%` }} /></div>
             <small>{view.players.length} {view.players.length === 1 ? "friend is" : "friends are"} here · {view.game.minPlayers} needed to play</small>
             {view.teamSetup ? <TeamSetup view={view} pending={pending} selectTeam={selectTeam} selectCaptain={selectCaptain} /> : null}
             {self?.isHost ? (
               <button className="primary-button host-start" disabled={!view.canStart || pending} onClick={startGame}>
-                {view.canStart ? "Start the game" : view.startBlockReason ?? "The room is not ready yet"} <b>→</b>
+                {view.canStart ? "Start the game" : isStoryChain ? "Invite one more storyteller" : view.startBlockReason ?? "The room is not ready yet"} <b>→</b>
               </button>
-            ) : <div className="waiting-card">The host will start when every team is ready.</div>}
+            ) : <div className="waiting-card">{view.teamSetup ? "The host will start when every team is ready." : "The host will start when everyone is ready."}</div>}
           </div>
           <PlayerRail view={view} />
         </section>
@@ -370,6 +372,7 @@ function GameStage({ view, isHost, pending, sendAction }: {
     if (view.title === "WordTrap") return <WordTrapStage view={view} pending={pending} sendAction={sendAction} />;
     if (view.title === "DrawBattle") return <DrawBattleStage view={view} pending={pending} sendAction={sendAction} />;
     if (view.title === "SoundCheck") return <SoundCheckStage view={view} pending={pending} sendAction={sendAction} />;
+    if (view.title === "StoryChain") return <StoryChainStage view={view} pending={pending} sendAction={sendAction} />;
     return <ComposedStage view={view} pending={pending} sendAction={sendAction} />;
   }
 
@@ -812,6 +815,75 @@ function SoundCheckStage({ view, pending, sendAction }: {
             </aside>
           </div>
         </section>
+      )}
+    </GameSurface>
+  );
+}
+
+function StoryChainStage({ view, pending, sendAction }: {
+  view: ComposedGameView;
+  pending: boolean;
+  sendAction: (action: GameAction) => void;
+}) {
+  const [contribution, setContribution] = useState("");
+  const theme = themeForRoom(view.theme);
+  const activePlayer = view.players.find((player) => player.id === view.activePlayerId);
+  const isActivePlayer = view.selfPlayerId === view.activePlayerId;
+  const drawAction = view.availableActions.find((action) => action.id === "draw_twist");
+  const writeAction = view.availableActions.find((action) => action.id === "continue_story");
+  const prompt = view.components.find((component) => component.kind === "prompt")?.data as { prompt?: string; hint?: string } | undefined;
+  const story = view.components.find((component) => component.kind === "story")?.data as { opening?: string; entries?: Array<{ sequence: number; round: number; actorId: string; actorName: string; text: string }> } | undefined;
+  const entries = story?.entries ?? [];
+
+  function perform(actionId: string, payload?: Extract<GameAction, { type: "COMPOSED_ACTION" }>["payload"]) {
+    sendAction({ type: "COMPOSED_ACTION", actionId, ...(payload ? { payload } : {}) });
+  }
+
+  function submitContribution() {
+    if (!writeAction || !contribution.trim()) return;
+    perform(writeAction.id, { text: contribution.trim() });
+    setContribution("");
+  }
+
+  return (
+    <GameSurface theme={theme} className={storyChainStyles.stage}>
+      <header className={storyChainStyles.header}>
+        <div><span>BoardForge Original No. 05</span><strong>StoryChain</strong></div>
+        <div className={storyChainStyles.chapter}><small>Chapter</small><b>{Math.min(view.round, view.totalRounds)}</b><i>/</i><span>{view.totalRounds}</span></div>
+      </header>
+
+      {view.status === "completed" ? (
+        <section className={storyChainStyles.final}>
+          <div className={storyChainStyles.finalHeading}><span>Our one-of-a-kind story</span><h1>{view.components.find((component) => component.kind === "header")?.data.title as string ?? "The story we made"}</h1><p>Written tonight by {view.players.map((player) => player.name).join(", ")}.</p></div>
+          <article className={storyChainStyles.manuscript}><p className={storyChainStyles.opening}>{story?.opening}</p>{entries.map((entry) => <p key={entry.sequence}>{entry.text}<small>— {entry.actorName}</small></p>)}<div className={storyChainStyles.theEnd}>The End</div></article>
+          <div className={storyChainStyles.finalActions}><button onClick={() => void navigator.clipboard.writeText([story?.opening, ...entries.map((entry) => entry.text)].filter(Boolean).join("\n\n"))}>Copy our story</button><a href="/">Choose another game <b>→</b></a></div>
+        </section>
+      ) : (
+        <div className={storyChainStyles.workspace}>
+          <section className={storyChainStyles.storyPane}>
+            <div className={storyChainStyles.storyMeta}><span><i /> Story in progress</span><b>{entries.length + 1} {entries.length ? "pages" : "page"}</b></div>
+            <article className={storyChainStyles.paper}>
+              <p className={storyChainStyles.opening}>{story?.opening}</p>
+              {entries.map((entry, index) => <div className={storyChainStyles.entry} key={entry.sequence}><span>{String(index + 2).padStart(2, "0")}</span><p>{entry.text}</p><small>{entry.actorName}</small></div>)}
+              <div className={storyChainStyles.cursorLine}><i /> The next line belongs to {activePlayer?.name ?? "our next writer"}.</div>
+            </article>
+          </section>
+
+          <aside className={storyChainStyles.writerPane}>
+            <div className={storyChainStyles.writer}><span>{activePlayer?.name.slice(0, 1).toUpperCase() ?? "?"}</span><div><small>Now writing</small><strong>{activePlayer?.name ?? "Player"}</strong></div>{isActivePlayer ? <b>Your turn</b> : null}</div>
+            {view.phase.id === "draw_twist" ? (
+              <div className={storyChainStyles.sealedTwist}><span>Secret twist</span><div>✦</div><h2>{isActivePlayer ? "Open your prompt." : "A new twist is being drawn."}</h2><p>{isActivePlayer ? "Keep it private. Your sentence must weave this word naturally into the story." : `Only ${activePlayer?.name ?? "the writer"} can see what comes next.`}</p>{drawAction ? <button disabled={pending} onClick={() => perform(drawAction.id)}>{pending ? "Opening…" : "Reveal my twist"} <b>↗</b></button> : <small>Waiting for the writer…</small>}</div>
+            ) : isActivePlayer && prompt?.prompt ? (
+              <div className={storyChainStyles.writeCard}>
+                <small>Your sentence must include</small><h2>{prompt.prompt}</h2><p>{prompt.hint}</p>
+                <label htmlFor="story-contribution">Continue in one or two sentences</label><textarea id="story-contribution" autoFocus maxLength={320} onChange={(event) => setContribution(event.target.value)} placeholder="And then…" rows={6} value={contribution} />
+                <div className={storyChainStyles.writeFooter}><span>{contribution.length}/320</span><button disabled={pending || !contribution.trim()} onClick={submitContribution}>{pending ? "Adding…" : "Add to the story"} <b>→</b></button></div>
+              </div>
+            ) : (
+              <div className={storyChainStyles.readerCard}><span>Read along</span><h2>{activePlayer?.name ?? "The writer"} is choosing the next words.</h2><p>You will see the new chapter the moment it is added. Their secret twist stays hidden until then.</p><div><i /><i /><i /></div></div>
+            )}
+          </aside>
+        </div>
       )}
     </GameSurface>
   );

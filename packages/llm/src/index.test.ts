@@ -74,6 +74,13 @@ describe("procedural local GameSpec compiler", () => {
     expect(pack.prompts.some((prompt) => prompt.category === "animals" || prompt.category === "music")).toBe(true);
   });
 
+  it("generates a strictly bounded StoryChain content pack", async () => {
+    const pack = await provider.generateStoryChainPack({ themeId: "cozy", mood: "mystery", length: "full", preferences: "a missing birthday cake at a grand hotel" });
+    expect(pack.source).toBe("ai");
+    expect(pack.twists).toHaveLength(12);
+    expect(new Set(pack.twists.map((twist) => twist.requiredWord.toLowerCase())).size).toBe(12);
+  });
+
   it("changes hidden-role content when the requested universe changes", async () => {
     const common = { template: "hidden_roles" as const, players: 6, durationMinutes: 20 };
     const pirate = await provider.generateGameSpec({ ...common, prompt: "Mutinerie pirate autour d'un trésor maudit" });

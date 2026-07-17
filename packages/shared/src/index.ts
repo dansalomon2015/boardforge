@@ -101,7 +101,7 @@ export type ComposedTheme =
 
 export type ResolvedGameComponent = {
   id: string;
-  kind: "header" | "prompt" | "deck" | "choices" | "text_input" | "drawing" | "timer" | "turn" | "round" | "teams" | "players" | "scores" | "clues" | "challenge" | "reveal" | "outcome" | "board" | "card_zone" | "resources" | "randomizer" | "buzzer" | "ordering" | "matching" | "media";
+  kind: "header" | "prompt" | "deck" | "choices" | "text_input" | "drawing" | "timer" | "turn" | "round" | "teams" | "players" | "scores" | "clues" | "challenge" | "reveal" | "outcome" | "board" | "card_zone" | "resources" | "randomizer" | "buzzer" | "ordering" | "matching" | "media" | "story";
   data: Record<string, unknown>;
 };
 

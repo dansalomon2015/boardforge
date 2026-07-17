@@ -89,7 +89,7 @@ export default function HomePage() {
             <p className={styles.eyebrow}><span /> The BoardForge collection</p>
             <h2>Choose tonight&apos;s<br />main event.</h2>
           </div>
-          <p>Four games, four completely different moods. Choose your favorite, add your people, and let the night take it from there.</p>
+          <p>Five games, five completely different moods. Choose your favorite, add your people, and let the night take it from there.</p>
         </div>
 
         <div className={styles.gamesGrid}>
@@ -142,6 +142,18 @@ export default function HomePage() {
           <div className={styles.gameInfo}>
             <p>Team game · Sound imitation</p><h3>SoundCheck</h3>
             <span>Make the sound. Keep a straight face. Hope someone understands what on earth you are doing.</span>
+            <div><b>Make it ours</b><strong>→</strong></div>
+          </div>
+        </Link>
+        <Link className={`${styles.gameCard} ${styles.storyChainCard}`} href="/games/story-chain">
+          <div className={`${styles.gameArtwork} ${styles.storyChainArtwork}`}>
+            <span className={styles.gameNumber}>No. 05</span>
+            <div className={styles.storyBook}><small>ONCE UPON A TIME…</small><strong>?</strong><p>The last train arrived without a driver, carrying only a silver suitcase.</p><i>✦</i></div>
+            <div className={styles.storyQuill}>⌁</div>
+          </div>
+          <div className={styles.gameInfo}>
+            <p>Cooperative · Creative storytelling</p><h3>StoryChain</h3>
+            <span>Take turns writing one shared tale, with a secret word waiting to twist every new chapter.</span>
             <div><b>Make it ours</b><strong>→</strong></div>
           </div>
         </Link>

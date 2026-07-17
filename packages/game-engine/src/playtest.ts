@@ -91,7 +91,13 @@ function payloadForAction(view: ComposedGameView, action: ViewAction, persona: V
     const chosen = persona === "chaotic" || persona === "adversarial" ? options.at(-1) : rotate(options, seed)[0];
     return chosen ? { choiceId: chosen.id } : null;
   }
-  if (action.kind === "text") return { text: `Test answer ${persona}` };
+  if (action.kind === "text") {
+    const secretDeck = view.components.find((component) => component.kind === "deck" && objectValue(component.data.activeCard));
+    const activeCard = objectValue(secretDeck?.data.activeCard);
+    const writingPrompt = view.components.find((component) => component.kind === "prompt" && component.data.category === "Your sentence must include");
+    const requiredWord = typeof activeCard?.title === "string" ? activeCard.title : typeof writingPrompt?.data.prompt === "string" ? writingPrompt.data.prompt : null;
+    return { text: requiredWord ? `The ${requiredWord} changed everything for our ${persona} hero.` : `Test answer ${persona}` };
+  }
   if (action.kind === "play_card") {
     const zone = view.components.find((component) => component.kind === "card_zone" && component.data.zone === "hand");
     const cardId = arrayValue(zone?.data.cards).map(stringId).find(Boolean);

@@ -10,6 +10,11 @@ import {
   createSoundCheckPack,
   soundCheckCatalog,
   soundCheckSetupSchema,
+  createRandomStoryChainPack,
+  createStoryChainPack,
+  storyChainSetupSchema,
+  storyRounds,
+  storyTwistSchema,
   movieCatalog,
   movieMimeSetupSchema,
   wordTrapCatalog,
@@ -30,6 +35,9 @@ import {
   type SoundCheckPack,
   type SoundCheckSetup,
   type SoundCheckSetupInput,
+  type StoryChainPack,
+  type StoryChainSetup,
+  type StoryChainSetupInput,
   type QuizVoteGameSpec,
   type QuizVoteQuestion,
   hiddenRolesGameSpecSchema,
@@ -133,7 +141,7 @@ export const composedGameReviewSchema = z
 export type ComposedGameReview = z.infer<typeof composedGameReviewSchema>;
 
 export type LlmUsageTelemetry = {
-  operation: "movie_mime_selection" | "word_trap_selection" | "draw_battle_selection" | "sound_check_selection" | "composed_generation" | "composed_review" | "composed_critique" | "composed_patch";
+  operation: "movie_mime_selection" | "word_trap_selection" | "draw_battle_selection" | "sound_check_selection" | "story_chain_generation" | "composed_generation" | "composed_review" | "composed_critique" | "composed_patch";
   provider: string;
   model: string;
   responseId: string;
@@ -151,6 +159,7 @@ export interface LlmProvider {
   generateWordTrapPack(setup: WordTrapSetupInput): Promise<WordTrapPack>;
   generateDrawBattlePack(setup: DrawBattleSetupInput): Promise<DrawBattlePack>;
   generateSoundCheckPack(setup: SoundCheckSetupInput): Promise<SoundCheckPack>;
+  generateStoryChainPack(setup: StoryChainSetupInput): Promise<StoryChainPack>;
   generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec>;
   reviewComposedGameSpec(
     spec: ComposedGameSpec,
@@ -727,6 +736,12 @@ export class FakeLlmProvider implements LlmProvider {
     return createSoundCheckPack(setup, ranked.slice(0, setup.promptCount).map(({ prompt }) => prompt.id), "ai");
   }
 
+  async generateStoryChainPack(setupInput: StoryChainSetupInput): Promise<StoryChainPack> {
+    const setup = storyChainSetupSchema.parse(setupInput);
+    const selected = createRandomStoryChainPack(setup, `local-ai:${normalizedPrompt(setup.preferences ?? setup.mood)}`);
+    return createStoryChainPack(setup, selected, "ai");
+  }
+
   async generateComposedGameSpec(prompt: string): Promise<ComposedGameSpec> {
     const normalized = normalizedPrompt(prompt) || "Un jeu de soirée convivial";
     const hash = hashText(normalized);
@@ -1130,6 +1145,50 @@ export class OpenAiLlmProvider implements LlmProvider {
     } catch (error) {
       const repaired = await this.selectSoundCheckCandidate(setup, error instanceof Error ? error.message : "The previous selection was invalid.");
       return createSoundCheckPack(setup, repaired.promptIds, "ai");
+    }
+  }
+
+  private async generateStoryChainCandidate(
+    setup: StoryChainSetup,
+    repairContext?: string,
+  ): Promise<{ title: string; opening: string; twists: z.infer<typeof storyTwistSchema>[] }> {
+    const count = storyRounds[setup.length];
+    const candidateSchema = z.object({
+      title: z.string().trim().min(2).max(64),
+      opening: z.string().trim().min(20).max(420),
+      twists: z.array(storyTwistSchema).min(8).max(16),
+    }).strict();
+    const startedAt = Date.now();
+    const response = await this.client.responses.parse({
+      model: this.reviewModel,
+      input: [
+        { role: "system", content: [
+          "You are the story editor for a premium, welcoming party game.",
+          "Create English story content only; never create or modify game rules.",
+          `Return exactly ${count} distinct secret twists.`,
+          "Each twist needs a unique lowercase snake_case id, a unique one- or two-word requiredWord, and a short creative direction.",
+          "The opening should be vivid, immediately playable, and leave room for many directions.",
+          "Keep everything PG-13, inclusive, original, and suitable for reading aloud with friends or family.",
+          "Do not reference copyrighted characters, living public figures, politics, explicit sex, self-harm, or graphic violence.",
+        ].join("\n") },
+        { role: "user", content: JSON.stringify({ mood: setup.mood, storyLength: setup.length, requestedTwists: count, preferences: setup.preferences, ...(repairContext ? { repairContext } : {}) }) },
+      ],
+      prompt_cache_key: "boardforge:story-chain-generation:v1",
+      text: { format: zodTextFormat(candidateSchema, "story_chain_pack") },
+      max_output_tokens: 2_800,
+    });
+    this.recordTelemetry("story_chain_generation", this.reviewModel, startedAt, response);
+    return requireParsedOutput(response.output_parsed, "StoryChain generation");
+  }
+
+  async generateStoryChainPack(setupInput: StoryChainSetupInput): Promise<StoryChainPack> {
+    const setup = storyChainSetupSchema.parse(setupInput);
+    const first = await this.generateStoryChainCandidate(setup);
+    try {
+      return createStoryChainPack(setup, first, "ai");
+    } catch (error) {
+      const repaired = await this.generateStoryChainCandidate(setup, error instanceof Error ? error.message : "The previous story pack was invalid.");
+      return createStoryChainPack(setup, repaired, "ai");
     }
   }
 

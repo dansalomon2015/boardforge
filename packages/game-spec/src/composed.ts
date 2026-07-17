@@ -81,6 +81,7 @@ export const composedComponentSchema = z.discriminatedUnion("kind", [
   z.object({ ...componentBase, kind: z.literal("ordering"), itemIds: z.array(idSchema).min(2).max(16) }).strict(),
   z.object({ ...componentBase, kind: z.literal("matching"), itemIds: z.array(idSchema).min(4).max(24) }).strict(),
   z.object({ ...componentBase, kind: z.literal("media"), mediaId: idSchema }).strict(),
+  z.object({ ...componentBase, kind: z.literal("story"), opening: textSourceSchema, actionId: idSchema, label: shortTextSchema.optional() }).strict(),
 ]);
 
 const choiceSchema = z.object({ id: idSchema, label: shortTextSchema, description: shortTextSchema.optional(), icon: z.string().max(8).optional(), correct: z.boolean().optional() }).strict();
@@ -168,6 +169,7 @@ export const actionDefinitionSchema = z
     boardId: idSchema.optional(),
     randomizerId: idSchema.optional(),
     answerDeckId: idSchema.optional(),
+    requiredWordDeckId: idSchema.optional(),
     effects: z.array(effectSchema).max(12).default([]),
   })
   .strict();
@@ -347,6 +349,7 @@ function semanticIssues(spec: ComposedGameSpec): ComposedValidationIssue[] {
     if (component.kind === "ordering") for (const id of component.itemIds) if (!orderingIds.has(id)) add("UNKNOWN_ORDERING_ITEM", path, `Unknown ordering item: ${id}.`);
     if (component.kind === "matching") for (const id of component.itemIds) if (!matchingIds.has(id)) add("UNKNOWN_MATCHING_ITEM", path, `Unknown matching item: ${id}.`);
     if (component.kind === "media" && !mediaIds.has(component.mediaId)) add("UNKNOWN_MEDIA", path, `Unknown media: ${component.mediaId}.`);
+    if (component.kind === "story" && !actionIds.has(component.actionId)) add("UNKNOWN_ACTION", path, `Unknown story action: ${component.actionId}.`);
   });
 
   spec.actions.forEach((action, index) => {
@@ -360,6 +363,9 @@ function semanticIssues(spec: ComposedGameSpec): ComposedValidationIssue[] {
     if (action.kind === "match" && (!action.itemIds || action.itemIds.some((id) => !matchingIds.has(id)))) add("ACTION_MATCHING_INVALID", path, "Match actions require known matching itemIds.");
     if (action.answerDeckId && (action.kind !== "text" || !deckIds.has(action.answerDeckId))) add("ACTION_ANSWER_DECK_INVALID", path, "answerDeckId is only valid for text actions and must reference a known deck.");
     if (action.answerDeckId && deckById.get(action.answerDeckId)?.visibility !== "private") add("ACTION_ANSWER_DECK_PUBLIC", path, "Text answer validation must reference a private deck.");
+    if (action.requiredWordDeckId && (action.kind !== "text" || !deckIds.has(action.requiredWordDeckId))) add("ACTION_REQUIRED_WORD_DECK_INVALID", path, "requiredWordDeckId is only valid for text actions and must reference a known deck.");
+    if (action.requiredWordDeckId && deckById.get(action.requiredWordDeckId)?.visibility !== "private") add("ACTION_REQUIRED_WORD_DECK_PUBLIC", path, "Required-word validation must reference a private deck.");
+    if (action.answerDeckId && action.requiredWordDeckId) add("ACTION_TEXT_VALIDATION_AMBIGUOUS", path, "A text action cannot use both exact-answer and required-word validation.");
     action.effects.forEach((effect, effectIndex) => checkEffect(effect, `${path}.effects.${effectIndex}`));
   });
 
