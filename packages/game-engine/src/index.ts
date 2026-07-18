@@ -1,5 +1,6 @@
 import type { GameSpec, HiddenRolesGameSpec, QuizVoteGameSpec } from "@boardforge/game-spec";
 export * from "./composed-engine";
+export * from "./game-night";
 export * from "./playtest";
 export * from "./replay";
 import type { GameAction, HiddenRolesView, PublicPlayer, QuizVoteView, RoomView } from "@boardforge/shared";
