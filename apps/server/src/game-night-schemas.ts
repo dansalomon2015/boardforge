@@ -23,6 +23,13 @@ export const gameNightSocketTeamSelectionSchema = z
   })
   .strict();
 
+export const gameNightSocketBoardOpenSchema = z
+  .object({
+    code: gameNightCodeSchema,
+    playerId: z.string().uuid(),
+  })
+  .strict();
+
 const gameNightTeamSchema = z
   .object({
     id: z.string().min(1).max(80),

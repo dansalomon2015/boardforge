@@ -32,10 +32,11 @@ Completed:
 - A shareable lobby with session recovery, player joining and self-service team selection.
 - Authenticated Socket.IO subscriptions with player-scoped Game Night state.
 - Live presence and team changes without manual refresh, including reconnect and session-replacement handling.
+- A host-only, persisted transition from team formation to the shared Game Night board.
+- A responsive live board with global standings, team members, presence and active-room recovery.
 
 Not completed:
 
-- Host-only access to the persistent Game Night board.
 - Game compatibility catalogue UI and explanations.
 - Return-to-board flow, history animation and final podium.
 
@@ -79,7 +80,7 @@ Acceptance tests:
 - The flow works at 320, 375 and 430 pixel widths.
 - The host receives a shareable six-character code in under one minute.
 
-### Phase 3 — Shared lobby (in progress)
+### Phase 3 — Shared lobby (completed)
 
 Work:
 
@@ -97,7 +98,7 @@ Acceptance tests:
 - Disconnecting marks a player offline without deleting them.
 - Teams are locked only while a child game is active.
 
-### Phase 4 — Persistent Game Night board
+### Phase 4 — Persistent Game Night board (in progress)
 
 Work:
 

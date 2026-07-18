@@ -5,6 +5,7 @@ import type { GameNightSessionRecord } from "./persistence";
 import {
   createGameNightChildRoom,
   linkGameNightToChildRoom,
+  openGameNightBoard,
   recordCompletedChildGame,
   selectGameNightTeam,
 } from "./game-night-runtime";
@@ -98,6 +99,21 @@ describe("game-night child rooms", () => {
 
     moved.currentRoomCode = "ACTIVE2";
     expect(() => selectGameNightTeam(moved, hostPlayerId, "red")).toThrow("Teams are locked during a game");
+  });
+
+  it("lets only the host open a ready board and keeps the transition idempotent", () => {
+    const night = session();
+
+    expect(() => openGameNightBoard(night, secondPlayerId)).toThrow("Only the host");
+    const opened = openGameNightBoard(night, hostPlayerId);
+
+    expect(opened.state.status).toBe("playing");
+    expect(night.state.status).toBe("lobby");
+    expect(openGameNightBoard(opened, hostPlayerId)).toBe(opened);
+
+    const unassigned = session();
+    unassigned.state.teams[1]!.playerIds = [];
+    expect(() => openGameNightBoard(unassigned, hostPlayerId)).toThrow("Every player must choose a team");
   });
 
   it("rejects incompatible team counts and concurrent child rooms", () => {

@@ -11,6 +11,7 @@ import {
   saveGameNightSession,
   type StoredGameNightSession,
 } from "../../../lib/game-night-session";
+import { GameNightBoard } from "./game-night-board";
 import styles from "./page.module.css";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -154,6 +155,26 @@ export default function GameNightLobbyPage() {
     );
   }
 
+  function openBoard() {
+    if (!view?.isHost) return;
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      setError("The live connection is still starting. Try again in a moment.");
+      return;
+    }
+    setPending(true);
+    setError("");
+    socket.emit(
+      "game-night:board:open",
+      { code, playerId: view.selfPlayerId },
+      (response: SocketAck<{ view: GameNightView }>) => {
+        setPending(false);
+        if (response.ok) setView(response.data.view);
+        else setError(response.error);
+      },
+    );
+  }
+
   async function copyInvite() {
     await navigator.clipboard.writeText(`${window.location.origin}/game-night/${code}`);
     setCopied(true);
@@ -217,6 +238,19 @@ export default function GameNightLobbyPage() {
     );
   }
 
+  if (view.status !== "lobby") {
+    return (
+      <GameNightBoard
+        code={code}
+        connected={connected}
+        copied={copied}
+        error={error}
+        onCopyInvite={() => void copyInvite()}
+        view={view}
+      />
+    );
+  }
+
   const emptyTeams = view.teams.filter((team) => team.playerIds.length === 0);
   const allAssigned = unassignedPlayers.length === 0 && emptyTeams.length === 0;
   const waitingCount = unassignedPlayers.length || emptyTeams.length;
@@ -254,7 +288,7 @@ export default function GameNightLobbyPage() {
           <section className={styles.teamsPanel}>
             <div className={styles.sectionHeading}>
               <span>Choose your team</span>
-              <b>{view.teams.length} teams · Any size</b>
+              <b>{view.teams.length} teams · Up to 6 each</b>
             </div>
             <div className={styles.teamGrid}>
               {view.teams.map((team, index) => {
@@ -329,6 +363,28 @@ export default function GameNightLobbyPage() {
                 </small>
               </span>
             </div>
+            {view.isHost ? (
+              <button
+                className={styles.openBoard}
+                disabled={!allAssigned || pending || !connected}
+                onClick={openBoard}
+                type="button"
+              >
+                <span>
+                  <small>{allAssigned ? "Everyone has a side" : "Waiting for the table"}</small>
+                  <strong>Open the game board</strong>
+                </span>
+                <b>→</b>
+              </button>
+            ) : allAssigned ? (
+              <div className={styles.hostWaiting}>
+                <i />
+                <span>
+                  <strong>Ready when the host is</strong>
+                  <small>The board will open here for everyone.</small>
+                </span>
+              </div>
+            ) : null}
           </aside>
         </div>
       </section>

@@ -191,7 +191,7 @@ describe("realtime room gateway", () => {
     expect(childReconnect.ok).toBe(true);
   });
 
-  it("broadcasts Game Night team and presence changes to every subscribed player", async () => {
+  it("broadcasts Game Night lobby changes and host-only board opening to every subscribed player", async () => {
     const { app, io } = await createBoardForgeServer({
       databaseUrl: null,
       llmProvider: "fake",
@@ -280,6 +280,27 @@ describe("realtime room gateway", () => {
     expect(selection.ok).toBe(true);
     expect((await teamUpdate).teams.find((team) => team.id === "team_2")?.playerIds).toContain(guest.playerId);
 
+    const hostSelection = await new Promise<SocketAck<{ view: { selfPlayerId: string } }>>((resolve) => {
+      client?.emit(
+        "game-night:team:select",
+        { code: host.view.code, playerId: host.playerId, teamId: "team_1" },
+        resolve,
+      );
+    });
+    expect(hostSelection.ok).toBe(true);
+
+    const unauthorizedOpening = await new Promise<SocketAck<{ view: { status: string } }>>((resolve) => {
+      secondClient?.emit("game-night:board:open", { code: host.view.code, playerId: guest.playerId }, resolve);
+    });
+    expect(unauthorizedOpening).toMatchObject({ ok: false, error: "Only the host can open the Game Night board." });
+
+    const guestBoardUpdate = waitForState<{ status: string }>(secondClient, (view) => view.status === "playing");
+    const opened = await new Promise<SocketAck<{ view: { status: string } }>>((resolve) => {
+      client?.emit("game-night:board:open", { code: host.view.code, playerId: host.playerId }, resolve);
+    });
+    expect(opened).toMatchObject({ ok: true, data: { view: { status: "playing" } } });
+    expect(await guestBoardUpdate).toMatchObject({ status: "playing" });
+
     const disconnectedUpdate = new Promise<{ players: Array<{ id: string; connected: boolean }> }>((resolve) => {
       void waitForState<{ players: Array<{ id: string; connected: boolean }> }>(
         client!,
@@ -288,5 +309,12 @@ describe("realtime room gateway", () => {
     });
     secondClient.disconnect();
     expect((await disconnectedUpdate).players.find((player) => player.id === guest.playerId)?.connected).toBe(false);
+
+    secondClient = await connect();
+    const resumedBoard = await subscribe(secondClient, guest);
+    expect(resumedBoard).toMatchObject({
+      ok: true,
+      data: { view: { selfPlayerId: guest.playerId, status: "playing" } },
+    });
   });
 });

@@ -130,6 +130,27 @@ export function selectGameNightTeam(
   };
 }
 
+export function openGameNightBoard(session: GameNightSessionRecord, playerId: string): GameNightSessionRecord {
+  if (playerId !== session.hostPlayerId) throw new GameNightRuleError("Only the host can open the Game Night board.");
+  if (session.state.status === "completed") throw new GameNightRuleError("This Game Night is already complete.");
+  if (session.currentRoomCode)
+    throw new GameNightRuleError("The Game Night board is already open with an active game.");
+  if (session.state.status === "playing") return session;
+
+  const assignedPlayerIds = new Set(session.state.teams.flatMap((team) => team.playerIds));
+  if (session.players.some((player) => !assignedPlayerIds.has(player.id))) {
+    throw new GameNightRuleError("Every player must choose a team before opening the board.");
+  }
+  if (session.state.teams.some((team) => team.playerIds.length === 0)) {
+    throw new GameNightRuleError("Every team needs at least one player before opening the board.");
+  }
+
+  return {
+    ...session,
+    state: { ...session.state, status: "playing" },
+  };
+}
+
 export function recordCompletedChildGame(
   session: GameNightSessionRecord,
   room: Pick<Room, "blueprintId" | "code" | "gameInstanceId" | "gameNightId" | "gameNightTeamByGameTeam">,

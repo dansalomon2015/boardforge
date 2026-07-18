@@ -77,6 +77,42 @@
 .readiness > i { width: 33px; height: 33px; display: grid; place-items: center; color: #fff; background: #d6a51d; border-radius: 50%; font-style: normal; font-weight: 900; }
 .readiness span { display: grid; }.readiness strong { font-size: 11px; }.readiness small { margin-top: 2px; font-size: 8px; line-height: 1.4; }
 .readiness.ready { color: #276d54; background: #d8f3e8; }.readiness.ready > i { background: #25a879; }
+.openBoard { width: 100%; min-height: 72px; margin-top: 10px; display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; color: #171614; background: #ffd54a; border: 0; border-radius: 13px 13px 4px 13px; box-shadow: 0 12px 25px rgba(164,121,0,.16); text-align: left; transition: transform .18s, box-shadow .18s; }
+.openBoard:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 16px 32px rgba(164,121,0,.22); }
+.openBoard:disabled { cursor: not-allowed; opacity: .42; box-shadow: none; }
+.openBoard span { display: grid; gap: 3px; }.openBoard small { font-size: 7px; font-weight: 900; letter-spacing: .8px; text-transform: uppercase; }.openBoard strong { font: 700 14px 'Space Grotesk'; }.openBoard b { font-size: 23px; }
+.hostWaiting { display: grid; grid-template-columns: 33px 1fr; align-items: center; gap: 10px; margin-top: 10px; padding: 13px; color: #5746b8; background: #e5dfff; border-radius: 11px; }
+.hostWaiting > i { width: 31px; height: 31px; background: radial-gradient(circle at 50% 50%, #7864df 0 23%, transparent 25%), conic-gradient(from 45deg, #7864df, #b6a9f4, #7864df); border: 6px solid #f1edff; border-radius: 50%; animation: waitTurn 2.4s linear infinite; }
+.hostWaiting span { display: grid; }.hostWaiting strong { font-size: 11px; }.hostWaiting small { margin-top: 2px; font-size: 8px; }
+@keyframes waitTurn { to { transform: rotate(360deg); } }
+.boardPage { min-height: 100vh; color: #f6f0e6; background: radial-gradient(circle at 75% -10%, rgba(255,213,74,.16), transparent 30%), radial-gradient(circle at 5% 45%, rgba(119,92,255,.17), transparent 28%), #11110f; }
+.boardPage .nav { border-color: rgba(255,255,255,.12); }
+.boardNavMeta { display: flex; align-items: center; gap: 22px; }
+.boardNavMeta > button { display: flex; align-items: center; gap: 10px; padding: 8px 11px; color: #f6f0e6; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.13); border-radius: 8px; }
+.boardNavMeta > button small { color: #8f887e; font-size: 7px; font-weight: 900; letter-spacing: .8px; text-transform: uppercase; }.boardNavMeta > button strong { color: #ffd54a; font: 700 14px 'Space Grotesk'; letter-spacing: 2px; }
+.boardLayout { width: min(1220px, calc(100% - 48px)); margin: 0 auto; padding: 54px 0 90px; }
+.boardHero { display: grid; grid-template-columns: 1fr 210px; gap: 60px; align-items: end; margin-bottom: 38px; }
+.boardHero p { margin: 0 0 13px; color: #ffd54a; font-size: 9px; font-weight: 900; letter-spacing: 1.3px; text-transform: uppercase; }
+.boardHero h1 { margin: 0; font: 700 clamp(62px, 8vw, 108px)/.82 'Space Grotesk'; letter-spacing: -7px; }
+.boardHero > div > span { display: block; max-width: 590px; margin-top: 24px; color: #9e978e; line-height: 1.65; }
+.nightTally { min-height: 190px; display: grid; align-content: center; justify-items: center; padding: 20px; color: #171614; background: #ffd54a; border-radius: 50% 50% 8px 50%; transform: rotate(2deg); box-shadow: 0 22px 70px rgba(0,0,0,.3); }
+.nightTally small { font-size: 7px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }.nightTally strong { font: 700 74px/.9 'Space Grotesk'; letter-spacing: -5px; }.nightTally span { margin-top: 7px !important; color: #594a18 !important; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.boardGrid { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 18px; align-items: start; }
+.standingsPanel { padding: 27px; color: #171614; background: #eee7d9; border-radius: 5px 30px 5px 5px; }
+.boardSectionTitle { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 3px 3px 23px; border-bottom: 1px solid #d2c9ba; }
+.boardSectionTitle small, .nextGamePanel > p { color: #6954d4; font-size: 8px; font-weight: 900; letter-spacing: 1.1px; text-transform: uppercase; }
+.boardSectionTitle h2 { margin: 5px 0 0; font: 700 clamp(29px,4vw,45px)/1 'Space Grotesk'; letter-spacing: -2px; }.boardSectionTitle > span { color: #7c7469; font-size: 8px; font-weight: 900; text-transform: uppercase; }
+.scoreGrid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-top: 14px; }
+.scoreCard { position: relative; min-width: 0; min-height: 270px; padding: 19px; overflow: hidden; background: color-mix(in srgb, var(--team-color) 7%, #fffdf8); border: 1px solid color-mix(in srgb, var(--team-color) 24%, #d8d0c3); border-radius: 17px 17px 4px 17px; }
+.scoreCard::after { content: ''; position: absolute; width: 150px; height: 150px; right: -75px; bottom: -80px; background: var(--team-color); border-radius: 50%; opacity: .08; }
+.scoreRank { display: flex; align-items: center; gap: 8px; }.scoreRank i { width: 28px; height: 28px; display: grid; place-items: center; color: #fff; background: var(--team-color); border-radius: 50%; font: 800 9px 'Space Grotesk'; font-style: normal; }.scoreRank span { color: #81796e; font-size: 7px; font-weight: 900; letter-spacing: .8px; text-transform: uppercase; }
+.scoreValue { display: flex; align-items: baseline; gap: 5px; margin-top: 23px; color: var(--team-color); }.scoreValue strong { font: 700 64px/.8 'Space Grotesk'; letter-spacing: -5px; }.scoreValue small { font-size: 8px; font-weight: 900; text-transform: uppercase; }
+.scoreCard h3 { margin: 14px 0 13px; font: 700 20px 'Space Grotesk'; }
+.boardMembers { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 5px; }.boardMembers > span { display: flex; align-items: center; gap: 5px; padding: 6px 7px; color: #5f584f; background: rgba(255,255,255,.72); border-radius: 999px; font-size: 8px; font-weight: 800; }.boardMembers > span > i { width: 5px; height: 5px; background: #aaa39a; border-radius: 50%; }.boardMembers > span > i.online { background: #28ae79; }.boardMembers small { margin-left: 2px; color: var(--team-color); font-size: 6px; text-transform: uppercase; }
+.nextGamePanel { min-height: 390px; padding: 29px; color: #f6f0e6; background: #6651cf; border-radius: 25px 25px 5px 25px; box-shadow: 0 25px 70px rgba(0,0,0,.23); }
+.nextGamePanel > p { margin: 0; color: #d8d0ff; }.nextGamePanel > h2 { margin: 15px 0; font: 700 42px/.92 'Space Grotesk'; letter-spacing: -3px; }.nextGamePanel > span { display: block; color: #d7d0f3; font-size: 12px; line-height: 1.6; }
+.nextGamePanel > a { min-height: 55px; margin-top: 28px; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; color: #171614; background: #ffd54a; border-radius: 10px 10px 3px 10px; font-size: 11px; font-weight: 900; text-decoration: none; }
+.hostBadge { display: flex; align-items: center; gap: 11px; margin-top: 35px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,.18); }.hostBadge > i { width: 42px; height: 42px; display: grid; place-items: center; color: #5945ba; background: #e8e2ff; border-radius: 13px; font: 700 15px 'Space Grotesk'; font-style: normal; }.hostBadge span { display: grid; }.hostBadge small { color: #c7bfee; font-size: 7px; font-weight: 900; letter-spacing: .7px; text-transform: uppercase; }.hostBadge strong { margin-top: 2px; font: 700 13px 'Space Grotesk'; }
 .toast { position: fixed; right: 20px; bottom: 20px; max-width: 380px; margin: 0; padding: 13px 16px; color: #8c2f28; background: #ffe0d8; border: 1px solid #f4b6aa; border-radius: 10px; box-shadow: 0 15px 45px rgba(0,0,0,.15); font-size: 11px; font-weight: 800; }
 @media (max-width: 850px) {
   .lobbyHeader { grid-template-columns: 1fr; gap: 18px; }
@@ -84,6 +120,9 @@
   .lobbyBody { grid-template-columns: 1fr; }
   .peoplePanel { order: -1; }
   .peopleList { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .boardHero { grid-template-columns: 1fr 165px; gap: 25px; }
+  .nightTally { min-height: 155px; }.nightTally strong { font-size: 60px; }
+  .boardGrid { grid-template-columns: 1fr; }.nextGamePanel { min-height: 300px; }
 }
 @media (max-width: 560px) {
   .nav { width: calc(100% - 30px); height: 70px; }
@@ -98,6 +137,12 @@
   .teamGrid { grid-template-columns: 1fr; }
   .teamCard { min-height: 205px; }
   .peopleList { grid-template-columns: 1fr; }
+  .boardNavMeta { gap: 10px; }.boardNavMeta .live { display: none; }
+  .boardLayout { width: calc(100% - 22px); padding-top: 32px; }
+  .boardHero { grid-template-columns: 1fr; gap: 26px; }.boardHero h1 { font-size: 66px; letter-spacing: -5px; }
+  .nightTally { width: 145px; min-height: 145px; justify-self: end; }.nightTally strong { font-size: 56px; }
+  .standingsPanel { padding: 17px; }.boardSectionTitle { align-items: start; flex-direction: column; }.boardSectionTitle h2 { font-size: 34px; }
+  .scoreGrid { grid-template-columns: 1fr; }.scoreCard { min-height: 235px; }.nextGamePanel { padding: 24px; }
 }
 @media (max-width: 340px) {
   .codeMini { gap: 6px; }.codeMini strong { font-size: 14px; letter-spacing: 2px; }
@@ -106,4 +151,4 @@
   .lobbyHeader h1 { font-size: 50px; }
   .inviteCode { padding-inline: 18px; }.inviteCode strong { font-size: 40px; letter-spacing: 6px; }
 }
-@media (prefers-reduced-motion: reduce) { .loading span { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .loading span, .hostWaiting > i { animation: none; } }

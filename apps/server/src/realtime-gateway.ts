@@ -29,8 +29,12 @@ import {
   type GameNightRuntime,
   type GameNightRuntimeMap,
 } from "./game-night-routes";
-import { recordCompletedChildGame, selectGameNightTeam } from "./game-night-runtime";
-import { gameNightSocketSessionSchema, gameNightSocketTeamSelectionSchema } from "./game-night-schemas";
+import { openGameNightBoard, recordCompletedChildGame, selectGameNightTeam } from "./game-night-runtime";
+import {
+  gameNightSocketBoardOpenSchema,
+  gameNightSocketSessionSchema,
+  gameNightSocketTeamSelectionSchema,
+} from "./game-night-schemas";
 import { issueReconnectToken, reconnectTokenMatches } from "./session-token";
 import {
   checkpointChecksumMatches,
@@ -248,6 +252,26 @@ export async function registerRealtimeGateway({
           await enqueueGameNight(runtime, async () => {
             assertSocketOwnsGameNightPlayer(socket, runtime, parsed.code, parsed.playerId);
             runtime.record = selectGameNightTeam(runtime.record, parsed.playerId, parsed.teamId);
+            await blueprintStore.saveGameNight(runtime.record);
+            acknowledge(ack, { ok: true, data: { view: viewForGameNight(runtime.record, parsed.playerId) } });
+            emitGameNight(runtime);
+          });
+        } catch (error) {
+          acknowledge(ack, { ok: false, error: socketError(error) });
+        }
+      },
+    );
+
+    socket.on(
+      "game-night:board:open",
+      async (payload: unknown, ack?: (response: SocketAck<{ view: GameNightView }>) => void) => {
+        try {
+          const parsed = gameNightSocketBoardOpenSchema.parse(payload);
+          const runtime = gameNights.get(parsed.code);
+          if (!runtime) throw new GameNightRuleError("Game night not found.");
+          await enqueueGameNight(runtime, async () => {
+            assertSocketOwnsGameNightPlayer(socket, runtime, parsed.code, parsed.playerId);
+            runtime.record = openGameNightBoard(runtime.record, parsed.playerId);
             await blueprintStore.saveGameNight(runtime.record);
             acknowledge(ack, { ok: true, data: { view: viewForGameNight(runtime.record, parsed.playerId) } });
             emitGameNight(runtime);
