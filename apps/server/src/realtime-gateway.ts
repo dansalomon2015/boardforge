@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Server as SocketServer, Socket } from "socket.io";
 import {
   ComposedGameRuleError,
+  GameNightRuleError,
   GameRuleError,
   initializeComposedGame,
   initializeGame,
@@ -13,6 +14,7 @@ import {
 } from "@boardforge/game-engine";
 import type {
   GameActionEnvelope,
+  GameNightView,
   JoinRoomPayload,
   JoinRoomResult,
   LobbyView,
@@ -20,8 +22,15 @@ import type {
   SocketAck,
 } from "@boardforge/shared";
 import type { RealtimeRoomStore, RoomEventRecord } from "./persistence";
-import { enqueueGameNight, type GameNightRuntimeMap } from "./game-night-routes";
-import { recordCompletedChildGame } from "./game-night-runtime";
+import {
+  assertGameNightCredential,
+  enqueueGameNight,
+  viewForGameNight,
+  type GameNightRuntime,
+  type GameNightRuntimeMap,
+} from "./game-night-routes";
+import { recordCompletedChildGame, selectGameNightTeam } from "./game-night-runtime";
+import { gameNightSocketSessionSchema, gameNightSocketTeamSelectionSchema } from "./game-night-schemas";
 import { issueReconnectToken, reconnectTokenMatches } from "./session-token";
 import {
   checkpointChecksumMatches,
@@ -67,6 +76,13 @@ export async function registerRealtimeGateway({
   const gameNightForRoom = (room: Room) =>
     room.gameNightId ? [...gameNights.values()].find((runtime) => runtime.record.id === room.gameNightId) : undefined;
 
+  function emitGameNight(runtime: GameNightRuntime): void {
+    for (const [playerId, socketId] of runtime.socketByPlayer) {
+      if (!io.sockets.sockets.has(socketId)) continue;
+      io.to(socketId).emit("game-night:state", viewForGameNight(runtime.record, playerId));
+    }
+  }
+
   async function synchronizeCompletedGameNight(room: Room, state: ComposedGameState): Promise<void> {
     if (!room.gameNightId || state.status !== "completed") return;
     const runtime = gameNightForRoom(room);
@@ -79,6 +95,7 @@ export async function registerRealtimeGateway({
       const scoreEvents = nextRecord.state.scoreEvents.filter((event) => scoreEventIds.has(event.id));
       await blueprintStore.appendGameNightResult(nextRecord, completedGame, scoreEvents, room.code);
       runtime.record = nextRecord;
+      emitGameNight(runtime);
     });
   }
 
@@ -87,7 +104,8 @@ export async function registerRealtimeGateway({
   }
 
   function socketError(error: unknown): string {
-    if (error instanceof GameRuleError || error instanceof ComposedGameRuleError) return error.message;
+    if (error instanceof GameRuleError || error instanceof ComposedGameRuleError || error instanceof GameNightRuleError)
+      return error.message;
     app.log.error(error);
     return "Unexpected server error.";
   }
@@ -99,6 +117,21 @@ export async function registerRealtimeGateway({
       room.socketByPlayer.get(playerId) !== socket.id
     ) {
       throw new GameRuleError("This connection is not authorized for that player.");
+    }
+  }
+
+  function assertSocketOwnsGameNightPlayer(
+    socket: Socket,
+    runtime: GameNightRuntime,
+    code: string,
+    playerId: string,
+  ): void {
+    if (
+      socket.data.gameNightCode !== code ||
+      socket.data.gameNightPlayerId !== playerId ||
+      runtime.socketByPlayer.get(playerId) !== socket.id
+    ) {
+      throw new GameNightRuleError("This connection is not authorized for that Game Night player.");
     }
   }
 
@@ -174,6 +207,57 @@ export async function registerRealtimeGateway({
   if (restoreRooms) await restorePersistedRooms();
 
   io.on("connection", (socket: Socket) => {
+    socket.on(
+      "game-night:subscribe",
+      async (payload: unknown, ack?: (response: SocketAck<{ view: GameNightView }>) => void) => {
+        try {
+          const parsed = gameNightSocketSessionSchema.parse(payload);
+          const runtime = gameNights.get(parsed.code);
+          if (!runtime) throw new GameNightRuleError("Game night not found.");
+          await enqueueGameNight(runtime, async () => {
+            assertGameNightCredential(runtime.record, parsed.playerId, parsed.reconnectToken);
+            const player = runtime.record.players.find((candidate) => candidate.id === parsed.playerId);
+            if (!player) throw new GameNightRuleError("Unknown Game Night player.");
+            const previousSocketId = runtime.socketByPlayer.get(player.id);
+            runtime.socketByPlayer.set(player.id, socket.id);
+            socket.data.gameNightCode = parsed.code;
+            socket.data.gameNightPlayerId = player.id;
+            player.connected = true;
+            await socket.join(`game-night:${parsed.code}`);
+            if (previousSocketId && previousSocketId !== socket.id) {
+              io.to(previousSocketId).emit("session:replaced");
+              io.sockets.sockets.get(previousSocketId)?.disconnect(true);
+            }
+            await blueprintStore.saveGameNight(runtime.record);
+            acknowledge(ack, { ok: true, data: { view: viewForGameNight(runtime.record, player.id) } });
+            emitGameNight(runtime);
+          });
+        } catch (error) {
+          acknowledge(ack, { ok: false, error: socketError(error) });
+        }
+      },
+    );
+
+    socket.on(
+      "game-night:team:select",
+      async (payload: unknown, ack?: (response: SocketAck<{ view: GameNightView }>) => void) => {
+        try {
+          const parsed = gameNightSocketTeamSelectionSchema.parse(payload);
+          const runtime = gameNights.get(parsed.code);
+          if (!runtime) throw new GameNightRuleError("Game night not found.");
+          await enqueueGameNight(runtime, async () => {
+            assertSocketOwnsGameNightPlayer(socket, runtime, parsed.code, parsed.playerId);
+            runtime.record = selectGameNightTeam(runtime.record, parsed.playerId, parsed.teamId);
+            await blueprintStore.saveGameNight(runtime.record);
+            acknowledge(ack, { ok: true, data: { view: viewForGameNight(runtime.record, parsed.playerId) } });
+            emitGameNight(runtime);
+          });
+        } catch (error) {
+          acknowledge(ack, { ok: false, error: socketError(error) });
+        }
+      },
+    );
+
     socket.on("room:join", async (payload: JoinRoomPayload, ack?: (response: SocketAck<JoinRoomResult>) => void) => {
       try {
         const parsed = joinSchema.parse(payload);
@@ -238,7 +322,10 @@ export async function registerRealtimeGateway({
         }
 
         await blueprintStore.saveRoom(persistedRoom(room));
-        if (parentGameNight) await blueprintStore.saveGameNight(parentGameNight.record);
+        if (parentGameNight) {
+          await blueprintStore.saveGameNight(parentGameNight.record);
+          emitGameNight(parentGameNight);
+        }
         const view = viewFor(room, resolvedPlayerId);
         acknowledge(ack, {
           ok: true,
@@ -452,6 +539,20 @@ export async function registerRealtimeGateway({
     );
 
     socket.on("disconnect", () => {
+      const gameNightCode = socket.data.gameNightCode as string | undefined;
+      const gameNightPlayerId = socket.data.gameNightPlayerId as string | undefined;
+      const gameNight = gameNightCode ? gameNights.get(gameNightCode) : undefined;
+      if (gameNight && gameNightPlayerId && gameNight.socketByPlayer.get(gameNightPlayerId) === socket.id) {
+        void enqueueGameNight(gameNight, async () => {
+          if (gameNight.socketByPlayer.get(gameNightPlayerId) !== socket.id) return;
+          gameNight.socketByPlayer.delete(gameNightPlayerId);
+          const player = gameNight.record.players.find((candidate) => candidate.id === gameNightPlayerId);
+          if (player) player.connected = false;
+          await blueprintStore.saveGameNight(gameNight.record);
+          emitGameNight(gameNight);
+        }).catch((error) => app.log.error({ error, gameNightCode }, "Failed to persist Game Night disconnect"));
+      }
+
       const code = socket.data.roomCode as string | undefined;
       const playerId = socket.data.playerId as string | undefined;
       if (!code || !playerId) return;
@@ -469,6 +570,7 @@ export async function registerRealtimeGateway({
         if (parentGameNight && parentPlayer) {
           parentPlayer.connected = false;
           await blueprintStore.saveGameNight(parentGameNight.record);
+          emitGameNight(parentGameNight);
         }
         emitRoom(room);
       }).catch((error) => app.log.error({ error, roomCode: room.code }, "Failed to persist disconnect"));

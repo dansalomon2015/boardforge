@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
-import type { GameNightView, JoinGameNightResult } from "@boardforge/shared";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { io, type Socket } from "socket.io-client";
+import type { GameNightView, JoinGameNightResult, SocketAck } from "@boardforge/shared";
 import {
   clearGameNightSession,
   readGameNightSession,
@@ -25,6 +26,7 @@ type GameNightPreview = {
 export default function GameNightLobbyPage() {
   const params = useParams<{ code: string }>();
   const code = params.code.toUpperCase();
+  const socketRef = useRef<Socket | null>(null);
   const [preview, setPreview] = useState<GameNightPreview | null>(null);
   const [view, setView] = useState<GameNightView | null>(null);
   const [name, setName] = useState("");
@@ -32,6 +34,7 @@ export default function GameNightLobbyPage() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [connected, setConnected] = useState(false);
 
   async function openSession(playerName: string, stored?: StoredGameNightSession): Promise<GameNightView> {
     const response = await fetch(`${apiUrl}/api/game-nights/${code}/join`, {
@@ -86,6 +89,33 @@ export default function GameNightLobbyPage() {
     };
   }, [code]);
 
+  useEffect(() => {
+    if (!view) return;
+    const stored = readGameNightSession(view.id);
+    if (!stored) return;
+    const socket = io(apiUrl, { transports: ["websocket", "polling"] });
+    socketRef.current = socket;
+    const subscribe = () => {
+      setConnected(true);
+      socket.emit(
+        "game-night:subscribe",
+        { code, playerId: stored.playerId, reconnectToken: stored.reconnectToken },
+        (response: SocketAck<{ view: GameNightView }>) => {
+          if (response.ok) setView(response.data.view);
+          else setError(response.error);
+        },
+      );
+    };
+    socket.on("connect", subscribe);
+    socket.on("disconnect", () => setConnected(false));
+    socket.on("game-night:state", (nextView: GameNightView) => setView(nextView));
+    socket.on("session:replaced", () => setError("This Game Night session was resumed in another tab."));
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [code, view?.id]);
+
   const assigned = useMemo(() => new Set(view?.teams.flatMap((team) => team.playerIds) ?? []), [view]);
   const unassignedPlayers = view?.players.filter((player) => !assigned.has(player.id)) ?? [];
   const selfTeamId = view?.teams.find((team) => team.playerIds.includes(view.selfPlayerId))?.id;
@@ -104,44 +134,24 @@ export default function GameNightLobbyPage() {
     }
   }
 
-  async function refreshLobby() {
-    if (!view) return;
-    const stored = readGameNightSession(view.id);
-    if (!stored) return;
-    setPending(true);
-    setError("");
-    try {
-      setView(await openSession(stored.name, stored));
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The lobby could not be refreshed.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function selectTeam(teamId: string) {
+  function selectTeam(teamId: string) {
     if (!view || teamId === selfTeamId) return;
-    const stored = readGameNightSession(view.id);
-    if (!stored) return;
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      setError("The live connection is still starting. Try again in a moment.");
+      return;
+    }
     setPending(true);
     setError("");
-    try {
-      const response = await fetch(`${apiUrl}/api/game-nights/${code}/team`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ playerId: stored.playerId, reconnectToken: stored.reconnectToken, teamId }),
-      });
-      if (!response.ok) {
-        const failure = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(failure?.error ?? "That team could not be selected.");
-      }
-      const result = (await response.json()) as { view: GameNightView };
-      setView(result.view);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Something unexpected happened.");
-    } finally {
-      setPending(false);
-    }
+    socket.emit(
+      "game-night:team:select",
+      { code, playerId: view.selfPlayerId, teamId },
+      (response: SocketAck<{ view: GameNightView }>) => {
+        setPending(false);
+        if (response.ok) setView(response.data.view);
+        else setError(response.error);
+      },
+    );
   }
 
   async function copyInvite() {
@@ -217,9 +227,9 @@ export default function GameNightLobbyPage() {
           <span>BF</span>
           <b>BoardForge</b>
         </Link>
-        <button className={styles.refresh} disabled={pending} onClick={() => void refreshLobby()} type="button">
-          ↻ Refresh lobby
-        </button>
+        <span className={`${styles.live} ${connected ? styles.online : ""}`}>
+          <i /> {connected ? "Live lobby" : "Reconnecting"}
+        </span>
       </nav>
 
       <section className={styles.lobbyLayout}>
@@ -275,7 +285,7 @@ export default function GameNightLobbyPage() {
                         <em>Waiting for its first player</em>
                       )}
                     </div>
-                    <button disabled={pending || selected} onClick={() => void selectTeam(team.id)} type="button">
+                    <button disabled={pending || selected} onClick={() => selectTeam(team.id)} type="button">
                       {selected ? "Your team ✓" : "Join this team"}
                     </button>
                   </article>

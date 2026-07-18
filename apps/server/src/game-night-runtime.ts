@@ -102,6 +102,34 @@ export function linkGameNightToChildRoom(
   };
 }
 
+export function selectGameNightTeam(
+  session: GameNightSessionRecord,
+  playerId: string,
+  teamId: string,
+): GameNightSessionRecord {
+  if (session.currentRoomCode) throw new GameNightRuleError("Teams are locked during a game.");
+  if (!session.players.some((player) => player.id === playerId)) throw new GameNightRuleError("Unknown player.");
+  const target = session.state.teams.find((team) => team.id === teamId);
+  if (!target) throw new GameNightRuleError("Unknown team.");
+  if (!target.playerIds.includes(playerId) && target.playerIds.length >= 6)
+    throw new GameNightRuleError("This team is full.");
+
+  return {
+    ...session,
+    state: {
+      ...session.state,
+      teams: session.state.teams.map((team) => ({
+        ...team,
+        playerIds:
+          team.id === target.id
+            ? [...team.playerIds.filter((id) => id !== playerId), playerId]
+            : team.playerIds.filter((id) => id !== playerId),
+        ...(team.captainPlayerId === playerId && team.id !== target.id ? { captainPlayerId: undefined } : {}),
+      })),
+    },
+  };
+}
+
 export function recordCompletedChildGame(
   session: GameNightSessionRecord,
   room: Pick<Room, "blueprintId" | "code" | "gameInstanceId" | "gameNightId" | "gameNightTeamByGameTeam">,

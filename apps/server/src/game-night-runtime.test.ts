@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { defaultMovieMimeSpec, defaultSecondSenseSpec } from "@boardforge/game-spec";
 import { createGameNightState, GameNightRuleError } from "@boardforge/game-engine";
 import type { GameNightSessionRecord } from "./persistence";
-import { createGameNightChildRoom, linkGameNightToChildRoom, recordCompletedChildGame } from "./game-night-runtime";
+import {
+  createGameNightChildRoom,
+  linkGameNightToChildRoom,
+  recordCompletedChildGame,
+  selectGameNightTeam,
+} from "./game-night-runtime";
 
 const hostPlayerId = "00000000-0000-4000-8000-000000000001";
 const secondPlayerId = "00000000-0000-4000-8000-000000000002";
@@ -74,6 +79,25 @@ describe("game-night child rooms", () => {
     });
 
     expect(room.lobbyCaptainByTeam.size).toBe(0);
+  });
+
+  it("moves one player between persistent teams and clears an obsolete captain", () => {
+    const night = session();
+    const moved = selectGameNightTeam(night, hostPlayerId, "blue");
+
+    expect(moved.state.teams).toEqual([
+      { id: "red", name: "Red", playerIds: [] },
+      {
+        id: "blue",
+        name: "Blue",
+        playerIds: [secondPlayerId, hostPlayerId],
+        captainPlayerId: secondPlayerId,
+      },
+    ]);
+    expect(night.state.teams[0]?.playerIds).toEqual([hostPlayerId]);
+
+    moved.currentRoomCode = "ACTIVE2";
+    expect(() => selectGameNightTeam(moved, hostPlayerId, "red")).toThrow("Teams are locked during a game");
   });
 
   it("rejects incompatible team counts and concurrent child rooms", () => {

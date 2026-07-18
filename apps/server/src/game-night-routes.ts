@@ -10,7 +10,8 @@ import type {
 } from "@boardforge/shared";
 import { gameSummary } from "./game-catalog";
 import { evaluateGameNightCompatibility } from "./game-night-compatibility";
-import { createGameNightChildRoom, linkGameNightToChildRoom } from "./game-night-runtime";
+import { createGameNightChildRoom, linkGameNightToChildRoom, selectGameNightTeam } from "./game-night-runtime";
+import { gameNightCredentialsSchema } from "./game-night-schemas";
 import type { BlueprintStore, GameNightSessionRecord } from "./persistence";
 import type { Room } from "./room-runtime";
 import { persistedRoom } from "./room-runtime";
@@ -38,13 +39,6 @@ const createBodySchema = z
   })
   .strict();
 
-const credentialsSchema = z
-  .object({
-    playerId: z.string().uuid(),
-    reconnectToken: z.string().regex(/^[A-Za-z0-9_-]{40,64}$/),
-  })
-  .strict();
-
 const joinBodySchema = z
   .object({
     name: z.string().trim().min(1).max(24),
@@ -59,15 +53,16 @@ const joinBodySchema = z
     message: "playerId and reconnectToken must be provided together",
   });
 
-const teamSelectionBodySchema = credentialsSchema.extend({ teamId: z.string().min(1).max(80) }).strict();
-const captainBodySchema = credentialsSchema
+const teamSelectionBodySchema = gameNightCredentialsSchema.extend({ teamId: z.string().min(1).max(80) }).strict();
+const captainBodySchema = gameNightCredentialsSchema
   .extend({ teamId: z.string().min(1).max(80), captainPlayerId: z.string().uuid() })
   .strict();
-const launchBodySchema = credentialsSchema.extend({ blueprintId: z.string().trim().min(1).max(160) }).strict();
+const launchBodySchema = gameNightCredentialsSchema.extend({ blueprintId: z.string().trim().min(1).max(160) }).strict();
 
 export type GameNightRuntime = {
   record: GameNightSessionRecord;
   operationQueue: Promise<void>;
+  socketByPlayer: Map<string, string>;
 };
 
 export type GameNightRuntimeMap = Map<string, GameNightRuntime>;
@@ -95,7 +90,7 @@ function allocateGameNightCode(gameNights: GameNightRuntimeMap): string {
   throw new GameNightRuleError("Could not allocate a unique game-night code.");
 }
 
-function viewForGameNight(record: GameNightSessionRecord, playerId: string): GameNightView {
+export function viewForGameNight(record: GameNightSessionRecord, playerId: string): GameNightView {
   const self = record.players.find((player) => player.id === playerId);
   if (!self) throw new GameNightRuleError("Unknown game-night player.");
   return {
@@ -118,7 +113,11 @@ function viewForGameNight(record: GameNightSessionRecord, playerId: string): Gam
   };
 }
 
-function assertCredential(record: GameNightSessionRecord, playerId: string, reconnectToken: string): void {
+export function assertGameNightCredential(
+  record: GameNightSessionRecord,
+  playerId: string,
+  reconnectToken: string,
+): void {
   const expectedHash = record.reconnectTokenHashes[playerId];
   if (!record.players.some((player) => player.id === playerId) || !expectedHash) {
     throw new GameNightRuleError("This game-night session is no longer valid.");
@@ -152,7 +151,7 @@ export async function registerGameNightRoutes(
       ...persisted,
       players: persisted.players.map((player) => ({ ...player, connected: false })),
     };
-    gameNights.set(record.code, { record, operationQueue: Promise.resolve() });
+    gameNights.set(record.code, { record, operationQueue: Promise.resolve(), socketByPlayer: new Map() });
   }
 
   app.post("/api/game-nights", async (request, reply) => {
@@ -182,7 +181,7 @@ export async function registerGameNightRoutes(
       currentRoomCode: null,
     };
     await blueprintStore.saveGameNight(record);
-    gameNights.set(code, { record, operationQueue: Promise.resolve() });
+    gameNights.set(code, { record, operationQueue: Promise.resolve(), socketByPlayer: new Map() });
     const result: JoinGameNightResult = {
       playerId: hostPlayerId,
       reconnectToken: credential.token,
@@ -232,7 +231,7 @@ export async function registerGameNightRoutes(
           ? runtime.record.players.find((candidate) => candidate.id === parsed.data.playerId)
           : undefined;
         if (parsed.data.playerId && parsed.data.reconnectToken) {
-          assertCredential(runtime.record, parsed.data.playerId, parsed.data.reconnectToken);
+          assertGameNightCredential(runtime.record, parsed.data.playerId, parsed.data.reconnectToken);
         } else if (runtime.record.state.status !== "lobby") {
           throw new GameNightRuleError("This game night has already started.");
         }
@@ -274,22 +273,8 @@ export async function registerGameNightRoutes(
     if (!runtime) return reply.code(404).send({ error: "Game night not found." });
     try {
       const view = await enqueueGameNight(runtime, async () => {
-        assertCredential(runtime.record, parsed.data.playerId, parsed.data.reconnectToken);
-        if (runtime.record.currentRoomCode) throw new GameNightRuleError("Teams are locked during a game.");
-        const target = runtime.record.state.teams.find((team) => team.id === parsed.data.teamId);
-        if (!target) throw new GameNightRuleError("Unknown team.");
-        if (!target.playerIds.includes(parsed.data.playerId) && target.playerIds.length >= 6)
-          throw new GameNightRuleError("This team is full.");
-        runtime.record.state.teams = runtime.record.state.teams.map((team) => ({
-          ...team,
-          playerIds:
-            team.id === target.id
-              ? [...team.playerIds.filter((id) => id !== parsed.data.playerId), parsed.data.playerId]
-              : team.playerIds.filter((id) => id !== parsed.data.playerId),
-          ...(team.captainPlayerId === parsed.data.playerId && team.id !== target.id
-            ? { captainPlayerId: undefined }
-            : {}),
-        }));
+        assertGameNightCredential(runtime.record, parsed.data.playerId, parsed.data.reconnectToken);
+        runtime.record = selectGameNightTeam(runtime.record, parsed.data.playerId, parsed.data.teamId);
         await blueprintStore.saveGameNight(runtime.record);
         return viewForGameNight(runtime.record, parsed.data.playerId);
       });
@@ -307,7 +292,7 @@ export async function registerGameNightRoutes(
     if (!runtime) return reply.code(404).send({ error: "Game night not found." });
     try {
       const view = await enqueueGameNight(runtime, async () => {
-        assertCredential(runtime.record, parsed.data.playerId, parsed.data.reconnectToken);
+        assertGameNightCredential(runtime.record, parsed.data.playerId, parsed.data.reconnectToken);
         if (parsed.data.playerId !== runtime.record.hostPlayerId)
           throw new GameNightRuleError("Only the host can choose captains.");
         if (runtime.record.currentRoomCode) throw new GameNightRuleError("Captains are locked during a game.");
@@ -333,7 +318,7 @@ export async function registerGameNightRoutes(
     if (!runtime) return reply.code(404).send({ error: "Game night not found." });
     try {
       const launched = await enqueueGameNight(runtime, async () => {
-        assertCredential(runtime.record, parsed.data.playerId, parsed.data.reconnectToken);
+        assertGameNightCredential(runtime.record, parsed.data.playerId, parsed.data.reconnectToken);
         if (parsed.data.playerId !== runtime.record.hostPlayerId)
           throw new GameNightRuleError("Only the host can launch a game.");
         const blueprint = await blueprintStore.get(parsed.data.blueprintId);

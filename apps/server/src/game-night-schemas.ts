@@ -1,5 +1,28 @@
 import { z } from "zod";
 
+const gameNightCodeSchema = z
+  .string()
+  .trim()
+  .length(6)
+  .transform((value) => value.toUpperCase());
+
+export const gameNightCredentialsSchema = z
+  .object({
+    playerId: z.string().uuid(),
+    reconnectToken: z.string().regex(/^[A-Za-z0-9_-]{40,64}$/),
+  })
+  .strict();
+
+export const gameNightSocketSessionSchema = gameNightCredentialsSchema.extend({ code: gameNightCodeSchema }).strict();
+
+export const gameNightSocketTeamSelectionSchema = z
+  .object({
+    code: gameNightCodeSchema,
+    playerId: z.string().uuid(),
+    teamId: z.string().min(1).max(80),
+  })
+  .strict();
+
 const gameNightTeamSchema = z
   .object({
     id: z.string().min(1).max(80),

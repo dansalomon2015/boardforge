@@ -30,10 +30,12 @@ Completed:
 - Distinct homepage paths for `Start a game night` and `Play one game`, plus code-aware invitation routing.
 - A responsive Game Night creation flow for two to four uniquely named and colored teams.
 - A shareable lobby with session recovery, player joining and self-service team selection.
+- Authenticated Socket.IO subscriptions with player-scoped Game Night state.
+- Live presence and team changes without manual refresh, including reconnect and session-replacement handling.
 
 Not completed:
 
-- Real-time lobby synchronization and persistent board UI.
+- Host-only access to the persistent Game Night board.
 - Game compatibility catalogue UI and explanations.
 - Return-to-board flow, history animation and final podium.
 
@@ -77,7 +79,7 @@ Acceptance tests:
 - The flow works at 320, 375 and 430 pixel widths.
 - The host receives a shareable six-character code in under one minute.
 
-### Phase 3 — Shared lobby
+### Phase 3 — Shared lobby (in progress)
 
 Work:
 

@@ -6,10 +6,12 @@ import { createBoardForgeServer } from "./app";
 
 describe("realtime room gateway", () => {
   let client: Socket | undefined;
+  let secondClient: Socket | undefined;
   let closeServer: (() => Promise<void>) | undefined;
 
   afterEach(async () => {
     client?.disconnect();
+    secondClient?.disconnect();
     await closeServer?.();
   });
 
@@ -187,5 +189,104 @@ describe("realtime room gateway", () => {
       );
     });
     expect(childReconnect.ok).toBe(true);
+  });
+
+  it("broadcasts Game Night team and presence changes to every subscribed player", async () => {
+    const { app, io } = await createBoardForgeServer({
+      databaseUrl: null,
+      llmProvider: "fake",
+      logger: false,
+      restoreRooms: false,
+    });
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    closeServer = async () => {
+      await new Promise<void>((resolve) => io.close(() => resolve()));
+      await app.close();
+    };
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/game-nights",
+      payload: { hostName: "Maya", teams: [{ name: "Red" }, { name: "Blue" }] },
+    });
+    const host = created.json<{ playerId: string; reconnectToken: string; view: { code: string } }>();
+    const joined = await app.inject({
+      method: "POST",
+      url: `/api/game-nights/${host.view.code}/join`,
+      payload: { name: "Noah" },
+    });
+    const guest = joined.json<{ playerId: string; reconnectToken: string }>();
+    const address = app.server.address();
+    if (!address || typeof address === "string") throw new Error("Expected a TCP test server address.");
+    const connect = async () => {
+      const socket = createSocketClient(`http://127.0.0.1:${address.port}`, {
+        transports: ["websocket"],
+        forceNew: true,
+        reconnection: false,
+      });
+      await new Promise<void>((resolve, reject) => {
+        socket.once("connect", resolve);
+        socket.once("connect_error", reject);
+      });
+      return socket;
+    };
+    client = await connect();
+    secondClient = await connect();
+
+    const subscribe = (socket: Socket, session: { playerId: string; reconnectToken: string }) =>
+      new Promise<SocketAck<{ view: { selfPlayerId: string } }>>((resolve) => {
+        socket.emit(
+          "game-night:subscribe",
+          {
+            code: host.view.code,
+            playerId: session.playerId,
+            reconnectToken: session.reconnectToken,
+          },
+          resolve,
+        );
+      });
+    const hostSubscription = await subscribe(client, host);
+    if (!hostSubscription.ok) throw new Error(hostSubscription.error);
+    expect(hostSubscription).toMatchObject({ ok: true, data: { view: { selfPlayerId: host.playerId } } });
+    const guestSubscription = await subscribe(secondClient, guest);
+    if (!guestSubscription.ok) throw new Error(guestSubscription.error);
+    expect(guestSubscription).toMatchObject({
+      ok: true,
+      data: { view: { selfPlayerId: guest.playerId } },
+    });
+
+    const waitForState = <T>(socket: Socket, predicate: (view: T) => boolean) =>
+      new Promise<T>((resolve) => {
+        const handler = (view: T) => {
+          if (!predicate(view)) return;
+          socket.off("game-night:state", handler);
+          resolve(view);
+        };
+        socket.on("game-night:state", handler);
+      });
+    const teamUpdate = new Promise<{ teams: Array<{ id: string; playerIds: string[] }> }>((resolve) => {
+      void waitForState<{ teams: Array<{ id: string; playerIds: string[] }> }>(
+        client!,
+        (view) => view.teams.find((team) => team.id === "team_2")?.playerIds.includes(guest.playerId) === true,
+      ).then(resolve);
+    });
+    const selection = await new Promise<SocketAck<{ view: { selfPlayerId: string } }>>((resolve) => {
+      secondClient?.emit(
+        "game-night:team:select",
+        { code: host.view.code, playerId: guest.playerId, teamId: "team_2" },
+        resolve,
+      );
+    });
+    expect(selection.ok).toBe(true);
+    expect((await teamUpdate).teams.find((team) => team.id === "team_2")?.playerIds).toContain(guest.playerId);
+
+    const disconnectedUpdate = new Promise<{ players: Array<{ id: string; connected: boolean }> }>((resolve) => {
+      void waitForState<{ players: Array<{ id: string; connected: boolean }> }>(
+        client!,
+        (view) => view.players.find((player) => player.id === guest.playerId)?.connected === false,
+      ).then(resolve);
+    });
+    secondClient.disconnect();
+    expect((await disconnectedUpdate).players.find((player) => player.id === guest.playerId)?.connected).toBe(false);
   });
 });

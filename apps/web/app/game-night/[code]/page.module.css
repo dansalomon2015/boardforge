@@ -29,8 +29,9 @@
 .lobbyPage { color: #171614; background: #eee7d9; }
 .lobbyPage .nav { border-color: rgba(23,22,20,.14); }
 .lobbyPage .brand { color: #171614; }
-.refresh { color: #6e675e; background: transparent; border: 0; font-size: 10px; font-weight: 900; }
-.refresh:disabled { opacity: .4; }
+.live { display: flex; align-items: center; gap: 7px; color: #7b746a; font-size: 9px; font-weight: 900; letter-spacing: .6px; text-transform: uppercase; }
+.live i { width: 7px; height: 7px; background: #b1aba2; border-radius: 50%; }
+.live.online { color: #277458; }.live.online i { background: #2caf7e; box-shadow: 0 0 0 4px rgba(44,175,126,.12); }
 .lobbyLayout { width: min(1220px, calc(100% - 48px)); margin: 0 auto; padding: 48px 0 80px; }
 .lobbyHeader { display: grid; grid-template-columns: 1fr 330px; gap: 60px; align-items: stretch; margin-bottom: 28px; }
 .lobbyHeader > div { padding: 18px 0; }
