@@ -151,6 +151,24 @@ export function openGameNightBoard(session: GameNightSessionRecord, playerId: st
   };
 }
 
+export function selectGameNightGame(
+  session: GameNightSessionRecord,
+  playerId: string,
+  blueprintId: string,
+): GameNightSessionRecord {
+  if (playerId !== session.hostPlayerId) throw new GameNightRuleError("Only the host can choose the next game.");
+  if (session.state.status === "lobby")
+    throw new GameNightRuleError("Open the Game Night board before choosing a game.");
+  if (session.state.status === "completed") throw new GameNightRuleError("This Game Night is already complete.");
+  if (session.currentRoomCode) throw new GameNightRuleError("Finish the current game before choosing another one.");
+  if (session.state.selectedBlueprintId === blueprintId) return session;
+
+  return {
+    ...session,
+    state: { ...session.state, selectedBlueprintId: blueprintId },
+  };
+}
+
 export function recordCompletedChildGame(
   session: GameNightSessionRecord,
   room: Pick<Room, "blueprintId" | "code" | "gameInstanceId" | "gameNightId" | "gameNightTeamByGameTeam">,
@@ -181,5 +199,9 @@ export function recordCompletedChildGame(
     idempotencyKey: `result:${room.gameInstanceId}`,
   });
 
-  return { ...session, state: nextState, currentRoomCode: null };
+  return {
+    ...session,
+    state: { ...nextState, selectedBlueprintId: null },
+    currentRoomCode: null,
+  };
 }

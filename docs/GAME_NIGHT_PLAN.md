@@ -34,10 +34,13 @@ Completed:
 - Live presence and team changes without manual refresh, including reconnect and session-replacement handling.
 - A host-only, persisted transition from team formation to the shared Game Night board.
 - A responsive live board with global standings, team members, presence and active-room recovery.
+- A responsive four-game catalogue with server-authored compatibility explanations.
+- Host-only next-game selection, synchronized live and restored with the Game Night session.
 
 Not completed:
 
-- Game compatibility catalogue UI and explanations.
+- Captain configuration and child-room launch from the selected catalogue game.
+- Ordered game-history details and awarded-points UI.
 - Return-to-board flow, history animation and final podium.
 
 ## P0 delivery plan

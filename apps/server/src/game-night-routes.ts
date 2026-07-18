@@ -108,6 +108,7 @@ export function viewForGameNight(record: GameNightSessionRecord, playerId: strin
       ...(team.captainPlayerId ? { captainPlayerId: team.captainPlayerId } : {}),
       score: record.state.scores[team.id] ?? 0,
     })),
+    selectedBlueprintId: record.state.selectedBlueprintId,
     currentRoomCode: record.currentRoomCode,
     gamesPlayed: record.state.completedGames.length,
   };

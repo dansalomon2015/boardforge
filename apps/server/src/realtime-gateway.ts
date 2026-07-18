@@ -29,9 +29,15 @@ import {
   type GameNightRuntime,
   type GameNightRuntimeMap,
 } from "./game-night-routes";
-import { openGameNightBoard, recordCompletedChildGame, selectGameNightTeam } from "./game-night-runtime";
+import {
+  openGameNightBoard,
+  recordCompletedChildGame,
+  selectGameNightGame,
+  selectGameNightTeam,
+} from "./game-night-runtime";
 import {
   gameNightSocketBoardOpenSchema,
+  gameNightSocketGameSelectionSchema,
   gameNightSocketSessionSchema,
   gameNightSocketTeamSelectionSchema,
 } from "./game-night-schemas";
@@ -63,6 +69,7 @@ type RealtimeGatewayDependencies = {
   io: SocketServer;
   rooms: Map<string, Room>;
   gameNights: GameNightRuntimeMap;
+  gameNightCatalogIds: ReadonlySet<string>;
   blueprintStore: RealtimeRoomStore;
   restoreRooms: boolean;
 };
@@ -72,6 +79,7 @@ export async function registerRealtimeGateway({
   io,
   rooms,
   gameNights,
+  gameNightCatalogIds,
   blueprintStore,
   restoreRooms,
 }: RealtimeGatewayDependencies): Promise<void> {
@@ -272,6 +280,32 @@ export async function registerRealtimeGateway({
           await enqueueGameNight(runtime, async () => {
             assertSocketOwnsGameNightPlayer(socket, runtime, parsed.code, parsed.playerId);
             runtime.record = openGameNightBoard(runtime.record, parsed.playerId);
+            await blueprintStore.saveGameNight(runtime.record);
+            acknowledge(ack, { ok: true, data: { view: viewForGameNight(runtime.record, parsed.playerId) } });
+            emitGameNight(runtime);
+          });
+        } catch (error) {
+          acknowledge(ack, { ok: false, error: socketError(error) });
+        }
+      },
+    );
+
+    socket.on(
+      "game-night:game:select",
+      async (payload: unknown, ack?: (response: SocketAck<{ view: GameNightView }>) => void) => {
+        try {
+          const parsed = gameNightSocketGameSelectionSchema.parse(payload);
+          const runtime = gameNights.get(parsed.code);
+          if (!runtime) throw new GameNightRuleError("Game night not found.");
+          await enqueueGameNight(runtime, async () => {
+            assertSocketOwnsGameNightPlayer(socket, runtime, parsed.code, parsed.playerId);
+            const blueprint = gameNightCatalogIds.has(parsed.blueprintId)
+              ? await blueprintStore.get(parsed.blueprintId)
+              : undefined;
+            if (blueprint?.status !== "release_ready") {
+              throw new GameNightRuleError("This game is not available for Game Night.");
+            }
+            runtime.record = selectGameNightGame(runtime.record, parsed.playerId, blueprint.id);
             await blueprintStore.saveGameNight(runtime.record);
             acknowledge(ack, { ok: true, data: { view: viewForGameNight(runtime.record, parsed.playerId) } });
             emitGameNight(runtime);

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { io, type Socket } from "socket.io-client";
-import type { GameNightView, JoinGameNightResult, SocketAck } from "@boardforge/shared";
+import type { GameNightCatalogEntry, GameNightView, JoinGameNightResult, SocketAck } from "@boardforge/shared";
 import {
   clearGameNightSession,
   readGameNightSession,
@@ -36,6 +36,8 @@ export default function GameNightLobbyPage() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [games, setGames] = useState<GameNightCatalogEntry[]>([]);
+  const [gamesLoading, setGamesLoading] = useState(false);
 
   async function openSession(playerName: string, stored?: StoredGameNightSession): Promise<GameNightView> {
     const response = await fetch(`${apiUrl}/api/game-nights/${code}/join`, {
@@ -120,6 +122,42 @@ export default function GameNightLobbyPage() {
   const assigned = useMemo(() => new Set(view?.teams.flatMap((team) => team.playerIds) ?? []), [view]);
   const unassignedPlayers = view?.players.filter((player) => !assigned.has(player.id)) ?? [];
   const selfTeamId = view?.teams.find((team) => team.playerIds.includes(view.selfPlayerId))?.id;
+  const catalogContext = useMemo(
+    () =>
+      view
+        ? JSON.stringify({
+            status: view.status,
+            currentRoomCode: view.currentRoomCode,
+            players: view.players.map((player) => player.id),
+            teams: view.teams.map((team) => ({
+              id: team.id,
+              playerIds: team.playerIds,
+              captainPlayerId: team.captainPlayerId ?? null,
+            })),
+          })
+        : "",
+    [view],
+  );
+
+  useEffect(() => {
+    if (!view || view.status === "lobby") return;
+    const controller = new AbortController();
+    setGamesLoading(true);
+    fetch(`${apiUrl}/api/game-nights/${code}/catalog`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("The game collection could not be opened.");
+        return response.json() as Promise<{ games: GameNightCatalogEntry[] }>;
+      })
+      .then((result) => setGames(result.games))
+      .catch((caught: unknown) => {
+        if (caught instanceof DOMException && caught.name === "AbortError") return;
+        setError(caught instanceof Error ? caught.message : "The game collection could not be opened.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setGamesLoading(false);
+      });
+    return () => controller.abort();
+  }, [catalogContext, code, view?.status]);
 
   async function join(event: FormEvent) {
     event.preventDefault();
@@ -167,6 +205,26 @@ export default function GameNightLobbyPage() {
     socket.emit(
       "game-night:board:open",
       { code, playerId: view.selfPlayerId },
+      (response: SocketAck<{ view: GameNightView }>) => {
+        setPending(false);
+        if (response.ok) setView(response.data.view);
+        else setError(response.error);
+      },
+    );
+  }
+
+  function selectGame(blueprintId: string) {
+    if (!view?.isHost) return;
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      setError("The live connection is still starting. Try again in a moment.");
+      return;
+    }
+    setPending(true);
+    setError("");
+    socket.emit(
+      "game-night:game:select",
+      { code, playerId: view.selfPlayerId, blueprintId },
       (response: SocketAck<{ view: GameNightView }>) => {
         setPending(false);
         if (response.ok) setView(response.data.view);
@@ -245,7 +303,11 @@ export default function GameNightLobbyPage() {
         connected={connected}
         copied={copied}
         error={error}
+        games={games}
+        gamesLoading={gamesLoading}
         onCopyInvite={() => void copyInvite()}
+        onSelectGame={selectGame}
+        pending={pending}
         view={view}
       />
     );

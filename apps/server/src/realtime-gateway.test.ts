@@ -301,6 +301,34 @@ describe("realtime room gateway", () => {
     expect(opened).toMatchObject({ ok: true, data: { view: { status: "playing" } } });
     expect(await guestBoardUpdate).toMatchObject({ status: "playing" });
 
+    const unauthorizedSelection = await new Promise<SocketAck<{ view: { selectedBlueprintId: string | null } }>>(
+      (resolve) => {
+        secondClient?.emit(
+          "game-night:game:select",
+          { code: host.view.code, playerId: guest.playerId, blueprintId: defaultMovieMimeSpec.id },
+          resolve,
+        );
+      },
+    );
+    expect(unauthorizedSelection).toMatchObject({ ok: false, error: "Only the host can choose the next game." });
+
+    const guestSelectionUpdate = waitForState<{ selectedBlueprintId: string | null }>(
+      secondClient,
+      (view) => view.selectedBlueprintId === defaultMovieMimeSpec.id,
+    );
+    const selected = await new Promise<SocketAck<{ view: { selectedBlueprintId: string | null } }>>((resolve) => {
+      client?.emit(
+        "game-night:game:select",
+        { code: host.view.code, playerId: host.playerId, blueprintId: defaultMovieMimeSpec.id },
+        resolve,
+      );
+    });
+    expect(selected).toMatchObject({
+      ok: true,
+      data: { view: { selectedBlueprintId: defaultMovieMimeSpec.id } },
+    });
+    expect(await guestSelectionUpdate).toMatchObject({ selectedBlueprintId: defaultMovieMimeSpec.id });
+
     const disconnectedUpdate = new Promise<{ players: Array<{ id: string; connected: boolean }> }>((resolve) => {
       void waitForState<{ players: Array<{ id: string; connected: boolean }> }>(
         client!,
@@ -314,7 +342,13 @@ describe("realtime room gateway", () => {
     const resumedBoard = await subscribe(secondClient, guest);
     expect(resumedBoard).toMatchObject({
       ok: true,
-      data: { view: { selfPlayerId: guest.playerId, status: "playing" } },
+      data: {
+        view: {
+          selfPlayerId: guest.playerId,
+          status: "playing",
+          selectedBlueprintId: defaultMovieMimeSpec.id,
+        },
+      },
     });
   });
 });

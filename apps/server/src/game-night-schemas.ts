@@ -30,6 +30,14 @@ export const gameNightSocketBoardOpenSchema = z
   })
   .strict();
 
+export const gameNightSocketGameSelectionSchema = z
+  .object({
+    code: gameNightCodeSchema,
+    playerId: z.string().uuid(),
+    blueprintId: z.string().trim().min(1).max(160),
+  })
+  .strict();
+
 const gameNightTeamSchema = z
   .object({
     id: z.string().min(1).max(80),
@@ -75,6 +83,7 @@ const gameNightStateSchema = z
   .object({
     id: z.string().uuid(),
     status: z.enum(["lobby", "playing", "completed"]),
+    selectedBlueprintId: z.string().min(1).max(160).nullable().default(null),
     teams: z.array(gameNightTeamSchema).min(2).max(12),
     scores: z.record(z.string(), z.number().int().min(0)),
     completedGames: z.array(gameNightCompletedGameSchema).max(100),

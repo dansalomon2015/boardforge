@@ -119,11 +119,12 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
 
   registerBalanceRoutes(app, { llm, blueprintStore });
 
+  const gameNightCatalog = [defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec];
   const gameNights = await registerGameNightRoutes(app, {
     blueprintStore,
     rooms,
     createRoomCode,
-    gameNightCatalog: [defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec],
+    gameNightCatalog,
   });
 
   app.post("/api/rooms", async (request, reply) => {
@@ -194,6 +195,7 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
     io,
     rooms,
     gameNights,
+    gameNightCatalogIds: new Set(gameNightCatalog.map((game) => game.id)),
     blueprintStore,
     restoreRooms: options.restoreRooms !== false,
   });

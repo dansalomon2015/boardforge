@@ -36,6 +36,7 @@ export type GameNightCompletedGame = {
 export type GameNightState = {
   id: string;
   status: "lobby" | "playing" | "completed";
+  selectedBlueprintId: string | null;
   teams: GameNightTeam[];
   scores: Record<string, number>;
   completedGames: GameNightCompletedGame[];
@@ -102,6 +103,7 @@ export function createGameNightState(id: string, teams: GameNightTeam[]): GameNi
   return {
     id,
     status: "lobby",
+    selectedBlueprintId: null,
     teams: structuredClone(teams),
     scores: Object.fromEntries(teamIds.map((teamId) => [teamId, 0])),
     completedGames: [],

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import type { GameNightView } from "@boardforge/shared";
+import type { GameNightCatalogEntry, GameNightView } from "@boardforge/shared";
+import { GameNightCatalog } from "./game-night-catalog";
 import styles from "./page.module.css";
 
 type GameNightBoardProps = {
@@ -8,15 +9,31 @@ type GameNightBoardProps = {
   connected: boolean;
   copied: boolean;
   error: string;
+  games: GameNightCatalogEntry[];
+  gamesLoading: boolean;
   onCopyInvite: () => void;
+  onSelectGame: (blueprintId: string) => void;
+  pending: boolean;
   view: GameNightView;
 };
 
-export function GameNightBoard({ code, connected, copied, error, onCopyInvite, view }: GameNightBoardProps) {
+export function GameNightBoard({
+  code,
+  connected,
+  copied,
+  error,
+  games,
+  gamesLoading,
+  onCopyInvite,
+  onSelectGame,
+  pending,
+  view,
+}: GameNightBoardProps) {
   const ranking = [...view.teams].sort(
     (left, right) => right.score - left.score || left.name.localeCompare(right.name),
   );
   const host = view.players.find((player) => player.isHost);
+  const selectedGame = games.find((entry) => entry.id === view.selectedBlueprintId);
 
   return (
     <main className={styles.boardPage}>
@@ -108,12 +125,22 @@ export function GameNightBoard({ code, connected, copied, error, onCopyInvite, v
               </>
             ) : (
               <>
-                <p>{view.isHost ? "Your move" : "Up next"}</p>
-                <h2>{view.isHost ? "Choose the next spark." : "The next game is coming."}</h2>
+                <p>{selectedGame ? "Coming up" : view.isHost ? "Your move" : "Up next"}</p>
+                <h2>
+                  {selectedGame
+                    ? `${selectedGame.game.title} is next.`
+                    : view.isHost
+                      ? "Choose the next spark."
+                      : "The next game is coming."}
+                </h2>
                 <span>
-                  {view.isHost
-                    ? "Pick a game that fits the teams at your table."
-                    : `Stay close — ${host?.name ?? "the host"} is choosing for the room.`}
+                  {selectedGame
+                    ? view.isHost
+                      ? "Get the teams ready, then set up the round before everyone enters."
+                      : `Stay close — ${host?.name ?? "the host"} is getting the teams ready.`
+                    : view.isHost
+                      ? "Pick a game that fits the teams at your table."
+                      : `Stay close — ${host?.name ?? "the host"} is choosing for the room.`}
                 </span>
                 <div className={styles.hostBadge}>
                   <i>{host?.name.slice(0, 1).toUpperCase() ?? "H"}</i>
@@ -126,6 +153,16 @@ export function GameNightBoard({ code, connected, copied, error, onCopyInvite, v
             )}
           </aside>
         </div>
+        {!view.currentRoomCode ? (
+          <GameNightCatalog
+            games={games}
+            isHost={view.isHost}
+            loading={gamesLoading}
+            onSelect={onSelectGame}
+            pending={pending}
+            selectedBlueprintId={view.selectedBlueprintId}
+          />
+        ) : null}
       </section>
       {error ? <p className={styles.toast}>{error}</p> : null}
     </main>

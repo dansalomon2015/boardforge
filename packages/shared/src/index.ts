@@ -291,6 +291,7 @@ export type GameNightView = {
     captainPlayerId?: string | undefined;
     score: number;
   }>;
+  selectedBlueprintId: string | null;
   currentRoomCode: string | null;
   gamesPlayed: number;
 };

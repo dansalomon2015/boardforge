@@ -7,6 +7,7 @@ import {
   linkGameNightToChildRoom,
   openGameNightBoard,
   recordCompletedChildGame,
+  selectGameNightGame,
   selectGameNightTeam,
 } from "./game-night-runtime";
 
@@ -114,6 +115,17 @@ describe("game-night child rooms", () => {
     const unassigned = session();
     unassigned.state.teams[1]!.playerIds = [];
     expect(() => openGameNightBoard(unassigned, hostPlayerId)).toThrow("Every player must choose a team");
+  });
+
+  it("persists only the host's next-game selection after the board opens", () => {
+    const night = openGameNightBoard(session(), hostPlayerId);
+
+    expect(() => selectGameNightGame(night, secondPlayerId, "movie-blueprint")).toThrow("Only the host");
+    const selected = selectGameNightGame(night, hostPlayerId, "movie-blueprint");
+
+    expect(selected.state.selectedBlueprintId).toBe("movie-blueprint");
+    expect(night.state.selectedBlueprintId).toBeNull();
+    expect(selectGameNightGame(selected, hostPlayerId, "movie-blueprint")).toBe(selected);
   });
 
   it("rejects incompatible team counts and concurrent child rooms", () => {
