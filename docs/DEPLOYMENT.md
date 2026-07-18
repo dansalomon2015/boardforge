@@ -38,7 +38,7 @@ Create a GitHub environment named `production`, then add these **environment sec
 
 Never place the OpenAI key, database password or SSH private key in source files, Compose files, build arguments, workflow output or the frontend. `NEXT_PUBLIC_API_URL` is not secret; the workflow derives it from `API_DOMAIN` and embeds it into the Next.js build.
 
-Generate a database password locally with a password manager or `openssl rand -base64 36`. Avoid characters that require URL escaping in this password because it is embedded in `DATABASE_URL`; a long hexadecimal value is safest.
+Generate a database password locally with a password manager or `openssl rand -hex 32`. Use only letters and numbers because the value is embedded in `DATABASE_URL`.
 
 ## 3. Configure the instance
 
@@ -58,6 +58,8 @@ Every successful `CI` run on `main` triggers **Deploy production**. It:
 4. authenticates with a short-lived workflow token, pulls the images and starts `compose.production.yaml` on EC2;
 5. preserves PostgreSQL and Caddy data in named volumes;
 6. verifies the public API health endpoint and homepage over HTTPS.
+
+If a container does not become healthy, the deployment workflow automatically prints its state and the latest PostgreSQL, server, web and Caddy logs before failing.
 
 The deployment can also be started manually from the Actions tab. Releases live under `/opt/boardforge/releases/<commit-sha>` and `/opt/boardforge/current` points to the active source release.
 

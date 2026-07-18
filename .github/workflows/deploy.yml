@@ -152,7 +152,14 @@ jobs:
           }
           docker login ghcr.io --username "$GHCR_USER" --password-stdin < /tmp/ghcr-token
           compose pull
-          compose up --detach --no-build --remove-orphans
+          if ! compose up --detach --no-build --remove-orphans; then
+            echo "Deployment failed; collecting container diagnostics."
+            compose ps --all || true
+            compose logs --no-color --tail=250 postgres server web caddy || true
+            docker inspect boardforge-server-1 \
+              --format '{{json .State}}' || true
+            exit 1
+          fi
           docker logout ghcr.io
           ln -sfn "$release" /opt/boardforge/current
           docker image prune -f
