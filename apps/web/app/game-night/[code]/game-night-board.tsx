@@ -1,7 +1,9 @@
 import Link from "next/link";
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import type { GameNightCatalogEntry, GameNightView } from "@boardforge/shared";
+import { rankGameNightTeams } from "../../../lib/game-night-ranking";
 import { GameNightCatalog } from "./game-night-catalog";
+import { GameNightFinale } from "./game-night-finale";
 import styles from "./page.module.css";
 
 type GameNightBoardProps = {
@@ -12,6 +14,7 @@ type GameNightBoardProps = {
   games: GameNightCatalogEntry[];
   gamesLoading: boolean;
   onCopyInvite: () => void;
+  onEndGameNight: () => void;
   onLaunchGame: (blueprintId: string) => void;
   onSelectCaptain: (teamId: string, captainPlayerId: string) => void;
   onSelectGame: (blueprintId: string) => void;
@@ -27,15 +30,15 @@ export function GameNightBoard({
   games,
   gamesLoading,
   onCopyInvite,
+  onEndGameNight,
   onLaunchGame,
   onSelectCaptain,
   onSelectGame,
   pending,
   view,
 }: GameNightBoardProps) {
-  const ranking = [...view.teams].sort(
-    (left, right) => right.score - left.score || left.name.localeCompare(right.name),
-  );
+  const [confirmingEnd, setConfirmingEnd] = useState(false);
+  const ranking = rankGameNightTeams(view.teams);
   const host = view.players.find((player) => player.isHost);
   const selectedGame = games.find((entry) => entry.id === view.selectedBlueprintId);
   const latestResult = view.history[view.history.length - 1];
@@ -47,6 +50,19 @@ export function GameNightBoard({
     .filter((name): name is string => Boolean(name));
   const gameTitle = (blueprintId: string) =>
     games.find((entry) => entry.id === blueprintId)?.game.title ?? "BoardForge Original";
+
+  if (view.status === "completed") {
+    return (
+      <GameNightFinale
+        code={code}
+        connected={connected}
+        copied={copied}
+        games={games}
+        onCopyInvite={onCopyInvite}
+        view={view}
+      />
+    );
+  }
 
   return (
     <main className={styles.boardPage}>
@@ -143,7 +159,7 @@ export function GameNightBoard({
                     style={{ "--team-color": team.color } as CSSProperties}
                   >
                     <div className={styles.scoreRank}>
-                      <i>{index + 1}</i>
+                      <i>{team.rank}</i>
                       <span>
                         {index === 0 ? "Leading" : team.score === ranking[0]?.score ? "Tied for lead" : "In the chase"}
                       </span>
@@ -204,6 +220,15 @@ export function GameNightBoard({
                     <strong>{host?.name ?? "Host"}</strong>
                   </span>
                 </div>
+                {view.isHost && view.gamesPlayed > 0 ? (
+                  <button className={styles.endNightButton} onClick={() => setConfirmingEnd(true)} type="button">
+                    <span>
+                      <small>Ready to call it a night?</small>
+                      <strong>Reveal the final podium</strong>
+                    </span>
+                    <b>✦</b>
+                  </button>
+                ) : null}
               </>
             )}
           </aside>
@@ -263,6 +288,27 @@ export function GameNightBoard({
           />
         ) : null}
       </section>
+      {confirmingEnd ? (
+        <div className={styles.confirmBackdrop} role="presentation">
+          <section aria-labelledby="end-night-title" aria-modal="true" className={styles.confirmDialog} role="dialog">
+            <span className={styles.confirmMark}>✦</span>
+            <small>Final call</small>
+            <h2 id="end-night-title">End this Game Night?</h2>
+            <p>
+              The final standings will be locked after {view.gamesPlayed} {view.gamesPlayed === 1 ? "game" : "games"}.
+              Everyone will see the podium, and no more games can be added.
+            </p>
+            <div>
+              <button disabled={pending} onClick={() => setConfirmingEnd(false)} type="button">
+                Keep playing
+              </button>
+              <button disabled={pending} onClick={onEndGameNight} type="button">
+                {pending ? "Closing the night…" : "Reveal the podium"} <b>→</b>
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {error ? <p className={styles.toast}>{error}</p> : null}
     </main>
   );

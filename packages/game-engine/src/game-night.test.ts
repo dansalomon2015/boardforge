@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createGameNightState, gameNightAssignments, GameNightRuleError, recordGameNightResult } from "./game-night";
+import {
+  completeGameNight,
+  createGameNightState,
+  gameNightAssignments,
+  GameNightRuleError,
+  recordGameNightResult,
+} from "./game-night";
 
 const teams = [
   { id: "red", name: "Red Rockets", playerIds: ["p1", "p2"] },
@@ -112,6 +118,33 @@ describe("game-night scoring", () => {
     expect(() => gameNightAssignments(state, true)).toThrow("Choose a captain");
     expect(() => createGameNightState("night-1", [{ ...teams[0]!, captainPlayerId: "p3" }, teams[1]!])).toThrow(
       "must belong to that team",
+    );
+  });
+
+  it("closes a scored Game Night and prevents any later result", () => {
+    const playing = recordGameNightResult(createGameNightState("night-1", teams), {
+      gameInstanceId: "game-1",
+      blueprintId: "movie-mime-v1",
+      winner: { kind: "teams", ids: ["red"] },
+      idempotencyKey: "result-1",
+    });
+    const completed = completeGameNight({ ...playing, selectedBlueprintId: "word-trap-v1" });
+
+    expect(completed).toMatchObject({ status: "completed", selectedBlueprintId: null });
+    expect(completeGameNight(completed)).toBe(completed);
+    expect(() =>
+      recordGameNightResult(completed, {
+        gameInstanceId: "game-2",
+        blueprintId: "word-trap-v1",
+        winner: { kind: "teams", ids: ["blue"] },
+        idempotencyKey: "result-2",
+      }),
+    ).toThrow("cannot accept new results");
+  });
+
+  it("requires one completed game before the night can end", () => {
+    expect(() => completeGameNight(createGameNightState("night-1", teams))).toThrow(
+      "Play at least one game before ending the Game Night.",
     );
   });
 });

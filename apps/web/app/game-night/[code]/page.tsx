@@ -288,6 +288,26 @@ export default function GameNightLobbyPage() {
     );
   }
 
+  function completeGameNight() {
+    if (!view?.isHost) return;
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      setError("The live connection is still starting. Try again in a moment.");
+      return;
+    }
+    setPending(true);
+    setError("");
+    socket.emit(
+      "game-night:complete",
+      { code, playerId: view.selfPlayerId },
+      (response: SocketAck<{ view: GameNightView }>) => {
+        setPending(false);
+        if (response.ok) setView(response.data.view);
+        else setError(response.error);
+      },
+    );
+  }
+
   async function copyInvite() {
     await navigator.clipboard.writeText(`${window.location.origin}/game-night/${code}`);
     setCopied(true);
@@ -361,6 +381,7 @@ export default function GameNightLobbyPage() {
         games={games}
         gamesLoading={gamesLoading}
         onCopyInvite={() => void copyInvite()}
+        onEndGameNight={completeGameNight}
         onLaunchGame={launchGame}
         onSelectCaptain={selectCaptain}
         onSelectGame={selectGame}

@@ -416,6 +416,14 @@ describe("realtime room gateway", () => {
     expect(launched.data.view.currentRoomCode).toBe(launched.data.roomCode);
     expect(await guestLaunchUpdate).toMatchObject({ currentRoomCode: launched.data.roomCode });
 
+    const activeGameCompletion = await new Promise<SocketAck<{ view: { status: string } }>>((resolve) => {
+      client?.emit("game-night:complete", { code: host.view.code, playerId: host.playerId }, resolve);
+    });
+    expect(activeGameCompletion).toMatchObject({
+      ok: false,
+      error: "Finish the current game before ending the Game Night.",
+    });
+
     const childJoin = await new Promise<SocketAck<JoinRoomResult>>((resolve) => {
       secondClient?.emit(
         "room:join",
@@ -599,5 +607,31 @@ describe("realtime room gateway", () => {
         expect.objectContaining({ id: "team_2", score: 1 }),
       ]),
     });
+
+    const unauthorizedCompletion = await new Promise<SocketAck<{ view: { status: string } }>>((resolve) => {
+      secondClient?.emit("game-night:complete", { code: host.view.code, playerId: guest.playerId }, resolve);
+    });
+    expect(unauthorizedCompletion).toMatchObject({ ok: false, error: "Only the host can end the Game Night." });
+
+    const guestFinale = waitForState<{ status: string; history: unknown[] }>(
+      secondClient,
+      (view) => view.status === "completed",
+    );
+    const completed = await new Promise<SocketAck<{ view: { status: string; history: unknown[] } }>>((resolve) => {
+      client?.emit("game-night:complete", { code: host.view.code, playerId: host.playerId }, resolve);
+    });
+    expect(completed).toMatchObject({ ok: true, data: { view: { status: "completed", history: [{}, {}] } } });
+    expect(await guestFinale).toMatchObject({ status: "completed", history: [{}, {}] });
+
+    const lockedSelection = await new Promise<SocketAck<{ view: { selectedBlueprintId: string | null } }>>(
+      (resolve) => {
+        client?.emit(
+          "game-night:game:select",
+          { code: host.view.code, playerId: host.playerId, blueprintId: defaultMovieMimeSpec.id },
+          resolve,
+        );
+      },
+    );
+    expect(lockedSelection).toMatchObject({ ok: false, error: "This Game Night is already complete." });
   });
 });

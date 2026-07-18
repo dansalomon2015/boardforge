@@ -125,6 +125,19 @@ export function gameNightAssignments(state: GameNightState, requiresCaptains: bo
   return { teamByPlayer, captainByTeam };
 }
 
+export function completeGameNight(state: GameNightState): GameNightState {
+  if (state.status === "completed") return state;
+  if (state.completedGames.length === 0) {
+    throw new GameNightRuleError("Play at least one game before ending the Game Night.");
+  }
+
+  return {
+    ...state,
+    status: "completed",
+    selectedBlueprintId: null,
+  };
+}
+
 export function recordGameNightResult(
   state: GameNightState,
   input: RecordGameNightResultInput,

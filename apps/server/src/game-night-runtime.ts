@@ -1,5 +1,6 @@
 import type { BoardGameSpec } from "@boardforge/game-spec";
 import {
+  completeGameNight,
   GameNightRuleError,
   recordGameNightResult,
   validateComposedTeamSelection,
@@ -161,6 +162,16 @@ export function openGameNightBoard(session: GameNightSessionRecord, playerId: st
   return {
     ...session,
     state: { ...session.state, status: "playing" },
+  };
+}
+
+export function endGameNight(session: GameNightSessionRecord, playerId: string): GameNightSessionRecord {
+  if (playerId !== session.hostPlayerId) throw new GameNightRuleError("Only the host can end the Game Night.");
+  if (session.currentRoomCode) throw new GameNightRuleError("Finish the current game before ending the Game Night.");
+
+  return {
+    ...session,
+    state: completeGameNight(session.state),
   };
 }
 

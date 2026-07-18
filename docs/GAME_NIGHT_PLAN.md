@@ -44,11 +44,14 @@ Completed:
 - A complete CineMimes vertical slice validated through all twenty rounds with two real-time players.
 - A two-game replay regression from CineMimes to WordTrap with preserved identities, teams, captains and cumulative scores.
 - Consistent Game Night return actions for CineMimes, WordTrap, DrawBattle and SoundCheck.
+- A host-only, persisted end-of-night transition that is blocked before the first result and during an active game.
+- A confirmed, shared final podium with deterministic tie ranking, complete standings and readable game history.
+- Completed sessions locked against new games while remaining available to returning participants.
 
 Not completed:
 
 - Complete multiplayer regressions for DrawBattle and SoundCheck.
-- End-of-night confirmation and final podium.
+- Complete three-team and four-team browser regressions.
 
 ## P0 delivery plan
 
@@ -168,13 +171,13 @@ Acceptance tests:
 - Refreshing the transition cannot duplicate the result.
 - A second compatible game can be launched and completed.
 
-### Phase 7 — Extend and finish
+### Phase 7 — Extend and finish (in progress)
 
 Work:
 
 - Add WordTrap, DrawBattle and SoundCheck to the complete loop.
-- Add `End game night`, confirmation and a final podium.
-- Lock completed sessions while keeping history readable.
+- Add `End game night`, confirmation and a final podium. **Completed.**
+- Lock completed sessions while keeping history readable. **Completed.**
 - Add complete multiplayer, browser, accessibility, Docker and migration coverage.
 
 Acceptance tests:

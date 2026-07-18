@@ -30,6 +30,13 @@ export const gameNightSocketBoardOpenSchema = z
   })
   .strict();
 
+export const gameNightSocketCompleteSchema = z
+  .object({
+    code: gameNightCodeSchema,
+    playerId: z.string().uuid(),
+  })
+  .strict();
+
 export const gameNightSocketGameSelectionSchema = z
   .object({
     code: gameNightCodeSchema,
