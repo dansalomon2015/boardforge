@@ -18,7 +18,7 @@ import {
   type BoardGameSpec,
 } from "@boardforge/game-spec";
 import { runComposedPlaytest } from "@boardforge/game-engine";
-import { createLlmProvider } from "@boardforge/llm";
+import { createLlmProvider, type GameContentProvider } from "@boardforge/llm";
 import { createBlueprintStore, type BlueprintRecord } from "./persistence";
 import { gameSummary } from "./game-catalog";
 import { registerGameRoutes } from "./game-routes";
@@ -38,6 +38,7 @@ export type BoardForgeServerOptions = {
   logger?: boolean;
   restoreRooms?: boolean;
   countdownClock?: CountdownClock;
+  storyBookProvider?: Pick<GameContentProvider, "generateStoryBook">;
 };
 
 export async function createBoardForgeServer(options: BoardForgeServerOptions = {}) {
@@ -176,6 +177,7 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
       operationQueue: Promise.resolve(),
       timingStartedAtByPlayer: new Map(),
       countdown: null,
+      storyBook: null,
       state: null,
     };
     await blueprintStore.saveRoom(persistedRoom(room));
@@ -202,6 +204,7 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
     gameNightCatalogIds: new Set(gameNightCatalog.map((game) => game.id)),
     createRoomCode,
     blueprintStore,
+    storyBookProvider: options.storyBookProvider ?? llm,
     restoreRooms: options.restoreRooms !== false,
     ...(options.countdownClock ? { countdownClock: options.countdownClock } : {}),
   });

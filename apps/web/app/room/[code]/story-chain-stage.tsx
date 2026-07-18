@@ -9,10 +9,12 @@ import storyChainStyles from "./story-chain.module.css";
 export function StoryChainStage({
   view,
   pending,
+  createStoryBook,
   sendAction,
 }: {
   view: ComposedGameView;
   pending: boolean;
+  createStoryBook: () => void;
   sendAction: (action: GameAction) => void;
 }) {
   const [contribution, setContribution] = useState("");
@@ -31,6 +33,7 @@ export function StoryChainStage({
       }
     | undefined;
   const entries = story?.entries ?? [];
+  const storyBook = view.storyBook ?? { status: "idle" as const };
 
   function perform(actionId: string, payload?: Extract<GameAction, { type: "COMPOSED_ACTION" }>["payload"]) {
     sendAction({ type: "COMPOSED_ACTION", actionId, ...(payload ? { payload } : {}) });
@@ -67,26 +70,79 @@ export function StoryChainStage({
             </h1>
             <p>Written tonight by {view.players.map((player) => player.name).join(", ")}.</p>
           </div>
-          <article className={storyChainStyles.manuscript}>
-            <p className={storyChainStyles.opening}>{story?.opening}</p>
-            {entries.map((entry) => (
-              <p key={entry.sequence}>
-                {entry.text}
-                <small>— {entry.actorName}</small>
-              </p>
-            ))}
-            <div className={storyChainStyles.theEnd}>The End</div>
-          </article>
+          {storyBook.status === "ready" ? (
+            <>
+              <div className={storyChainStyles.boundBook}>
+                <aside className={storyChainStyles.finalCover}>
+                  <small>BoardForge · One-night edition</small>
+                  <span>✦</span>
+                  <h2>{storyBook.book.title}</h2>
+                  <p>{storyBook.book.subtitle}</p>
+                  <b>Written by {view.players.map((player) => player.name).join(" · ")}</b>
+                </aside>
+                <article className={storyChainStyles.bookPages}>
+                  <p className={storyChainStyles.dedication}>{storyBook.book.dedication}</p>
+                  {storyBook.book.chapters.map((chapter, index) => (
+                    <section key={`${chapter.title}-${index}`}>
+                      <small>Chapter {String(index + 1).padStart(2, "0")}</small>
+                      <h3>{chapter.title}</h3>
+                      <p>{chapter.text}</p>
+                    </section>
+                  ))}
+                  <div className={storyChainStyles.theEnd}>The End</div>
+                  <blockquote>{storyBook.book.backCover}</blockquote>
+                </article>
+              </div>
+              <details className={storyChainStyles.originalDraft}>
+                <summary>Read the original StoryChain manuscript</summary>
+                <OriginalManuscript opening={story?.opening} entries={entries} />
+              </details>
+            </>
+          ) : (
+            <>
+              <OriginalManuscript opening={story?.opening} entries={entries} />
+              <div className={storyChainStyles.bookInvitation} aria-live="polite">
+                {storyBook.status === "generating" ? (
+                  <>
+                    <div className={storyChainStyles.bindingAnimation}>
+                      <i />
+                      <i />
+                      <span>✦</span>
+                    </div>
+                    <small>Binding your one-night edition</small>
+                    <h2>Your story is becoming a book.</h2>
+                    <p>Polishing the prose · shaping the chapters · designing the final edition</p>
+                  </>
+                ) : (
+                  <>
+                    <span>AI-bound keepsake</span>
+                    <h2>Turn tonight&apos;s twists into a book worth keeping.</h2>
+                    <p>One thoughtful final edit makes the story flow beautifully while keeping every idea yours.</p>
+                    {storyBook.status === "failed" ? <em>{storyBook.message}</em> : null}
+                    <button type="button" disabled={pending} onClick={createStoryBook}>
+                      {storyBook.status === "failed" ? "Try binding again" : "Bind our story into a book"} <b>→</b>
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
+          )}
           <div className={storyChainStyles.finalActions}>
             <button
               type="button"
               onClick={() =>
                 void navigator.clipboard.writeText(
-                  [story?.opening, ...entries.map((entry) => entry.text)].filter(Boolean).join("\n\n"),
+                  storyBook.status === "ready"
+                    ? [
+                        storyBook.book.title,
+                        storyBook.book.subtitle,
+                        ...storyBook.book.chapters.flatMap((chapter) => [chapter.title, chapter.text]),
+                      ].join("\n\n")
+                    : [story?.opening, ...entries.map((entry) => entry.text)].filter(Boolean).join("\n\n"),
                 )
               }
             >
-              Copy our story
+              Copy {storyBook.status === "ready" ? "the book" : "our story"}
             </button>
             <a href="/">
               Choose another game <b>→</b>
@@ -183,5 +239,26 @@ export function StoryChainStage({
         </div>
       )}
     </GameSurface>
+  );
+}
+
+function OriginalManuscript({
+  opening,
+  entries,
+}: {
+  opening?: string | undefined;
+  entries: Array<{ sequence: number; actorName: string; text: string }>;
+}) {
+  return (
+    <article className={storyChainStyles.manuscript}>
+      <p className={storyChainStyles.opening}>{opening}</p>
+      {entries.map((entry) => (
+        <p key={entry.sequence}>
+          {entry.text}
+          <small>— {entry.actorName}</small>
+        </p>
+      ))}
+      <div className={storyChainStyles.theEnd}>The End</div>
+    </article>
   );
 }

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Server as SocketServer, Socket } from "socket.io";
+import type { GameContentProvider } from "@boardforge/llm";
 import {
   ComposedGameRuleError,
   GameNightRuleError,
@@ -20,6 +21,7 @@ import type {
   LobbyView,
   RoomView,
   SocketAck,
+  StoryBookState,
 } from "@boardforge/shared";
 import type { RealtimeRoomStore, RoomEventRecord } from "./persistence";
 import {
@@ -80,7 +82,9 @@ import {
   persistedStringMapSchema,
   persistedTeamPresentationMapSchema,
   teamSelectionSchema,
+  storyBookRequestSchema,
 } from "./room-schemas";
+import { storyBookInputForRoom } from "./story-book-runtime";
 
 type RealtimeGatewayDependencies = {
   app: FastifyInstance;
@@ -90,6 +94,7 @@ type RealtimeGatewayDependencies = {
   gameNightCatalogIds: ReadonlySet<string>;
   createRoomCode: () => string;
   blueprintStore: RealtimeRoomStore;
+  storyBookProvider: Pick<GameContentProvider, "generateStoryBook">;
   restoreRooms: boolean;
   countdownClock?: CountdownClock;
 };
@@ -102,6 +107,7 @@ export async function registerRealtimeGateway({
   gameNightCatalogIds,
   createRoomCode,
   blueprintStore,
+  storyBookProvider,
   restoreRooms,
   countdownClock,
 }: RealtimeGatewayDependencies): Promise<void> {
@@ -313,6 +319,7 @@ export async function registerRealtimeGateway({
           operationQueue: Promise.resolve(),
           timingStartedAtByPlayer: restoreTimingStarts(blueprint.spec, events),
           countdown: null,
+          storyBook: record.storyBook?.status === "generating" ? { status: "idle" } : (record.storyBook ?? null),
           state,
         };
         restoreRoomCountdown(room, events, clock.now());
@@ -742,6 +749,52 @@ export async function registerRealtimeGateway({
           scheduleRoomCountdown(room, clock.now());
           emitRoom(room);
           acknowledge(ack, { ok: true, data: { view: viewFor(room, payload.playerId, clock.now()) } });
+        } catch (error) {
+          acknowledge(ack, { ok: false, error: socketError(error) });
+        }
+      },
+    );
+
+    socket.on(
+      "story-chain:book:create",
+      async (payload: unknown, ack?: (response: SocketAck<{ storyBook: StoryBookState }>) => void) => {
+        try {
+          const parsed = storyBookRequestSchema.parse(payload);
+          const room = rooms.get(parsed.code);
+          if (!room) throw new GameRuleError("Room not found.");
+          assertSocketOwnsPlayer(socket, room, parsed.code, parsed.playerId);
+          const result = await enqueueRoom(room, async () => {
+            const input = storyBookInputForRoom(room, parsed.playerId);
+            if (room.storyBook?.status === "ready" || room.storyBook?.status === "generating") {
+              return { start: false as const, input, storyBook: room.storyBook };
+            }
+            room.storyBook = { status: "generating" };
+            await blueprintStore.saveRoom(persistedRoom(room));
+            return { start: true as const, input, storyBook: room.storyBook };
+          });
+          acknowledge(ack, { ok: true, data: { storyBook: result.storyBook } });
+          emitRoom(room);
+          if (!result.start) return;
+          void storyBookProvider
+            .generateStoryBook(result.input)
+            .then((book) =>
+              enqueueRoom(room, async () => {
+                room.storyBook = { status: "ready", book };
+                await blueprintStore.saveRoom(persistedRoom(room));
+                emitRoom(room);
+              }),
+            )
+            .catch((error) =>
+              enqueueRoom(room, async () => {
+                app.log.warn({ err: error, roomCode: room.code }, "StoryChain book generation failed");
+                room.storyBook = {
+                  status: "failed",
+                  message: "The bookbinder lost the thread. Please try again.",
+                };
+                await blueprintStore.saveRoom(persistedRoom(room));
+                emitRoom(room);
+              }),
+            );
         } catch (error) {
           acknowledge(ack, { ok: false, error: socketError(error) });
         }

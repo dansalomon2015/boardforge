@@ -11,7 +11,11 @@ import {
   createRandomStoryChainPack,
   createStoryChainPack,
   storyChainSetupSchema,
+  storyBookChapterSchema,
+  storyBookInputSchema,
+  storyBookSchema,
   storyRounds,
+  storyTwistCatalog,
   storyTwistSchema,
   movieCatalog,
   movieMimeSetupSchema,
@@ -34,6 +38,8 @@ import {
   type StoryChainPack,
   type StoryChainSetup,
   type StoryChainSetupInput,
+  type StoryBook,
+  type StoryBookInput,
 } from "@boardforge/game-spec";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
@@ -45,6 +51,44 @@ export type ComposedBalanceEvidence = {
   averageActions: number;
   failures: Array<{ code: string; evidence: string }>;
 };
+
+function normalizedStoryText(value: string): string {
+  return ` ${value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()} `;
+}
+
+export function repairStoryChainCandidate(
+  setup: StoryChainSetup,
+  candidate: { title: string; opening: string; twists: z.infer<typeof storyTwistSchema>[] },
+): StoryChainPack {
+  const premise = normalizedStoryText(`${candidate.title} ${candidate.opening}`);
+  const usedIds = new Set<string>();
+  const usedWords = new Set<string>();
+  const replacements = storyTwistCatalog.filter(
+    (twist) => !premise.includes(` ${normalizedStoryText(twist.requiredWord).trim()} `),
+  );
+  const twists = candidate.twists.map((twist) => {
+    const word = normalizedStoryText(twist.requiredWord).trim();
+    const leaked = premise.includes(` ${word} `);
+    const duplicate = usedIds.has(twist.id) || usedWords.has(word);
+    const selected =
+      leaked || duplicate
+        ? replacements.find((replacement) => {
+            const replacementWord = normalizedStoryText(replacement.requiredWord).trim();
+            return !usedIds.has(replacement.id) && !usedWords.has(replacementWord);
+          })
+        : twist;
+    if (!selected) throw new Error("No safe StoryChain twist remains for the generated premise.");
+    usedIds.add(selected.id);
+    usedWords.add(normalizedStoryText(selected.requiredWord).trim());
+    return selected;
+  });
+  return createStoryChainPack(setup, { title: candidate.title, opening: candidate.opening, twists }, "ai");
+}
 
 export type ComposedAdjustableParameter =
   | { kind: "duration"; current: number; min: 2; max: 180 }
@@ -108,6 +152,7 @@ export type LlmUsageTelemetry = {
     | "draw_battle_selection"
     | "sound_check_selection"
     | "story_chain_generation"
+    | "story_chain_book"
     | "composed_critique"
     | "composed_patch";
   provider: string;
@@ -131,6 +176,7 @@ export interface GameContentProvider extends NamedLlmProvider {
   generateDrawBattlePack(setup: DrawBattleSetupInput): Promise<DrawBattlePack>;
   generateSoundCheckPack(setup: SoundCheckSetupInput): Promise<SoundCheckPack>;
   generateStoryChainPack(setup: StoryChainSetupInput): Promise<StoryChainPack>;
+  generateStoryBook(input: StoryBookInput): Promise<StoryBook>;
 }
 
 export interface GameReviewProvider extends NamedLlmProvider {
@@ -370,6 +416,36 @@ export class FakeLlmProvider implements LlmProvider {
     const setup = storyChainSetupSchema.parse(setupInput);
     const selected = createRandomStoryChainPack(setup, `local-ai:${normalizedPrompt(setup.preferences ?? setup.mood)}`);
     return createStoryChainPack(setup, selected, "ai");
+  }
+
+  async generateStoryBook(inputValue: StoryBookInput): Promise<StoryBook> {
+    const input = storyBookInputSchema.parse(inputValue);
+    const chapterCount = Math.min(4, Math.max(2, Math.ceil(input.entries.length / 4)));
+    const chapters = Array.from({ length: chapterCount }, (_, index) => {
+      const start = Math.floor((index * input.entries.length) / chapterCount);
+      const end = Math.floor(((index + 1) * input.entries.length) / chapterCount);
+      const prose = input.entries
+        .slice(start, end)
+        .map((entry) => entry.text)
+        .join(" ");
+      return {
+        title:
+          index === 0 ? "The First Turn" : index === chapterCount - 1 ? "The Final Twist" : `A New Turn ${index + 1}`,
+        text: `${prose} ${prose.length < 40 ? "Together, the storytellers carried the adventure forward." : ""}`.trim(),
+      };
+    });
+    return storyBookSchema.parse({
+      schemaVersion: 1,
+      title: input.title,
+      subtitle: "A StoryChain tale written together in one unforgettable night",
+      dedication: `For ${input.authors.join(", ")} — the storytellers who made every twist possible.`.slice(0, 180),
+      backCover:
+        `${input.opening.slice(0, 240)} What followed was shaped one sentence, one secret word, and one surprising turn at a time.`.slice(
+          0,
+          360,
+        ),
+      chapters,
+    });
   }
 
   async proposeComposedBalancePatch(
@@ -756,14 +832,13 @@ export class OpenAiLlmProvider implements LlmProvider {
 
   private async generateStoryChainCandidate(
     setup: StoryChainSetup,
-    repairContext?: string,
   ): Promise<{ title: string; opening: string; twists: z.infer<typeof storyTwistSchema>[] }> {
     const count = storyRounds[setup.length];
     const candidateSchema = z
       .object({
         title: z.string().trim().min(2).max(64),
         opening: z.string().trim().min(20).max(420),
-        twists: z.array(storyTwistSchema).min(8).max(16),
+        twists: z.array(storyTwistSchema).min(4).max(16),
       })
       .strict();
     const startedAt = Date.now();
@@ -789,7 +864,6 @@ export class OpenAiLlmProvider implements LlmProvider {
             storyLength: setup.length,
             requestedTwists: count,
             preferences: setup.preferences,
-            ...(repairContext ? { repairContext } : {}),
           }),
         },
       ],
@@ -803,16 +877,45 @@ export class OpenAiLlmProvider implements LlmProvider {
 
   async generateStoryChainPack(setupInput: StoryChainSetupInput): Promise<StoryChainPack> {
     const setup = storyChainSetupSchema.parse(setupInput);
-    const first = await this.generateStoryChainCandidate(setup);
-    try {
-      return createStoryChainPack(setup, first, "ai");
-    } catch (error) {
-      const repaired = await this.generateStoryChainCandidate(
-        setup,
-        error instanceof Error ? error.message : "The previous story pack was invalid.",
-      );
-      return createStoryChainPack(setup, repaired, "ai");
-    }
+    return repairStoryChainCandidate(setup, await this.generateStoryChainCandidate(setup));
+  }
+
+  async generateStoryBook(inputValue: StoryBookInput): Promise<StoryBook> {
+    const input = storyBookInputSchema.parse(inputValue);
+    const chapterCount = Math.min(4, Math.max(2, Math.ceil(input.entries.length / 4)));
+    const outputSchema = storyBookSchema.extend({ chapters: z.array(storyBookChapterSchema).length(chapterCount) });
+    const startedAt = Date.now();
+    const response = await this.client.responses.parse({
+      model: this.reviewModel,
+      input: [
+        {
+          role: "system",
+          content: [
+            "You are the final editor of a premium collaborative storybook.",
+            "Line-edit the supplied manuscript into polished literary prose while preserving its plot, chronology, characters, surprises and original spirit.",
+            "Do not invent new plot events, remove meaningful contributions, mention the editing process, or imitate a living author.",
+            `Return exactly ${chapterCount} chapters with concise, evocative titles.`,
+            "Keep the manuscript's language. Smooth grammar, repetition and transitions so it reads beautifully aloud.",
+            "Keep the result PG-13 and write a short dedication and back-cover blurb.",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            title: input.title,
+            authors: input.authors,
+            manuscript: [input.opening, ...input.entries.map((entry) => entry.text)].join("\n"),
+          }),
+        },
+      ],
+      store: false,
+      reasoning: { effort: "low" },
+      prompt_cache_key: "boardforge:story-chain-book:v1",
+      text: { format: zodTextFormat(outputSchema, "story_chain_book") },
+      max_output_tokens: 2_400,
+    });
+    this.recordTelemetry("story_chain_book", this.reviewModel, startedAt, response);
+    return storyBookSchema.parse(requireParsedOutput(response.output_parsed, "StoryChain book"));
   }
 
   async proposeComposedBalancePatch(

@@ -18,7 +18,7 @@ BoardForge was built for the OpenAI Build Week hackathon around one simple idea:
 - **Word Trap** — help your team find a secret word without using any of the forbidden clues.
 - **Draw Battle** — turn a secret idea into a drawing before the clock runs out.
 - **Sound Check** — recreate a sound and hope your team understands what you mean.
-- **Story Chain** — write one story together, with private twists that send it in unexpected directions.
+- **Story Chain** — write one story together in as few as four chapters, then bind the finished adventure into a polished AI-edited book.
 - **Word Duel** — uncover your opponent’s hidden word one letter at a time before they uncover yours.
 - **Second Sense** — trust your sense of time and survive each round by stopping closest to the target.
 

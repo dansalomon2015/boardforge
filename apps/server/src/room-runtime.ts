@@ -9,7 +9,7 @@ import {
   type ComposedGameState,
   type GameState,
 } from "@boardforge/game-engine";
-import type { GameAction, LobbyView, PublicPlayer, RoomView } from "@boardforge/shared";
+import type { GameAction, LobbyView, PublicPlayer, RoomView, StoryBookState } from "@boardforge/shared";
 import type { GameNightTeamPresentation, RoomEventRecord, RoomSessionRecord } from "./persistence";
 import { gameSummary } from "./game-catalog";
 
@@ -31,6 +31,7 @@ export type Room = {
   operationQueue: Promise<void>;
   timingStartedAtByPlayer: Map<string, number>;
   countdown: RoomCountdown | null;
+  storyBook: StoryBookState | null;
   state: GameState | ComposedGameState | null;
 };
 
@@ -168,6 +169,7 @@ export function persistedRoom(room: Room, state: Room["state"] = room.state): Om
     checkpoint: state,
     checkpointChecksum: state ? stateChecksum(state) : null,
     checkpointRevision: state?.revision ?? null,
+    storyBook: room.storyBook,
   };
 }
 
@@ -244,6 +246,9 @@ export function viewFor(room: Room, playerId: string, serverNow = Date.now()): R
     const view = projectComposedGameState(room.state, room.spec, players, room.code, playerId);
     return {
       ...view,
+      ...(room.spec.experienceId === "story_chain" && room.state.status === "completed"
+        ? { storyBook: room.storyBook ?? { status: "idle" as const } }
+        : {}),
       ...(room.countdown
         ? {
             turnTimer: {

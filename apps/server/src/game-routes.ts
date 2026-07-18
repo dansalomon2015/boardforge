@@ -352,7 +352,7 @@ export function registerGameRoutes(app: FastifyInstance, { llm, blueprintStore }
     .object({
       themeId: composedThemeIdSchema.default("cozy"),
       mood: z.enum(["chaotic", "mystery", "fantasy", "spooky", "romantic", "family"]).default("chaotic"),
-      length: z.enum(["quick", "full", "epic"]).default("full"),
+      length: z.enum(["mini", "quick", "full", "epic"]).default("full"),
       preferences: z.string().trim().max(240).optional(),
     })
     .strict();

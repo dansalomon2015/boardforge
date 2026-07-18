@@ -178,6 +178,21 @@ export type ResolvedGameComponent = {
   data: Record<string, unknown>;
 };
 
+export type StoryBook = {
+  schemaVersion: 1;
+  title: string;
+  subtitle: string;
+  dedication: string;
+  backCover: string;
+  chapters: Array<{ title: string; text: string }>;
+};
+
+export type StoryBookState =
+  | { status: "idle" }
+  | { status: "generating" }
+  | { status: "ready"; book: StoryBook }
+  | { status: "failed"; message: string };
+
 export type ComposedGameView = {
   kind: "composed";
   code: string;
@@ -236,6 +251,7 @@ export type ComposedGameView = {
     itemIds?: string[] | undefined;
   }>;
   winner: { kind: "players" | "teams" | "none"; ids: string[] } | null;
+  storyBook?: StoryBookState | undefined;
 };
 
 export type RoomView = LobbyView | HiddenRolesView | QuizVoteView | ComposedGameView;

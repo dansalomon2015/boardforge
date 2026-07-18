@@ -2,7 +2,7 @@ import { z } from "zod";
 import { composedThemeIdSchema, validateComposedGameSpec, type ComposedGameSpec, type ComposedTheme } from "./composed";
 
 export const storyMoodSchema = z.enum(["chaotic", "mystery", "fantasy", "spooky", "romantic", "family"]);
-export const storyLengthSchema = z.enum(["quick", "full", "epic"]);
+export const storyLengthSchema = z.enum(["mini", "quick", "full", "epic"]);
 
 export const storyChainSetupSchema = z
   .object({
@@ -40,7 +40,7 @@ export const storyChainPackSchema = z
     preferences: z.string().trim().min(3).max(240).optional(),
     title: z.string().trim().min(2).max(64),
     opening: z.string().trim().min(20).max(420),
-    twists: z.array(storyTwistSchema).min(8).max(16),
+    twists: z.array(storyTwistSchema).min(4).max(16),
   })
   .strict();
 
@@ -51,7 +51,7 @@ export type StoryChainSetup = z.output<typeof storyChainSetupSchema>;
 export type StoryTwist = z.infer<typeof storyTwistSchema>;
 export type StoryChainPack = z.infer<typeof storyChainPackSchema>;
 
-export const storyRounds: Record<StoryLength, number> = { quick: 8, full: 12, epic: 16 };
+export const storyRounds: Record<StoryLength, number> = { mini: 4, quick: 8, full: 12, epic: 16 };
 
 const openings: Record<StoryMood, { title: string; opening: string }> = {
   chaotic: {

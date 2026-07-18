@@ -103,6 +103,7 @@ export function createGameNightChildRoom({
     operationQueue: Promise.resolve(),
     timingStartedAtByPlayer: new Map(),
     countdown: null,
+    storyBook: null,
     state: null,
   };
 }

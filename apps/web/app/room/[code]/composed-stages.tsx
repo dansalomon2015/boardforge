@@ -13,8 +13,9 @@ export function ComposedStageRouter({
   isHost,
   pending,
   gameNightCode,
+  createStoryBook,
   sendAction,
-}: ComposedStageProps & { isHost: boolean; gameNightCode: string | null }) {
+}: ComposedStageProps & { isHost: boolean; gameNightCode: string | null; createStoryBook: () => void }) {
   switch (view.experienceId) {
     case "movie_mime":
       return <MovieMimeStage view={view} pending={pending} gameNightCode={gameNightCode} sendAction={sendAction} />;
@@ -25,7 +26,9 @@ export function ComposedStageRouter({
     case "sound_check":
       return <SoundCheckStage view={view} pending={pending} gameNightCode={gameNightCode} sendAction={sendAction} />;
     case "story_chain":
-      return <StoryChainStage view={view} pending={pending} sendAction={sendAction} />;
+      return (
+        <StoryChainStage view={view} pending={pending} createStoryBook={createStoryBook} sendAction={sendAction} />
+      );
     case "word_duel":
       return <WordDuelStage view={view} pending={pending} sendAction={sendAction} />;
     case "second_sense":

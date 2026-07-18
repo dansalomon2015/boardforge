@@ -15,8 +15,9 @@ import type {
   GameNightState,
 } from "@boardforge/game-engine";
 import { composedGameCritiqueSchema, type ComposedGameCritique } from "@boardforge/llm";
-import type { GameAction, PublicPlayer } from "@boardforge/shared";
+import type { GameAction, PublicPlayer, StoryBookState } from "@boardforge/shared";
 import { gameNightSessionSchema } from "./game-night-schemas";
+import { persistedStoryBookStateSchema } from "./room-schemas";
 
 export type BlueprintStatus = "draft" | "validating" | "playtesting" | "release_ready" | "needs_review";
 
@@ -77,6 +78,7 @@ export type RoomSessionRecord = {
   checkpoint: unknown | null;
   checkpointChecksum: string | null;
   checkpointRevision: number | null;
+  storyBook?: StoryBookState | null | undefined;
   events: RoomEventRecord[];
 };
 
@@ -193,6 +195,13 @@ function parseBalancePatch(input: unknown): ComposedBalancePatch {
 function parseCritique(input: unknown): ComposedGameCritique {
   const parsed = composedGameCritiqueSchema.safeParse(input);
   if (!parsed.success) throw new Error("Refusing invalid persisted game critique.");
+  return parsed.data;
+}
+
+function parseStoryBookState(input: unknown): StoryBookState | null {
+  if (input === null || input === undefined) return null;
+  const parsed = persistedStoryBookStateSchema.safeParse(input);
+  if (!parsed.success) throw new Error("Refusing invalid persisted StoryChain book.");
   return parsed.data;
 }
 
@@ -317,7 +326,7 @@ export class MemoryBlueprintStore implements BlueprintStore {
 
   async saveRoom(record: Omit<RoomSessionRecord, "events">): Promise<void> {
     if (!this.records.has(record.blueprintId)) throw new Error(`Unknown blueprint: ${record.blueprintId}`);
-    this.roomRecords.set(record.code, structuredClone(record));
+    this.roomRecords.set(record.code, structuredClone({ ...record, storyBook: parseStoryBookState(record.storyBook) }));
   }
 
   async appendRoomEvent(record: Omit<RoomSessionRecord, "events">, event: RoomEventRecord): Promise<void> {
@@ -419,6 +428,7 @@ type RoomSessionRow = {
   checkpoint: unknown | null;
   checkpoint_checksum: string | null;
   checkpoint_revision: number | null;
+  story_book: unknown | null;
 };
 
 type RoomEventRow = {
@@ -500,6 +510,7 @@ class PostgresBlueprintStore implements BlueprintStore {
       "0010_game_night_room_links.sql",
       "0011_game_night_team_mapping.sql",
       "0012_game_night_team_presentation.sql",
+      "0013_story_books.sql",
     ]) {
       const migration = await readFile(new URL(`../migrations/${filename}`, import.meta.url), "utf8");
       await this.pool.query(migration);
@@ -754,7 +765,7 @@ class PostgresBlueprintStore implements BlueprintStore {
               game_night_team_presentation_by_game_team,
               players, reconnect_token_hashes,
               lobby_team_by_player, lobby_captain_by_team,
-              seed, checkpoint, checkpoint_checksum, checkpoint_revision
+              seed, checkpoint, checkpoint_checksum, checkpoint_revision, story_book
        FROM room_sessions
        ORDER BY created_at`,
     );
@@ -785,6 +796,7 @@ class PostgresBlueprintStore implements BlueprintStore {
       checkpoint: row.checkpoint,
       checkpointChecksum: row.checkpoint_checksum,
       checkpointRevision: row.checkpoint_revision,
+      storyBook: parseStoryBookState(row.story_book),
       events: byRoom.get(row.code) ?? [],
     }));
   }
@@ -796,8 +808,8 @@ class PostgresBlueprintStore implements BlueprintStore {
          game_night_team_presentation_by_game_team,
          players, reconnect_token_hashes,
          lobby_team_by_player, lobby_captain_by_team,
-         seed, checkpoint, checkpoint_checksum, checkpoint_revision
-       ) VALUES ($1, $2, $3::uuid, $4::uuid, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11, $12::jsonb, $13, $14)
+         seed, checkpoint, checkpoint_checksum, checkpoint_revision, story_book
+       ) VALUES ($1, $2, $3::uuid, $4::uuid, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11, $12::jsonb, $13, $14, $15::jsonb)
        ON CONFLICT (code) DO UPDATE SET
          game_night_id = EXCLUDED.game_night_id,
          game_instance_id = EXCLUDED.game_instance_id,
@@ -811,6 +823,7 @@ class PostgresBlueprintStore implements BlueprintStore {
          checkpoint = EXCLUDED.checkpoint,
          checkpoint_checksum = EXCLUDED.checkpoint_checksum,
          checkpoint_revision = EXCLUDED.checkpoint_revision,
+         story_book = EXCLUDED.story_book,
          updated_at = now()`,
       [
         record.code,
@@ -827,6 +840,7 @@ class PostgresBlueprintStore implements BlueprintStore {
         record.checkpoint === null ? null : JSON.stringify(record.checkpoint),
         record.checkpointChecksum,
         record.checkpointRevision,
+        record.storyBook ? JSON.stringify(parseStoryBookState(record.storyBook)) : null,
       ],
     );
   }
@@ -863,6 +877,7 @@ class PostgresBlueprintStore implements BlueprintStore {
            checkpoint = $7::jsonb,
            checkpoint_checksum = $8,
            checkpoint_revision = $9,
+           story_book = $10::jsonb,
            updated_at = now()
          WHERE code = $1`,
         [
@@ -875,6 +890,7 @@ class PostgresBlueprintStore implements BlueprintStore {
           record.checkpoint === null ? null : JSON.stringify(record.checkpoint),
           record.checkpointChecksum,
           record.checkpointRevision,
+          record.storyBook ? JSON.stringify(parseStoryBookState(record.storyBook)) : null,
         ],
       );
       await client.query("COMMIT");

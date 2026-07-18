@@ -84,6 +84,26 @@ describe("MemoryBlueprintStore", () => {
       checkpoint: { revision: 2 },
       checkpointChecksum: "checksum",
       checkpointRevision: 2,
+      storyBook: {
+        status: "ready" as const,
+        book: {
+          schemaVersion: 1 as const,
+          title: "The Clockwork Picnic",
+          subtitle: "A mystery written together around one table",
+          dedication: "For Avery and Blake, who followed every impossible clue.",
+          backCover: "A ticking picnic basket leads two friends into a warm and wonderfully strange midnight mystery.",
+          chapters: [
+            {
+              title: "The Basket",
+              text: "At noon, the basket began ticking, and every guest leaned closer despite their better judgment.",
+            },
+            {
+              title: "The Last Clue",
+              text: "Together they followed the final clue and discovered why the clock had chosen their picnic.",
+            },
+          ],
+        },
+      },
     };
     await store.saveRoom(session);
     const event = {
@@ -101,7 +121,7 @@ describe("MemoryBlueprintStore", () => {
     await store.appendRoomEvent(session, event);
 
     expect((await store.findRoomEvent("ABC234", "event-key-001"))?.resultingRevision).toBe(2);
-    expect((await store.loadRooms())[0]?.events).toEqual([event]);
+    expect((await store.loadRooms())[0]).toMatchObject({ storyBook: { status: "ready" }, events: [event] });
     await expect(
       store.appendRoomEvent(session, { ...event, id: "00000000-0000-4000-8000-000000000100", sequence: 2 }),
     ).rejects.toThrow("Duplicate");

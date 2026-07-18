@@ -8,6 +8,7 @@ export * from "./word-trap";
 export * from "./draw-battle";
 export * from "./sound-check";
 export * from "./story-chain";
+export * from "./story-book";
 export * from "./word-duel";
 export * from "./second-sense";
 

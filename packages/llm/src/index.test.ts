@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { cinemaCharadesSpec, composedBalancePatchSchema } from "@boardforge/game-spec";
+import { cinemaCharadesSpec, composedBalancePatchSchema, storyBookSchema } from "@boardforge/game-spec";
 import {
   FakeLlmProvider,
   composedAdjustableParameters,
   composedGameCritiqueSchema,
   createLlmProvider,
+  repairStoryChainCandidate,
 } from "./index.js";
 
 const provider = new FakeLlmProvider();
@@ -77,6 +78,43 @@ describe("bounded AI content provider", () => {
     expect(pack.source).toBe("ai");
     expect(pack.twists).toHaveLength(12);
     expect(new Set(pack.twists.map((twist) => twist.requiredWord.toLowerCase())).size).toBe(12);
+  });
+
+  it("turns only the bounded public manuscript into a reusable storybook", async () => {
+    const book = await provider.generateStoryBook({
+      title: "The Clockwork Picnic",
+      opening: "At noon, the picnic basket began ticking beneath the oldest tree in the park.",
+      authors: ["Avery", "Blake"],
+      entries: Array.from({ length: 4 }, (_, index) => ({
+        authorName: index % 2 === 0 ? "Avery" : "Blake",
+        text: `The storytellers followed clue ${index + 1}, and the mystery grew stranger with every careful step.`,
+      })),
+    });
+
+    expect(storyBookSchema.safeParse(book).success).toBe(true);
+    expect(book.chapters).toHaveLength(2);
+    expect(book.dedication).toContain("Avery");
+  });
+
+  it("repairs leaked and repeated secret words locally without another model call", () => {
+    const pack = repairStoryChainCandidate(
+      { themeId: "cozy", mood: "mystery", length: "mini" },
+      {
+        title: "The Candle in the Window",
+        opening: "A candle flickered in the window while four friends searched for the missing invitation.",
+        twists: [
+          { id: "candle", requiredWord: "candle", direction: "Narrow the scene to one vivid detail." },
+          { id: "window", requiredWord: "window", direction: "Reveal something nobody can reach yet." },
+          { id: "window", requiredWord: "window", direction: "Repeat the impossible clue once more." },
+          { id: "echo", requiredWord: "echo", direction: "Bring an earlier phrase back with new meaning." },
+        ],
+      },
+    );
+
+    expect(pack.twists).toHaveLength(4);
+    expect(new Set(pack.twists.map((twist) => twist.id)).size).toBe(4);
+    expect(pack.twists.map((twist) => twist.requiredWord)).not.toContain("candle");
+    expect(pack.twists.map((twist) => twist.requiredWord)).not.toContain("window");
   });
 
   it("returns an allowlisted critique and balance patch", async () => {

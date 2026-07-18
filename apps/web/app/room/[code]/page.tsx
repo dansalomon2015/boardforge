@@ -186,6 +186,19 @@ export default function RoomPage() {
     submit(0);
   }
 
+  function createStoryBook() {
+    setPending(true);
+    setError("");
+    socketRef.current?.emit(
+      "story-chain:book:create",
+      { code, playerId },
+      (response: SocketAck<{ storyBook: NonNullable<ComposedGameView["storyBook"]> }>) => {
+        setPending(false);
+        if (!response.ok) setError(response.error);
+      },
+    );
+  }
+
   const self = view?.players.find((player) => player.id === playerId);
   const experienceId =
     view?.kind === "lobby" ? view.game.experienceId : view?.kind === "composed" ? view.experienceId : roomExperienceId;
@@ -306,6 +319,7 @@ export default function RoomPage() {
             isHost={Boolean(self?.isHost)}
             pending={pending}
             gameNightCode={gameNightCode}
+            createStoryBook={createStoryBook}
             sendAction={sendAction}
           />
           <PlayerRail view={view} />
@@ -452,12 +466,14 @@ function GameStage({
   isHost,
   pending,
   gameNightCode,
+  createStoryBook,
   sendAction,
 }: {
   view: Exclude<RoomView, { kind: "lobby" }>;
   isHost: boolean;
   pending: boolean;
   gameNightCode: string | null;
+  createStoryBook: () => void;
   sendAction: (action: GameAction) => void;
 }) {
   if (view.kind === "hidden_roles") {
@@ -565,6 +581,7 @@ function GameStage({
         isHost={isHost}
         pending={pending}
         gameNightCode={gameNightCode}
+        createStoryBook={createStoryBook}
         sendAction={sendAction}
       />
     );
