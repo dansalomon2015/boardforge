@@ -1,20 +1,24 @@
 # BoardForge
 
-> A premium collection of social games, ready to play together.
+> Bring game night back, wherever everyone is.
 
-BoardForge is a mobile-first multiplayer game night platform built for the OpenAI Build Week hackathon. Players choose a designed game, customize its visual theme and content, create a room, form teams when the game calls for them, and play from their own devices.
+The internet is remarkably good at putting people on the same call. It is less successful at recreating the spontaneity, suspense and shared laughter of a game night when family and friends cannot be in the same room.
 
-The public product is a curated game collection—not a universal game generator. Every game mechanic is implemented and tested in deterministic TypeScript. OpenAI is used only for bounded creative content, virtual-playtest critique and allowlisted balance suggestions; it never writes or executes game logic.
+BoardForge closes that gap. It is an immersive, mobile-first tabletop for playing together from anywhere. A host chooses a game and its atmosphere, shares a room code, and every player joins from their own device. Each screen becomes part of the table: revealing private clues, coordinating teams, capturing gestures and keeping every turn synchronized in real time.
+
+The experience is designed to feel like a shared place rather than another video-call utility. Twenty visual worlds let the group shape the mood of the evening, while carefully crafted interactions preserve the tension and delight of playing face to face.
+
+BoardForge is built for the OpenAI Build Week hackathon. Its games use authored and deterministic mechanics instead of AI-generated rules. OpenAI personalizes bounded creative content and supports virtual playtesting and balance critique, while the server remains authoritative over secrets, turns, timers, scores and winners.
 
 ## Included games
 
-- Movie Mime — team charades with AI-curated movie cards.
-- Word Trap — describe a secret word without using its forbidden clues.
-- Draw Battle — fast team drawing rounds.
-- Sound Check — imitate sounds and let your team guess.
-- Story Chain — build a shared story around private twists.
-- Word Duel — discover your opponent's hidden word one letter at a time.
-- Second Sense — an elimination game of timing and intuition.
+- Movie Mime - team charades with AI-curated movie cards.
+- Word Trap - describe a secret word without using its forbidden clues.
+- Draw Battle - fast team drawing rounds.
+- Sound Check - imitate sounds and let your team guess.
+- Story Chain - build a shared story around private twists.
+- Word Duel - discover your opponent's hidden word one letter at a time.
+- Second Sense - an elimination game of timing and intuition.
 
 Twenty visual themes can be applied across the collection.
 
