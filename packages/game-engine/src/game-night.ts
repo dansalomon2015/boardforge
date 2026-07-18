@@ -16,6 +16,11 @@ export type GameNightScorePolicy = {
   tiePoints: number;
 };
 
+export type GameNightGameConfiguration = {
+  rounds: number;
+  turnSeconds: number;
+};
+
 export type GameNightScoreEvent = {
   id: string;
   gameInstanceId: string;
@@ -37,6 +42,7 @@ export type GameNightState = {
   id: string;
   status: "lobby" | "playing" | "completed";
   selectedBlueprintId: string | null;
+  selectedGameConfiguration: GameNightGameConfiguration | null;
   teams: GameNightTeam[];
   scores: Record<string, number>;
   completedGames: GameNightCompletedGame[];
@@ -104,6 +110,7 @@ export function createGameNightState(id: string, teams: GameNightTeam[]): GameNi
     id,
     status: "lobby",
     selectedBlueprintId: null,
+    selectedGameConfiguration: null,
     teams: structuredClone(teams),
     scores: Object.fromEntries(teamIds.map((teamId) => [teamId, 0])),
     completedGames: [],
@@ -135,6 +142,7 @@ export function completeGameNight(state: GameNightState): GameNightState {
     ...state,
     status: "completed",
     selectedBlueprintId: null,
+    selectedGameConfiguration: null,
   };
 }
 

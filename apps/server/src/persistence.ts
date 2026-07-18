@@ -139,7 +139,14 @@ export type BalanceWorkflowStore = Pick<
 
 export type RealtimeRoomStore = Pick<
   BlueprintStore,
-  "get" | "loadRooms" | "saveRoom" | "appendRoomEvent" | "findRoomEvent" | "saveGameNight" | "appendGameNightResult"
+  | "get"
+  | "saveBlueprint"
+  | "loadRooms"
+  | "saveRoom"
+  | "appendRoomEvent"
+  | "findRoomEvent"
+  | "saveGameNight"
+  | "appendGameNightResult"
 >;
 
 function parseSpec(input: unknown): BoardGameSpec {

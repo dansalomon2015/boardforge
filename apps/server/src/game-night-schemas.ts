@@ -45,6 +45,22 @@ export const gameNightSocketGameSelectionSchema = z
   })
   .strict();
 
+export const gameNightGameConfigurationSchema = z
+  .object({
+    rounds: z.number().int().min(1).max(100),
+    turnSeconds: z.number().int().min(1).max(300),
+  })
+  .strict();
+
+export const gameNightSocketGameConfigurationSchema = z
+  .object({
+    code: gameNightCodeSchema,
+    playerId: z.string().uuid(),
+    blueprintId: z.string().trim().min(1).max(160),
+    configuration: gameNightGameConfigurationSchema,
+  })
+  .strict();
+
 export const gameNightSocketCaptainSelectionSchema = z
   .object({
     code: gameNightCodeSchema,
@@ -59,6 +75,7 @@ export const gameNightSocketGameLaunchSchema = z
     code: gameNightCodeSchema,
     playerId: z.string().uuid(),
     blueprintId: z.string().trim().min(1).max(160),
+    configuration: gameNightGameConfigurationSchema.optional(),
   })
   .strict();
 
@@ -108,6 +125,7 @@ const gameNightStateSchema = z
     id: z.string().uuid(),
     status: z.enum(["lobby", "playing", "completed"]),
     selectedBlueprintId: z.string().min(1).max(160).nullable().default(null),
+    selectedGameConfiguration: gameNightGameConfigurationSchema.nullable().default(null),
     teams: z.array(gameNightTeamSchema).min(2).max(12),
     scores: z.record(z.string(), z.number().int().min(0)),
     completedGames: z.array(gameNightCompletedGameSchema).max(100),

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useState, type CSSProperties } from "react";
-import type { GameNightCatalogEntry, GameNightView } from "@boardforge/shared";
+import type { GameNightCatalogEntry, GameNightGameConfiguration, GameNightView } from "@boardforge/shared";
 import { rankGameNightTeams } from "../../../lib/game-night-ranking";
 import { GameNightCatalog } from "./game-night-catalog";
 import { GameNightFinale } from "./game-night-finale";
@@ -14,6 +14,7 @@ type GameNightBoardProps = {
   games: GameNightCatalogEntry[];
   gamesLoading: boolean;
   onCopyInvite: () => void;
+  onConfigureGame: (blueprintId: string, configuration: GameNightGameConfiguration) => void;
   onEndGameNight: () => void;
   onLaunchGame: (blueprintId: string) => void;
   onSelectCaptain: (teamId: string, captainPlayerId: string) => void;
@@ -30,6 +31,7 @@ export function GameNightBoard({
   games,
   gamesLoading,
   onCopyInvite,
+  onConfigureGame,
   onEndGameNight,
   onLaunchGame,
   onSelectCaptain,
@@ -279,10 +281,12 @@ export function GameNightBoard({
             isHost={view.isHost}
             loading={gamesLoading}
             onLaunch={onLaunchGame}
+            onConfigure={onConfigureGame}
             onSelectCaptain={onSelectCaptain}
             onSelect={onSelectGame}
             pending={pending}
             selectedBlueprintId={view.selectedBlueprintId}
+            selectedGameConfiguration={view.selectedGameConfiguration}
             teams={view.teams}
             players={view.players}
           />

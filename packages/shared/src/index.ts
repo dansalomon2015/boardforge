@@ -26,6 +26,8 @@ export type GameSummary = {
   durationMinutes: number;
   accent: string;
   experienceId?: ComposedExperienceId | undefined;
+  rounds?: number | undefined;
+  turnSeconds?: number | undefined;
 };
 
 export type LobbyView = {
@@ -295,6 +297,30 @@ export type GameNightHistoryEntry = {
   }>;
 };
 
+export type GameNightGameConfiguration = {
+  rounds: number;
+  turnSeconds: number;
+};
+
+export type GameNightGameConfigurationDefinition = {
+  rounds: {
+    label: string;
+    unitSingular: string;
+    unitPlural: string;
+    min: number;
+    max: number;
+    step: number;
+    defaultValue: number;
+  };
+  turnSeconds: {
+    label: string;
+    min: number;
+    max: number;
+    step: number;
+    defaultValue: number;
+  };
+};
+
 export type GameNightView = {
   id: string;
   code: string;
@@ -311,6 +337,7 @@ export type GameNightView = {
     score: number;
   }>;
   selectedBlueprintId: string | null;
+  selectedGameConfiguration: GameNightGameConfiguration | null;
   currentRoomCode: string | null;
   gamesPlayed: number;
   history: GameNightHistoryEntry[];
@@ -349,6 +376,7 @@ export type GameNightCatalogEntry = {
   id: string;
   game: GameSummary;
   compatibility: GameNightCompatibility;
+  configuration: GameNightGameConfigurationDefinition | null;
 };
 
 export type SocketAck<T> = { ok: true; data: T } | { ok: false; error: string };

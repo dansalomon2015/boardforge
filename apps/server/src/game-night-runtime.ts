@@ -5,8 +5,10 @@ import {
   recordGameNightResult,
   validateComposedTeamSelection,
   type ComposedGameState,
+  type GameNightGameConfiguration,
 } from "@boardforge/game-engine";
 import type { GameNightSessionRecord, GameNightTeamPresentation } from "./persistence";
+import { sourceGameNightBlueprintId } from "./game-night-blueprint";
 import type { Room } from "./room-runtime";
 
 type CreateGameNightChildRoomInput = {
@@ -180,17 +182,41 @@ export function selectGameNightGame(
   session: GameNightSessionRecord,
   playerId: string,
   blueprintId: string,
+  configuration: GameNightGameConfiguration | null = null,
 ): GameNightSessionRecord {
   if (playerId !== session.hostPlayerId) throw new GameNightRuleError("Only the host can choose the next game.");
   if (session.state.status === "lobby")
     throw new GameNightRuleError("Open the Game Night board before choosing a game.");
   if (session.state.status === "completed") throw new GameNightRuleError("This Game Night is already complete.");
   if (session.currentRoomCode) throw new GameNightRuleError("Finish the current game before choosing another one.");
-  if (session.state.selectedBlueprintId === blueprintId) return session;
+  if (
+    session.state.selectedBlueprintId === blueprintId &&
+    JSON.stringify(session.state.selectedGameConfiguration) === JSON.stringify(configuration)
+  )
+    return session;
 
   return {
     ...session,
-    state: { ...session.state, selectedBlueprintId: blueprintId },
+    state: { ...session.state, selectedBlueprintId: blueprintId, selectedGameConfiguration: configuration },
+  };
+}
+
+export function configureGameNightGame(
+  session: GameNightSessionRecord,
+  playerId: string,
+  blueprintId: string,
+  configuration: GameNightGameConfiguration,
+): GameNightSessionRecord {
+  if (playerId !== session.hostPlayerId) throw new GameNightRuleError("Only the host can configure the next game.");
+  if (session.state.status === "completed") throw new GameNightRuleError("This Game Night is already complete.");
+  if (session.currentRoomCode) throw new GameNightRuleError("Game settings are locked during a game.");
+  if (session.state.selectedBlueprintId !== blueprintId) {
+    throw new GameNightRuleError("Choose this game before changing its settings.");
+  }
+  if (JSON.stringify(session.state.selectedGameConfiguration) === JSON.stringify(configuration)) return session;
+  return {
+    ...session,
+    state: { ...session.state, selectedGameConfiguration: structuredClone(configuration) },
   };
 }
 
@@ -244,14 +270,14 @@ export function recordCompletedChildGame(
       : structuredClone(state.winner);
   const nextState = recordGameNightResult(session.state, {
     gameInstanceId: room.gameInstanceId,
-    blueprintId: room.blueprintId,
+    blueprintId: sourceGameNightBlueprintId(room.blueprintId),
     winner,
     idempotencyKey: `result:${room.gameInstanceId}`,
   });
 
   return {
     ...session,
-    state: { ...nextState, selectedBlueprintId: null },
+    state: { ...nextState, selectedBlueprintId: null, selectedGameConfiguration: null },
     currentRoomCode: null,
   };
 }

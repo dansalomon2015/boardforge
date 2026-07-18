@@ -1,5 +1,10 @@
 import type { CSSProperties } from "react";
-import type { GameNightCatalogEntry, GameNightView, PublicPlayer } from "@boardforge/shared";
+import type {
+  GameNightCatalogEntry,
+  GameNightGameConfiguration,
+  GameNightView,
+  PublicPlayer,
+} from "@boardforge/shared";
 import styles from "./page.module.css";
 
 const gameMarks: Record<string, string> = {
@@ -13,12 +18,14 @@ type GameNightCatalogProps = {
   games: GameNightCatalogEntry[];
   isHost: boolean;
   loading: boolean;
+  onConfigure: (blueprintId: string, configuration: GameNightGameConfiguration) => void;
   onLaunch: (blueprintId: string) => void;
   onSelect: (blueprintId: string) => void;
   onSelectCaptain: (teamId: string, captainPlayerId: string) => void;
   pending: boolean;
   players: PublicPlayer[];
   selectedBlueprintId: string | null;
+  selectedGameConfiguration: GameNightGameConfiguration | null;
   teams: GameNightView["teams"];
 };
 
@@ -26,15 +33,25 @@ export function GameNightCatalog({
   games,
   isHost,
   loading,
+  onConfigure,
   onLaunch,
   onSelect,
   onSelectCaptain,
   pending,
   players,
   selectedBlueprintId,
+  selectedGameConfiguration,
   teams,
 }: GameNightCatalogProps) {
   const selectedGame = games.find((entry) => entry.id === selectedBlueprintId);
+  const configurationDefinition = selectedGame?.configuration;
+  const configuration =
+    selectedGame && configurationDefinition
+      ? (selectedGameConfiguration ?? {
+          rounds: configurationDefinition.rounds.defaultValue,
+          turnSeconds: configurationDefinition.turnSeconds.defaultValue,
+        })
+      : null;
 
   return (
     <section className={styles.gameShelf}>
@@ -56,11 +73,105 @@ export function GameNightCatalog({
             <span>Next game</span>
             <strong>{gameMarks[selectedGame.game.experienceId ?? "generic"] ?? "BF"}</strong>
             <div>
-              <small>Team setup</small>
+              <small>Game setup</small>
               <h3>{selectedGame.game.title}</h3>
-              <p>Each captain will choose the active player when their team&apos;s turn begins.</p>
+              <p>
+                {isHost
+                  ? "Shape the pace, confirm the captains, then open the room."
+                  : "Your host is shaping the pace before the room opens."}
+              </p>
             </div>
           </div>
+          {configurationDefinition && configuration ? (
+            <div className={styles.configurationGrid}>
+              <article>
+                <div>
+                  <small>Game length</small>
+                  <strong>{configurationDefinition.rounds.label}</strong>
+                  <p>{configuration.rounds / teams.length} turns per team · fair by design</p>
+                </div>
+                <div className={styles.configurationStepper}>
+                  <button
+                    aria-label={`Remove ${configurationDefinition.rounds.unitSingular}`}
+                    disabled={!isHost || pending || configuration.rounds <= configurationDefinition.rounds.min}
+                    onClick={() =>
+                      onConfigure(selectedGame.id, {
+                        ...configuration,
+                        rounds: configuration.rounds - configurationDefinition.rounds.step,
+                      })
+                    }
+                    type="button"
+                  >
+                    −
+                  </button>
+                  <span>
+                    <strong>{configuration.rounds}</strong>
+                    <small>
+                      {configuration.rounds === 1
+                        ? configurationDefinition.rounds.unitSingular
+                        : configurationDefinition.rounds.unitPlural}
+                    </small>
+                  </span>
+                  <button
+                    aria-label={`Add ${configurationDefinition.rounds.unitSingular}`}
+                    disabled={!isHost || pending || configuration.rounds >= configurationDefinition.rounds.max}
+                    onClick={() =>
+                      onConfigure(selectedGame.id, {
+                        ...configuration,
+                        rounds: configuration.rounds + configurationDefinition.rounds.step,
+                      })
+                    }
+                    type="button"
+                  >
+                    +
+                  </button>
+                </div>
+              </article>
+              <article>
+                <div>
+                  <small>Round rhythm</small>
+                  <strong>{configurationDefinition.turnSeconds.label}</strong>
+                  <p>One shared server clock for every player</p>
+                </div>
+                <div className={styles.configurationStepper}>
+                  <button
+                    aria-label="Remove 15 seconds"
+                    disabled={
+                      !isHost || pending || configuration.turnSeconds <= configurationDefinition.turnSeconds.min
+                    }
+                    onClick={() =>
+                      onConfigure(selectedGame.id, {
+                        ...configuration,
+                        turnSeconds: configuration.turnSeconds - configurationDefinition.turnSeconds.step,
+                      })
+                    }
+                    type="button"
+                  >
+                    −
+                  </button>
+                  <span>
+                    <strong>{configuration.turnSeconds}</strong>
+                    <small>seconds</small>
+                  </span>
+                  <button
+                    aria-label="Add 15 seconds"
+                    disabled={
+                      !isHost || pending || configuration.turnSeconds >= configurationDefinition.turnSeconds.max
+                    }
+                    onClick={() =>
+                      onConfigure(selectedGame.id, {
+                        ...configuration,
+                        turnSeconds: configuration.turnSeconds + configurationDefinition.turnSeconds.step,
+                      })
+                    }
+                    type="button"
+                  >
+                    +
+                  </button>
+                </div>
+              </article>
+            </div>
+          ) : null}
           {selectedGame.compatibility.requiresCaptains ? (
             <div className={styles.captainGrid}>
               {teams.map((team) => {

@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { io, type Socket } from "socket.io-client";
-import type { GameNightCatalogEntry, GameNightView, JoinGameNightResult, SocketAck } from "@boardforge/shared";
+import type {
+  GameNightCatalogEntry,
+  GameNightGameConfiguration,
+  GameNightView,
+  JoinGameNightResult,
+  SocketAck,
+} from "@boardforge/shared";
 import {
   clearGameNightSession,
   readGameNightSession,
@@ -268,6 +274,26 @@ export default function GameNightLobbyPage() {
     );
   }
 
+  function configureGame(blueprintId: string, configuration: GameNightGameConfiguration) {
+    if (!view?.isHost) return;
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      setError("The live connection is still starting. Try again in a moment.");
+      return;
+    }
+    setPending(true);
+    setError("");
+    socket.emit(
+      "game-night:game:configure",
+      { code, playerId: view.selfPlayerId, blueprintId, configuration },
+      (response: SocketAck<{ view: GameNightView }>) => {
+        setPending(false);
+        if (response.ok) setView(response.data.view);
+        else setError(response.error);
+      },
+    );
+  }
+
   function launchGame(blueprintId: string) {
     if (!view?.isHost) return;
     const socket = socketRef.current;
@@ -381,6 +407,7 @@ export default function GameNightLobbyPage() {
         games={games}
         gamesLoading={gamesLoading}
         onCopyInvite={() => void copyInvite()}
+        onConfigureGame={configureGame}
         onEndGameNight={completeGameNight}
         onLaunchGame={launchGame}
         onSelectCaptain={selectCaptain}

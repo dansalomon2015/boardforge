@@ -147,7 +147,43 @@ describe("four-team Game Night", () => {
     );
     expect(selected).toMatchObject({
       ok: true,
-      data: { view: { selectedBlueprintId: defaultDrawBattleSpec.id } },
+      data: {
+        view: {
+          selectedBlueprintId: defaultDrawBattleSpec.id,
+          selectedGameConfiguration: { rounds: 16, turnSeconds: 75 },
+        },
+      },
+    });
+    const unauthorizedConfiguration = await emitAck(players[1]!.socket!, "game-night:game:configure", {
+      code: host.view.code,
+      playerId: players[1]!.playerId,
+      blueprintId: defaultDrawBattleSpec.id,
+      configuration: { rounds: 8, turnSeconds: 45 },
+    });
+    expect(unauthorizedConfiguration).toMatchObject({ ok: false, error: "Only the host can configure the next game." });
+    const guestConfigurationUpdate = waitForEvent<{
+      selectedGameConfiguration: { rounds: number; turnSeconds: number } | null;
+    }>(
+      players[1]!.socket!,
+      "game-night:state",
+      (view) => view.selectedGameConfiguration?.rounds === 8 && view.selectedGameConfiguration.turnSeconds === 45,
+    );
+    const configured = await emitAck<{ view: { selectedGameConfiguration: { rounds: number; turnSeconds: number } } }>(
+      hostPlayer.socket,
+      "game-night:game:configure",
+      {
+        code: host.view.code,
+        playerId: hostPlayer.playerId,
+        blueprintId: defaultDrawBattleSpec.id,
+        configuration: { rounds: 8, turnSeconds: 45 },
+      },
+    );
+    expect(configured).toMatchObject({
+      ok: true,
+      data: { view: { selectedGameConfiguration: { rounds: 8, turnSeconds: 45 } } },
+    });
+    expect(await guestConfigurationUpdate).toMatchObject({
+      selectedGameConfiguration: { rounds: 8, turnSeconds: 45 },
     });
     const launched = await emitAck<{ roomCode: string; gameInstanceId: string }>(
       hostPlayer.socket,
@@ -188,7 +224,7 @@ describe("four-team Game Night", () => {
     initialViews.forEach((view, index) => {
       players[index]!.view = view;
     });
-    expect(initialViews[0]).toMatchObject({ kind: "composed", totalRounds: 16, status: "playing" });
+    expect(initialViews[0]).toMatchObject({ kind: "composed", totalRounds: 8, status: "playing" });
 
     const completedNight = waitForEvent<{
       currentRoomCode: string | null;
@@ -205,10 +241,15 @@ describe("four-team Game Night", () => {
     );
     const activeTeamIds = new Set<string>();
     let reconnected = false;
+    let configuredTimerSeen = false;
 
     for (let turn = 0; turn < 60; turn += 1) {
       const hostView = hostPlayer.view;
       if (hostView?.kind === "composed" && hostView.status === "completed") break;
+      if (hostView?.kind === "composed" && hostView.turnTimer) {
+        expect(hostView.turnTimer.totalSeconds).toBe(45);
+        configuredTimerSeen = true;
+      }
 
       if (!reconnected && turn >= 12) {
         const reconnectingPlayer = players[2]!;
@@ -295,11 +336,12 @@ describe("four-team Game Night", () => {
     }
 
     expect(reconnected).toBe(true);
+    expect(configuredTimerSeen).toBe(true);
     expect(activeTeamIds).toEqual(new Set(["game_team_1", "game_team_2", "game_team_3", "game_team_4"]));
     expect(hostPlayer.view).toMatchObject({
       kind: "composed",
       status: "completed",
-      totalRounds: 16,
+      totalRounds: 8,
       winner: { kind: "teams", ids: ["game_team_1", "game_team_2", "game_team_3", "game_team_4"] },
     });
 

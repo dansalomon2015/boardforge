@@ -31,6 +31,7 @@ import {
 } from "./game-night-routes";
 import {
   endGameNight,
+  configureGameNightGame,
   openGameNightBoard,
   recordCompletedChildGame,
   selectGameNightCaptain,
@@ -43,10 +44,17 @@ import {
   gameNightSocketCaptainSelectionSchema,
   gameNightSocketCompleteSchema,
   gameNightSocketGameLaunchSchema,
+  gameNightSocketGameConfigurationSchema,
   gameNightSocketGameSelectionSchema,
   gameNightSocketSessionSchema,
   gameNightSocketTeamSelectionSchema,
 } from "./game-night-schemas";
+import {
+  defaultGameNightConfiguration,
+  gameNightConfigurationDefinition,
+  validateGameNightConfiguration,
+} from "./game-night-configuration";
+import { adaptGameNightSpec } from "./game-night-spec";
 import { issueReconnectToken, reconnectTokenMatches } from "./session-token";
 import { systemCountdownClock, type CountdownClock } from "./countdown-clock";
 import {
@@ -407,7 +415,39 @@ export async function registerRealtimeGateway({
             if (blueprint?.status !== "release_ready") {
               throw new GameNightRuleError("This game is not available for Game Night.");
             }
-            runtime.record = selectGameNightGame(runtime.record, parsed.playerId, blueprint.id);
+            const adaptedSpec = adaptGameNightSpec(blueprint.spec, runtime.record.state.teams);
+            const configuration = defaultGameNightConfiguration(adaptedSpec, runtime.record.state.teams.length);
+            runtime.record = selectGameNightGame(runtime.record, parsed.playerId, blueprint.id, configuration);
+            await blueprintStore.saveGameNight(runtime.record);
+            acknowledge(ack, { ok: true, data: { view: viewForGameNight(runtime.record, parsed.playerId) } });
+            emitGameNight(runtime);
+          });
+        } catch (error) {
+          acknowledge(ack, { ok: false, error: socketError(error) });
+        }
+      },
+    );
+
+    socket.on(
+      "game-night:game:configure",
+      async (payload: unknown, ack?: (response: SocketAck<{ view: GameNightView }>) => void) => {
+        try {
+          const parsed = gameNightSocketGameConfigurationSchema.parse(payload);
+          const runtime = gameNights.get(parsed.code);
+          if (!runtime) throw new GameNightRuleError("Game night not found.");
+          await enqueueGameNight(runtime, async () => {
+            assertSocketOwnsGameNightPlayer(socket, runtime, parsed.code, parsed.playerId);
+            const blueprint = gameNightCatalogIds.has(parsed.blueprintId)
+              ? await blueprintStore.get(parsed.blueprintId)
+              : undefined;
+            if (blueprint?.status !== "release_ready") {
+              throw new GameNightRuleError("This game is not available for Game Night.");
+            }
+            const adaptedSpec = adaptGameNightSpec(blueprint.spec, runtime.record.state.teams);
+            const definition = gameNightConfigurationDefinition(adaptedSpec, runtime.record.state.teams.length);
+            if (!definition) throw new GameNightRuleError("This game does not expose configurable rounds.");
+            const configuration = validateGameNightConfiguration(definition, parsed.configuration);
+            runtime.record = configureGameNightGame(runtime.record, parsed.playerId, parsed.blueprintId, configuration);
             await blueprintStore.saveGameNight(runtime.record);
             acknowledge(ack, { ok: true, data: { view: viewForGameNight(runtime.record, parsed.playerId) } });
             emitGameNight(runtime);
@@ -468,6 +508,9 @@ export async function registerRealtimeGateway({
               blueprintStore,
               rooms,
               createRoomCode,
+              ...(runtime.record.state.selectedGameConfiguration
+                ? { configuration: runtime.record.state.selectedGameConfiguration }
+                : {}),
             });
             const view = viewForGameNight(runtime.record, parsed.playerId);
             if (!room.gameInstanceId) throw new GameNightRuleError("The game room has no instance id.");

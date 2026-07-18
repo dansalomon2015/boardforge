@@ -8,7 +8,8 @@ import { evaluateGameNightCompatibility } from "./game-night-compatibility";
 import { GameNightLaunchError, launchGameNightGame } from "./game-night-launch";
 import { adaptGameNightSpec } from "./game-night-spec";
 import { selectGameNightCaptain, selectGameNightTeam } from "./game-night-runtime";
-import { gameNightCredentialsSchema } from "./game-night-schemas";
+import { gameNightCredentialsSchema, gameNightGameConfigurationSchema } from "./game-night-schemas";
+import { gameNightConfigurationDefinition } from "./game-night-configuration";
 import type { BlueprintStore, GameNightSessionRecord } from "./persistence";
 import type { Room } from "./room-runtime";
 import { persistedRoom } from "./room-runtime";
@@ -54,7 +55,12 @@ const teamSelectionBodySchema = gameNightCredentialsSchema.extend({ teamId: z.st
 const captainBodySchema = gameNightCredentialsSchema
   .extend({ teamId: z.string().min(1).max(80), captainPlayerId: z.string().uuid() })
   .strict();
-const launchBodySchema = gameNightCredentialsSchema.extend({ blueprintId: z.string().trim().min(1).max(160) }).strict();
+const launchBodySchema = gameNightCredentialsSchema
+  .extend({
+    blueprintId: z.string().trim().min(1).max(160),
+    configuration: gameNightGameConfigurationSchema.optional(),
+  })
+  .strict();
 
 export type GameNightRuntime = {
   record: GameNightSessionRecord;
@@ -101,6 +107,7 @@ export function viewForGameNight(record: GameNightSessionRecord, playerId: strin
       score: record.state.scores[team.id] ?? 0,
     })),
     selectedBlueprintId: record.state.selectedBlueprintId,
+    selectedGameConfiguration: record.state.selectedGameConfiguration,
     currentRoomCode: record.currentRoomCode,
     gamesPlayed: record.state.completedGames.length,
     history: record.state.completedGames.map((game, index) => ({
@@ -218,6 +225,7 @@ export async function registerGameNightRoutes(
           id: spec.id,
           game: gameSummary(adaptedSpec),
           compatibility: evaluateGameNightCompatibility(runtime.record, spec, blueprint?.status === "release_ready"),
+          configuration: gameNightConfigurationDefinition(adaptedSpec, runtime.record.state.teams.length),
         };
       }),
     );
@@ -331,6 +339,7 @@ export async function registerGameNightRoutes(
           blueprintStore,
           rooms,
           createRoomCode,
+          ...(parsed.data.configuration ? { configuration: parsed.data.configuration } : {}),
         });
       });
       return reply.code(201).send({ code: launched.code, gameInstanceId: launched.gameInstanceId });

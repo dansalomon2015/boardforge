@@ -189,6 +189,7 @@ Work:
 - Add `End game night`, confirmation and a final podium. **Completed.**
 - Lock completed sessions while keeping history readable. **Completed.**
 - Synchronize timed turns from one server-authoritative deadline, including reconnect and automatic timeout resolution. **Completed.**
+- Let the host configure fair content counts and turn duration before launching each ranked game. **Completed.**
 - Add complete multiplayer, browser, accessibility, Docker and migration coverage.
 
 Acceptance tests:
