@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { io as createSocketClient, type Socket } from "socket.io-client";
 import type { ComposedGameView, JoinRoomResult, RoomView, SocketAck } from "@boardforge/shared";
-import { defaultMovieMimeSpec, defaultWordTrapSpec } from "@boardforge/game-spec";
+import {
+  defaultDrawBattleSpec,
+  defaultMovieMimeSpec,
+  defaultSoundCheckSpec,
+  defaultWordTrapSpec,
+} from "@boardforge/game-spec";
 import { createBoardForgeServer } from "./app";
 
 describe("realtime room gateway", () => {
@@ -192,7 +197,7 @@ describe("realtime room gateway", () => {
     expect(childReconnect.ok).toBe(true);
   });
 
-  it("broadcasts Game Night lobby changes and host-only board opening to every subscribed player", async () => {
+  it("runs the complete realtime Game Night lifecycle across the ranked catalogue", async () => {
     const { app, io } = await createBoardForgeServer({
       databaseUrl: null,
       llmProvider: "fake",
@@ -492,12 +497,23 @@ describe("realtime room gateway", () => {
           { socket: client, playerId: host.playerId, view: hostRoomView },
           { socket: secondClient, playerId: guest.playerId, view: guestRoomView },
         ];
-        const actor = actors.find(
+        const legalActors = actors.filter(
           (candidate): candidate is { socket: Socket; playerId: string; view: ComposedGameView } =>
             candidate.view.kind === "composed" && candidate.view.availableActions.length > 0,
         );
+        const preferredActionIds = [selectActionId, "draw_prompt", "draw_sound", "pass_prompt", "pass_sound"];
+        const preferredActionId = preferredActionIds.find((actionId) =>
+          legalActors.some((candidate) => candidate.view.availableActions.some((action) => action.id === actionId)),
+        );
+        const actor = preferredActionId
+          ? legalActors.find((candidate) =>
+              candidate.view.availableActions.some((action) => action.id === preferredActionId),
+            )
+          : legalActors[0];
         if (!actor) throw new Error(`No legal ${gameName} action was available on turn ${turn}.`);
-        const available = actor.view.availableActions[0]!;
+        const available = preferredActionId
+          ? actor.view.availableActions.find((action) => action.id === preferredActionId)!
+          : actor.view.availableActions[0]!;
         const previousRevision = actor.view.revision;
         const nextState = new Promise<RoomView>((resolve) => {
           const handler = (view: RoomView) => {
@@ -525,13 +541,79 @@ describe("realtime room gateway", () => {
             resolve,
           );
         });
+        if (!submitted.ok)
+          throw new Error(`${gameName} action ${available.id} failed on turn ${turn}: ${submitted.error}`);
         expect(submitted.ok).toBe(true);
-        if (!submitted.ok) throw new Error(submitted.error);
         hostRoomView = await nextState;
       }
 
       expect(hostRoomView).toMatchObject({ kind: "composed", status: "completed" });
       return completedNight;
+    };
+
+    const launchAndPlayNextGame = async ({
+      blueprintId,
+      selectActionId,
+      expectedHistoryLength,
+      gameName,
+      hostReconnectToken,
+      guestReconnectToken,
+    }: {
+      blueprintId: string;
+      selectActionId: string;
+      expectedHistoryLength: number;
+      gameName: string;
+      hostReconnectToken: string;
+      guestReconnectToken: string;
+    }) => {
+      const selected = await new Promise<SocketAck<{ view: { selectedBlueprintId: string | null } }>>((resolve) => {
+        client?.emit("game-night:game:select", { code: host.view.code, playerId: host.playerId, blueprintId }, resolve);
+      });
+      expect(selected).toMatchObject({ ok: true, data: { view: { selectedBlueprintId: blueprintId } } });
+
+      const launch = await new Promise<
+        SocketAck<{ view: { currentRoomCode: string | null }; roomCode: string; gameInstanceId: string }>
+      >((resolve) => {
+        client?.emit("game-night:game:launch", { code: host.view.code, playerId: host.playerId, blueprintId }, resolve);
+      });
+      expect(launch.ok).toBe(true);
+      if (!launch.ok) throw new Error(launch.error);
+
+      const guestJoin = await new Promise<SocketAck<JoinRoomResult>>((resolve) => {
+        secondClient?.emit(
+          "room:join",
+          {
+            code: launch.data.roomCode,
+            name: "Noah",
+            playerId: guest.playerId,
+            reconnectToken: guestReconnectToken,
+          },
+          resolve,
+        );
+      });
+      const hostJoin = await new Promise<SocketAck<JoinRoomResult>>((resolve) => {
+        client?.emit(
+          "room:join",
+          {
+            code: launch.data.roomCode,
+            name: "Maya",
+            playerId: host.playerId,
+            reconnectToken: hostReconnectToken,
+          },
+          resolve,
+        );
+      });
+      expect(guestJoin.ok).toBe(true);
+      expect(hostJoin.ok).toBe(true);
+      if (!guestJoin.ok || !hostJoin.ok) throw new Error(`Both players must enter ${gameName}.`);
+      guestRoomView = guestJoin.data.view;
+      hostRoomView = hostJoin.data.view;
+
+      return {
+        completedNight: await playChildRoom(launch.data.roomCode, selectActionId, expectedHistoryLength, gameName),
+        hostReconnectToken: hostJoin.data.reconnectToken,
+        guestReconnectToken: guestJoin.data.reconnectToken,
+      };
     };
 
     const firstCompletedNight = await playChildRoom(launched.data.roomCode, "select_mimer", 1, "CineMimes");
@@ -540,63 +622,15 @@ describe("realtime room gateway", () => {
       history: [{ blueprintId: defaultMovieMimeSpec.id, awards: expect.arrayContaining([expect.any(Object)]) }],
     });
 
-    const selectedSecondGame = await new Promise<SocketAck<{ view: { selectedBlueprintId: string | null } }>>(
-      (resolve) => {
-        client?.emit(
-          "game-night:game:select",
-          { code: host.view.code, playerId: host.playerId, blueprintId: defaultWordTrapSpec.id },
-          resolve,
-        );
-      },
-    );
-    expect(selectedSecondGame).toMatchObject({
-      ok: true,
-      data: { view: { selectedBlueprintId: defaultWordTrapSpec.id } },
+    const secondGame = await launchAndPlayNextGame({
+      blueprintId: defaultWordTrapSpec.id,
+      selectActionId: "select_clue_giver",
+      expectedHistoryLength: 2,
+      gameName: "WordTrap",
+      hostReconnectToken: hostChildJoin.data.reconnectToken,
+      guestReconnectToken: childJoin.data.reconnectToken,
     });
-    const secondLaunch = await new Promise<
-      SocketAck<{ view: { currentRoomCode: string | null }; roomCode: string; gameInstanceId: string }>
-    >((resolve) => {
-      client?.emit(
-        "game-night:game:launch",
-        { code: host.view.code, playerId: host.playerId, blueprintId: defaultWordTrapSpec.id },
-        resolve,
-      );
-    });
-    expect(secondLaunch.ok).toBe(true);
-    if (!secondLaunch.ok) throw new Error(secondLaunch.error);
-
-    const secondGuestJoin = await new Promise<SocketAck<JoinRoomResult>>((resolve) => {
-      secondClient?.emit(
-        "room:join",
-        {
-          code: secondLaunch.data.roomCode,
-          name: "Noah",
-          playerId: guest.playerId,
-          reconnectToken: childJoin.data.reconnectToken,
-        },
-        resolve,
-      );
-    });
-    const secondHostJoin = await new Promise<SocketAck<JoinRoomResult>>((resolve) => {
-      client?.emit(
-        "room:join",
-        {
-          code: secondLaunch.data.roomCode,
-          name: "Maya",
-          playerId: host.playerId,
-          reconnectToken: hostChildJoin.data.reconnectToken,
-        },
-        resolve,
-      );
-    });
-    expect(secondGuestJoin.ok).toBe(true);
-    expect(secondHostJoin.ok).toBe(true);
-    if (!secondGuestJoin.ok || !secondHostJoin.ok) throw new Error("Both players must enter the second game.");
-    guestRoomView = secondGuestJoin.data.view;
-    hostRoomView = secondHostJoin.data.view;
-
-    const secondCompletedNight = await playChildRoom(secondLaunch.data.roomCode, "select_clue_giver", 2, "WordTrap");
-    expect(secondCompletedNight).toMatchObject({
+    expect(secondGame.completedNight).toMatchObject({
       currentRoomCode: null,
       history: [
         { blueprintId: defaultMovieMimeSpec.id },
@@ -605,6 +639,61 @@ describe("realtime room gateway", () => {
       teams: expect.arrayContaining([
         expect.objectContaining({ id: "team_1", score: 4 }),
         expect.objectContaining({ id: "team_2", score: 1 }),
+      ]),
+    });
+
+    const thirdGame = await launchAndPlayNextGame({
+      blueprintId: defaultDrawBattleSpec.id,
+      selectActionId: "select_artist",
+      expectedHistoryLength: 3,
+      gameName: "DrawBattle",
+      hostReconnectToken: secondGame.hostReconnectToken,
+      guestReconnectToken: secondGame.guestReconnectToken,
+    });
+    expect(thirdGame.completedNight).toMatchObject({
+      currentRoomCode: null,
+      history: [
+        { blueprintId: defaultMovieMimeSpec.id },
+        { blueprintId: defaultWordTrapSpec.id },
+        {
+          blueprintId: defaultDrawBattleSpec.id,
+          awards: expect.arrayContaining([
+            expect.objectContaining({ points: 1, teamId: "team_1" }),
+            expect.objectContaining({ points: 1, teamId: "team_2" }),
+          ]),
+        },
+      ],
+      teams: expect.arrayContaining([
+        expect.objectContaining({ id: "team_1", score: 5 }),
+        expect.objectContaining({ id: "team_2", score: 2 }),
+      ]),
+    });
+
+    const fourthGame = await launchAndPlayNextGame({
+      blueprintId: defaultSoundCheckSpec.id,
+      selectActionId: "select_performer",
+      expectedHistoryLength: 4,
+      gameName: "SoundCheck",
+      hostReconnectToken: thirdGame.hostReconnectToken,
+      guestReconnectToken: thirdGame.guestReconnectToken,
+    });
+    expect(fourthGame.completedNight).toMatchObject({
+      currentRoomCode: null,
+      history: [
+        { blueprintId: defaultMovieMimeSpec.id },
+        { blueprintId: defaultWordTrapSpec.id },
+        { blueprintId: defaultDrawBattleSpec.id },
+        {
+          blueprintId: defaultSoundCheckSpec.id,
+          awards: expect.arrayContaining([
+            expect.objectContaining({ points: 1, teamId: "team_1" }),
+            expect.objectContaining({ points: 1, teamId: "team_2" }),
+          ]),
+        },
+      ],
+      teams: expect.arrayContaining([
+        expect.objectContaining({ id: "team_1", score: 6 }),
+        expect.objectContaining({ id: "team_2", score: 3 }),
       ]),
     });
 
@@ -620,8 +709,11 @@ describe("realtime room gateway", () => {
     const completed = await new Promise<SocketAck<{ view: { status: string; history: unknown[] } }>>((resolve) => {
       client?.emit("game-night:complete", { code: host.view.code, playerId: host.playerId }, resolve);
     });
-    expect(completed).toMatchObject({ ok: true, data: { view: { status: "completed", history: [{}, {}] } } });
-    expect(await guestFinale).toMatchObject({ status: "completed", history: [{}, {}] });
+    expect(completed).toMatchObject({
+      ok: true,
+      data: { view: { status: "completed", history: [{}, {}, {}, {}] } },
+    });
+    expect(await guestFinale).toMatchObject({ status: "completed", history: [{}, {}, {}, {}] });
 
     const lockedSelection = await new Promise<SocketAck<{ view: { selectedBlueprintId: string | null } }>>(
       (resolve) => {

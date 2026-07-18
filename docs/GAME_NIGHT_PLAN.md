@@ -46,6 +46,8 @@ Completed:
 - A server-authored result spotlight with normalized awards and an ordered, persistent game history.
 - A complete CineMimes vertical slice validated through all twenty rounds with two real-time players.
 - A two-game replay regression from CineMimes to WordTrap with preserved identities, teams, captains and cumulative scores.
+- A four-game Socket.IO regression covering CineMimes, WordTrap, DrawBattle and SoundCheck in one continuous evening.
+- Complete DrawBattle and SoundCheck rounds, parent-board returns, tie awards and cumulative global scores.
 - Consistent Game Night return actions for CineMimes, WordTrap, DrawBattle and SoundCheck.
 - A host-only, persisted end-of-night transition that is blocked before the first result and during an active game.
 - A confirmed, shared final podium with deterministic tie ranking, complete standings and readable game history.
@@ -54,7 +56,6 @@ Completed:
 
 Not completed:
 
-- Complete multiplayer regressions for DrawBattle and SoundCheck.
 - Complete the three-team browser regression and full four-team game completions.
 
 ## P0 delivery plan
@@ -179,7 +180,7 @@ Acceptance tests:
 
 Work:
 
-- Add WordTrap, DrawBattle and SoundCheck to the complete loop.
+- Add WordTrap, DrawBattle and SoundCheck to the complete loop. **Completed.**
 - Adapt ranked game specifications deterministically for two, three or four persistent teams and revalidate them before launch. **Completed.**
 - Add `End game night`, confirmation and a final podium. **Completed.**
 - Lock completed sessions while keeping history readable. **Completed.**
