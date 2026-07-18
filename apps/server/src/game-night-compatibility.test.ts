@@ -6,6 +6,7 @@ import { evaluateGameNightCompatibility } from "./game-night-compatibility";
 
 const hostId = "00000000-0000-4000-8000-000000000001";
 const guestId = "00000000-0000-4000-8000-000000000002";
+const thirdId = "00000000-0000-4000-8000-000000000003";
 
 function session(): GameNightSessionRecord {
   const id = "00000000-0000-4000-8000-000000000010";
@@ -29,6 +30,25 @@ function session(): GameNightSessionRecord {
 describe("Game Night compatibility", () => {
   it("accepts a ranked game when teams, players and captains match", () => {
     expect(evaluateGameNightCompatibility(session(), defaultMovieMimeSpec)).toEqual({
+      compatible: true,
+      scoring: "ranked",
+      requiresCaptains: true,
+      reasons: [],
+    });
+  });
+
+  it("accepts three persistent teams for a ranked game", () => {
+    const night = session();
+    night.players.push({ id: thirdId, name: "Ada", isHost: false, connected: true });
+    night.state.teams.push({
+      id: "gold",
+      name: "Gold",
+      playerIds: [thirdId],
+      captainPlayerId: thirdId,
+    });
+    night.state.scores.gold = 0;
+
+    expect(evaluateGameNightCompatibility(night, defaultMovieMimeSpec)).toEqual({
       compatible: true,
       scoring: "ranked",
       requiresCaptains: true,

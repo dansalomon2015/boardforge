@@ -2,6 +2,7 @@ import { GameNightRuleError } from "@boardforge/game-engine";
 import type { GameNightCompatibility } from "@boardforge/shared";
 import { evaluateGameNightCompatibility } from "./game-night-compatibility";
 import { createGameNightChildRoom, linkGameNightToChildRoom } from "./game-night-runtime";
+import { adaptGameNightSpec } from "./game-night-spec";
 import type { BlueprintStore, GameNightSessionRecord } from "./persistence";
 import { persistedRoom, type Room } from "./room-runtime";
 
@@ -37,10 +38,11 @@ export async function launchGameNightGame({
     blueprint.status === "release_ready",
   );
   if (!compatibility.compatible) throw new GameNightLaunchError(compatibility);
+  const spec = adaptGameNightSpec(blueprint.spec, runtime.record.state.teams);
   const room = createGameNightChildRoom({
     session: runtime.record,
     blueprintId: blueprint.id,
-    spec: blueprint.spec,
+    spec,
     roomCode: createRoomCode(),
     gameInstanceId: crypto.randomUUID(),
   });

@@ -6,6 +6,7 @@ import type { GameNightCatalogEntry, GameNightView, JoinGameNightResult } from "
 import { gameSummary } from "./game-catalog";
 import { evaluateGameNightCompatibility } from "./game-night-compatibility";
 import { GameNightLaunchError, launchGameNightGame } from "./game-night-launch";
+import { adaptGameNightSpec } from "./game-night-spec";
 import { selectGameNightCaptain, selectGameNightTeam } from "./game-night-runtime";
 import { gameNightCredentialsSchema } from "./game-night-schemas";
 import type { BlueprintStore, GameNightSessionRecord } from "./persistence";
@@ -212,9 +213,10 @@ export async function registerGameNightRoutes(
       gameNightCatalog.map(async (catalogSpec): Promise<GameNightCatalogEntry> => {
         const blueprint = await blueprintStore.get(catalogSpec.id);
         const spec = blueprint?.spec ?? catalogSpec;
+        const adaptedSpec = adaptGameNightSpec(spec, runtime.record.state.teams);
         return {
           id: spec.id,
-          game: gameSummary(spec),
+          game: gameSummary(adaptedSpec),
           compatibility: evaluateGameNightCompatibility(runtime.record, spec, blueprint?.status === "release_ready"),
         };
       }),

@@ -1,8 +1,7 @@
 import type { BoardGameSpec } from "@boardforge/game-spec";
 import type { GameNightCompatibility, GameNightCompatibilityReason } from "@boardforge/shared";
 import type { GameNightSessionRecord } from "./persistence";
-
-const rankedExperiences = new Set(["movie_mime", "word_trap", "draw_battle", "sound_check"]);
+import { adaptGameNightSpec, isRankedGameNightSpec } from "./game-night-spec";
 
 function reason(code: GameNightCompatibilityReason["code"], message: string): GameNightCompatibilityReason {
   return { code, message };
@@ -13,9 +12,10 @@ export function evaluateGameNightCompatibility(
   spec: BoardGameSpec,
   releaseReady = true,
 ): GameNightCompatibility {
+  const adaptedSpec = adaptGameNightSpec(spec, session.state.teams);
   const reasons: GameNightCompatibilityReason[] = [];
   const playerCount = session.players.length;
-  const isRankedExperience = spec.template === "composed" && rankedExperiences.has(spec.experienceId);
+  const isRankedExperience = isRankedGameNightSpec(adaptedSpec);
 
   if (!releaseReady) reasons.push(reason("NOT_RELEASE_READY", "This game has not passed its release checks."));
   if (session.currentRoomCode)
@@ -23,11 +23,11 @@ export function evaluateGameNightCompatibility(
   if (!isRankedExperience) {
     reasons.push(reason("NOT_IN_CATALOG", "This game is not part of the ranked Game Night catalogue yet."));
   }
-  if (playerCount < spec.minPlayers) {
-    reasons.push(reason("TOO_FEW_PLAYERS", `This game needs at least ${spec.minPlayers} players.`));
+  if (playerCount < adaptedSpec.minPlayers) {
+    reasons.push(reason("TOO_FEW_PLAYERS", `This game needs at least ${adaptedSpec.minPlayers} players.`));
   }
-  if (playerCount > spec.maxPlayers) {
-    reasons.push(reason("TOO_MANY_PLAYERS", `This game supports at most ${spec.maxPlayers} players.`));
+  if (playerCount > adaptedSpec.maxPlayers) {
+    reasons.push(reason("TOO_MANY_PLAYERS", `This game supports at most ${adaptedSpec.maxPlayers} players.`));
   }
 
   const assignedPlayerIds = new Set(session.state.teams.flatMap((team) => team.playerIds));
@@ -42,9 +42,9 @@ export function evaluateGameNightCompatibility(
   }
 
   const requiresCaptains =
-    spec.template === "composed" && spec.actions.some((action) => action.actor === "team_captain");
-  if (spec.template === "composed" && spec.setup.mode === "teams" && spec.setup.teamPolicy) {
-    const policy = spec.setup.teamPolicy;
+    adaptedSpec.template === "composed" && adaptedSpec.actions.some((action) => action.actor === "team_captain");
+  if (adaptedSpec.template === "composed" && adaptedSpec.setup.mode === "teams" && adaptedSpec.setup.teamPolicy) {
+    const policy = adaptedSpec.setup.teamPolicy;
     if (session.state.teams.length !== policy.teams.length) {
       reasons.push(
         reason(

@@ -160,4 +160,75 @@ describe("BoardForge HTTP application", () => {
     });
     expect(secondLaunch.statusCode).toBe(409);
   });
+
+  it("adapts a ranked child game to four persistent teams", async () => {
+    const { app } = await createBoardForgeServer({
+      databaseUrl: null,
+      llmProvider: "fake",
+      logger: false,
+      restoreRooms: false,
+    });
+    activeApp = app;
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/game-nights",
+      payload: {
+        hostName: "Maya",
+        teams: [{ name: "Comets" }, { name: "Moons" }, { name: "Sparks" }, { name: "Waves" }],
+      },
+    });
+    const host = created.json();
+    const code = host.view.code as string;
+    const players = [host];
+    for (const name of ["Noah", "Ada", "Leo"]) {
+      const joined = await app.inject({
+        method: "POST",
+        url: `/api/game-nights/${code}/join`,
+        payload: { name },
+      });
+      players.push(joined.json());
+    }
+
+    for (const [index, player] of players.entries()) {
+      const teamId = `team_${index + 1}`;
+      const selection = await app.inject({
+        method: "PATCH",
+        url: `/api/game-nights/${code}/team`,
+        payload: { playerId: player.playerId, reconnectToken: player.reconnectToken, teamId },
+      });
+      expect(selection.statusCode).toBe(200);
+      const captain = await app.inject({
+        method: "PATCH",
+        url: `/api/game-nights/${code}/captain`,
+        payload: {
+          playerId: host.playerId,
+          reconnectToken: host.reconnectToken,
+          teamId,
+          captainPlayerId: player.playerId,
+        },
+      });
+      expect(captain.statusCode).toBe(200);
+    }
+
+    const catalog = await app.inject({ method: "GET", url: `/api/game-nights/${code}/catalog` });
+    const movie = catalog.json().games.find((game: { id: string }) => game.id === defaultMovieMimeSpec.id);
+    expect(movie).toMatchObject({
+      game: { minPlayers: 4 },
+      compatibility: { compatible: true, reasons: [] },
+    });
+
+    const launched = await app.inject({
+      method: "POST",
+      url: `/api/game-nights/${code}/games`,
+      payload: {
+        playerId: host.playerId,
+        reconnectToken: host.reconnectToken,
+        blueprintId: defaultMovieMimeSpec.id,
+      },
+    });
+    expect(launched.statusCode).toBe(201);
+    const child = await app.inject({ method: "GET", url: `/api/rooms/${launched.json().code}` });
+    expect(child.json()).toMatchObject({ playerCount: 4, started: false });
+  });
 });

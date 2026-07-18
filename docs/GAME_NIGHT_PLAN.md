@@ -25,6 +25,9 @@ Completed:
 - Automatic, idempotent result transfer from a completed child room to the global score ledger.
 - Recovery-time result reconciliation if the server stops during the completion transition.
 - A shared compatibility evaluator for player count, team structure, team sizes and captain requirements.
+- Deterministic two-to-four-team adaptation for every ranked Game Night: CineMimes, WordTrap, DrawBattle and SoundCheck.
+- Fair round counts aligned to the number of teams, followed by strict schema validation before launch.
+- Automated composed-engine playtests for every ranked game with three and four teams.
 - A Game Night catalogue API with actionable compatibility reasons, enforced again at launch.
 - Backend APIs to create and join a Game Night, select teams and captains, and launch a child game.
 - Distinct homepage paths for `Start a game night` and `Play one game`, plus code-aware invitation routing.
@@ -47,11 +50,12 @@ Completed:
 - A host-only, persisted end-of-night transition that is blocked before the first result and during an active game.
 - A confirmed, shared final podium with deterministic tie ranking, complete standings and readable game history.
 - Completed sessions locked against new games while remaining available to returning participants.
+- A real four-team browser launch through captain selection into a 16-round DrawBattle room, with no browser warnings or errors.
 
 Not completed:
 
 - Complete multiplayer regressions for DrawBattle and SoundCheck.
-- Complete three-team and four-team browser regressions.
+- Complete the three-team browser regression and full four-team game completions.
 
 ## P0 delivery plan
 
@@ -176,6 +180,7 @@ Acceptance tests:
 Work:
 
 - Add WordTrap, DrawBattle and SoundCheck to the complete loop.
+- Adapt ranked game specifications deterministically for two, three or four persistent teams and revalidate them before launch. **Completed.**
 - Add `End game night`, confirmation and a final podium. **Completed.**
 - Lock completed sessions while keeping history readable. **Completed.**
 - Add complete multiplayer, browser, accessibility, Docker and migration coverage.

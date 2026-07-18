@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultMovieMimeSpec, defaultSecondSenseSpec } from "@boardforge/game-spec";
+import { defaultMovieMimeSpec, defaultSecondSenseSpec, type ComposedGameSpec } from "@boardforge/game-spec";
 import { createGameNightState, GameNightRuleError, initializeComposedGame } from "@boardforge/game-engine";
 import type { GameNightSessionRecord } from "./persistence";
 import { viewForGameNight } from "./game-night-routes";
@@ -12,10 +12,13 @@ import {
   selectGameNightGame,
   selectGameNightTeam,
 } from "./game-night-runtime";
+import { adaptGameNightSpec } from "./game-night-spec";
 import { viewFor } from "./room-runtime";
 
 const hostPlayerId = "00000000-0000-4000-8000-000000000001";
 const secondPlayerId = "00000000-0000-4000-8000-000000000002";
+const thirdPlayerId = "00000000-0000-4000-8000-000000000003";
+const fourthPlayerId = "00000000-0000-4000-8000-000000000004";
 const nightId = "00000000-0000-4000-8000-000000000010";
 
 function session(): GameNightSessionRecord {
@@ -217,5 +220,37 @@ describe("game-night child rooms", () => {
       },
     ]);
     expect(recordCompletedChildGame(completed, room, completedState)).toEqual(completed);
+  });
+
+  it("maps a fourth child-game team back to its persistent score", () => {
+    const night = session();
+    night.players.push(
+      { id: thirdPlayerId, name: "Ada", isHost: false, connected: true },
+      { id: fourthPlayerId, name: "Leo", isHost: false, connected: true },
+    );
+    night.state.teams.push(
+      { id: "gold", name: "Gold", color: "#f4c84a", playerIds: [thirdPlayerId], captainPlayerId: thirdPlayerId },
+      { id: "green", name: "Green", color: "#42c98b", playerIds: [fourthPlayerId], captainPlayerId: fourthPlayerId },
+    );
+    night.state.scores.gold = 0;
+    night.state.scores.green = 0;
+    const spec = adaptGameNightSpec(defaultMovieMimeSpec, night.state.teams) as ComposedGameSpec;
+    const room = createGameNightChildRoom({
+      session: night,
+      blueprintId: "movie-blueprint",
+      spec,
+      roomCode: "CHILD6",
+      gameInstanceId: "00000000-0000-4000-8000-000000000024",
+    });
+    const linked = linkGameNightToChildRoom(night, room);
+
+    expect(room.gameNightTeamByGameTeam.get("game_team_4")).toBe("green");
+    expect(room.lobbyCaptainByTeam.get("game_team_4")).toBe(fourthPlayerId);
+
+    const completed = recordCompletedChildGame(linked, room, {
+      status: "completed",
+      winner: { kind: "teams", ids: ["game_team_4"] },
+    });
+    expect(completed.state.scores).toEqual({ red: 0, blue: 0, gold: 0, green: 3 });
   });
 });
