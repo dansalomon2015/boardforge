@@ -20,13 +20,15 @@ Completed:
 - PostgreSQL snapshots and append-only result/score ledgers.
 - Parent Game Night and child room identifiers.
 - Child-room creation that preserves player identities, teams and captains.
+- Explicit persisted mapping from child-game teams to persistent Game Night teams.
+- Shared reconnect credentials across a Game Night and its active child room.
+- Automatic, idempotent result transfer from a completed child room to the global score ledger.
+- Recovery-time result reconciliation if the server stops during the completion transition.
 - Backend APIs to create and join a Game Night, select teams and captains, and launch a child game.
 
 Not completed:
 
-- Explicit persisted mapping between Game Night teams and child-game teams.
 - Shared real-time lobby and board UI.
-- Automatic result transfer from a completed room to the Game Night.
 - Game compatibility catalogue and explanations.
 - Return-to-board flow, history animation and final podium.
 
@@ -36,7 +38,7 @@ Not completed:
 
 Work:
 
-- Persist an explicit `gameNightTeamId -> gameTeamId` mapping for every child game.
+- Persist an explicit `gameTeamId -> gameNightTeamId` mapping for every child game.
 - Keep the direct-game path independent and covered by regression tests.
 - Synchronize reconnect credentials between a Game Night and its active child room.
 - Detect game completion exactly once and append the normalized global result.
