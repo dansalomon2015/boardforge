@@ -22,6 +22,7 @@ import { createLlmProvider } from "@boardforge/llm";
 import { createBlueprintStore, type BlueprintRecord } from "./persistence";
 import { gameSummary } from "./game-catalog";
 import { registerGameRoutes } from "./game-routes";
+import { registerGameNightRoutes } from "./game-night-routes";
 import { registerBalanceRoutes } from "./balance-routes";
 import { allocateRoomCode, persistedRoom, type Room } from "./room-runtime";
 import { roomBodySchema } from "./room-schemas";
@@ -113,6 +114,8 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
   registerGameRoutes(app, { llm, blueprintStore });
 
   registerBalanceRoutes(app, { llm, blueprintStore });
+
+  await registerGameNightRoutes(app, { blueprintStore, rooms, createRoomCode });
 
   app.post("/api/rooms", async (request, reply) => {
     const parsed = roomBodySchema.safeParse(request.body);

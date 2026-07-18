@@ -1,6 +1,7 @@
 export type GameNightTeam = {
   id: string;
   name: string;
+  color?: string | undefined;
   playerIds: string[];
   captainPlayerId?: string | undefined;
 };
@@ -91,6 +92,8 @@ export function createGameNightState(id: string, teams: GameNightTeam[]): GameNi
   if (new Set(playerIds).size !== playerIds.length)
     throw new GameNightRuleError("A player cannot belong to more than one game-night team.");
   for (const team of teams) {
+    if (team.color && !/^#[0-9a-fA-F]{6}$/.test(team.color))
+      throw new GameNightRuleError(`Team ${team.id} must use a valid hexadecimal color.`);
     if (team.captainPlayerId && !team.playerIds.includes(team.captainPlayerId)) {
       throw new GameNightRuleError(`Captain for team ${team.id} must belong to that team.`);
     }

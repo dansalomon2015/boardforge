@@ -4,6 +4,10 @@ const gameNightTeamSchema = z
   .object({
     id: z.string().min(1).max(80),
     name: z.string().min(1).max(80),
+    color: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .optional(),
     playerIds: z.array(z.string().uuid()),
     captainPlayerId: z.string().uuid().optional(),
   })

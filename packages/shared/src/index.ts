@@ -275,4 +275,29 @@ export type JoinRoomResult = {
   view: RoomView;
 };
 
+export type GameNightView = {
+  id: string;
+  code: string;
+  status: "lobby" | "playing" | "completed";
+  selfPlayerId: string;
+  isHost: boolean;
+  players: PublicPlayer[];
+  teams: Array<{
+    id: string;
+    name: string;
+    color: string;
+    playerIds: string[];
+    captainPlayerId?: string | undefined;
+    score: number;
+  }>;
+  currentRoomCode: string | null;
+  gamesPlayed: number;
+};
+
+export type JoinGameNightResult = {
+  playerId: string;
+  reconnectToken: string;
+  view: GameNightView;
+};
+
 export type SocketAck<T> = { ok: true; data: T } | { ok: false; error: string };
