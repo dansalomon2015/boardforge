@@ -5,14 +5,20 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import styles from "./page.module.css";
 
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+
 export default function HomePage() {
   const router = useRouter();
   const [joinCode, setJoinCode] = useState("");
+  const [joinBusy, setJoinBusy] = useState(false);
 
-  function joinRoom(event: FormEvent) {
+  async function joinRoom(event: FormEvent) {
     event.preventDefault();
     if (joinCode.trim().length !== 6) return;
-    router.push(`/room/${joinCode.trim().toUpperCase()}`);
+    const code = joinCode.trim().toUpperCase();
+    setJoinBusy(true);
+    const gameNight = await fetch(`${apiUrl}/api/game-nights/${code}`).catch(() => null);
+    router.push(gameNight?.ok ? `/game-night/${code}` : `/room/${code}`);
   }
 
   const joinInput = (className?: string) => (
@@ -37,8 +43,8 @@ export default function HomePage() {
         <form className={styles.join} onSubmit={joinRoom}>
           <span>Already invited?</span>
           {joinInput()}
-          <button type="submit" disabled={joinCode.trim().length !== 6}>
-            Join
+          <button type="submit" disabled={joinCode.trim().length !== 6 || joinBusy}>
+            {joinBusy ? "Finding…" : "Join"}
           </button>
         </form>
       </nav>
@@ -58,8 +64,11 @@ export default function HomePage() {
             laughter, rivalry, and little moments of a real game night—wherever your people are.
           </p>
           <div className={styles.heroActions}>
-            <a className={styles.primaryAction} href="#games">
-              Choose tonight&apos;s game <b>↗</b>
+            <Link className={styles.primaryAction} href="/game-night/new">
+              Start a game night <b>→</b>
+            </Link>
+            <a className={styles.secondaryAction} href="#games">
+              Play one game
             </a>
           </div>
           <form className={styles.heroJoin} onSubmit={joinRoom}>
@@ -69,20 +78,20 @@ export default function HomePage() {
             </div>
             <div className={styles.heroJoinControls}>
               {joinInput(styles.heroJoinInput)}
-              <button type="submit" disabled={joinCode.trim().length !== 6}>
-                Enter room <b>→</b>
+              <button type="submit" disabled={joinCode.trim().length !== 6 || joinBusy}>
+                {joinBusy ? "Finding…" : "Enter room"} <b>→</b>
               </button>
             </div>
           </form>
           <div className={styles.proof}>
             <span>
-              <b>Pick</b> your mood
+              <b>Build</b> your teams
             </span>
             <span>
               <b>Invite</b> with one code
             </span>
             <span>
-              <b>Play</b> together
+              <b>Play</b> all night
             </span>
           </div>
         </div>

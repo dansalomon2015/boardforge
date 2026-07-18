@@ -27,10 +27,13 @@ Completed:
 - A shared compatibility evaluator for player count, team structure, team sizes and captain requirements.
 - A Game Night catalogue API with actionable compatibility reasons, enforced again at launch.
 - Backend APIs to create and join a Game Night, select teams and captains, and launch a child game.
+- Distinct homepage paths for `Start a game night` and `Play one game`, plus code-aware invitation routing.
+- A responsive Game Night creation flow for two to four uniquely named and colored teams.
+- A shareable lobby with session recovery, player joining and self-service team selection.
 
 Not completed:
 
-- Shared real-time lobby and board UI.
+- Real-time lobby synchronization and persistent board UI.
 - Game compatibility catalogue UI and explanations.
 - Return-to-board flow, history animation and final podium.
 
@@ -57,7 +60,7 @@ Acceptance tests:
 - Two child games cannot run at the same time.
 - Direct rooms still create, join, play and complete without Game Night state.
 
-### Phase 2 — Game Night creation
+### Phase 2 — Game Night creation (completed)
 
 Work:
 

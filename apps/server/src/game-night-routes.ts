@@ -195,6 +195,7 @@ export async function registerGameNightRoutes(
     const runtime = gameNights.get(request.params.code.toUpperCase());
     if (!runtime) return reply.code(404).send({ error: "Game night not found." });
     return {
+      id: runtime.record.id,
       code: runtime.record.code,
       status: runtime.record.state.status,
       playerCount: runtime.record.players.length,

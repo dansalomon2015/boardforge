@@ -7,6 +7,7 @@ import type { ComposedGameView, GameAction, JoinRoomResult, RoomView, SocketAck 
 import { ComposedStageRouter } from "./composed-stages";
 import { originalExperience } from "./experience-registry";
 import roomChromeStyles from "./room-chrome.module.css";
+import { saveGameNightSession } from "../../../lib/game-night-session";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -23,11 +24,13 @@ export default function RoomPage() {
   const [pending, setPending] = useState(false);
   const [roomExperienceId, setRoomExperienceId] = useState<ComposedGameView["experienceId"] | undefined>();
 
-  function saveGameNightSession(result: JoinRoomResult, playerName: string) {
+  function saveParentGameNightSession(result: JoinRoomResult, playerName: string) {
     if (!result.gameNightId) return;
-    localStorage.setItem(`boardforge:game-night:${result.gameNightId}:playerId`, result.playerId);
-    localStorage.setItem(`boardforge:game-night:${result.gameNightId}:reconnectToken`, result.reconnectToken);
-    localStorage.setItem(`boardforge:game-night:${result.gameNightId}:name`, playerName);
+    saveGameNightSession(result.gameNightId, {
+      playerId: result.playerId,
+      reconnectToken: result.reconnectToken,
+      name: playerName,
+    });
   }
 
   useEffect(() => {
@@ -58,7 +61,7 @@ export default function RoomPage() {
             setPlayerId(response.data.playerId);
             setView(response.data.view);
             localStorage.setItem(`boardforge:${code}:reconnectToken`, response.data.reconnectToken);
-            saveGameNightSession(response.data, savedName);
+            saveParentGameNightSession(response.data, savedName);
           } else {
             localStorage.removeItem(`boardforge:${code}:playerId`);
             localStorage.removeItem(`boardforge:${code}:reconnectToken`);
@@ -97,7 +100,7 @@ export default function RoomPage() {
       localStorage.setItem(`boardforge:${code}:playerId`, response.data.playerId);
       localStorage.setItem(`boardforge:${code}:reconnectToken`, response.data.reconnectToken);
       localStorage.setItem(`boardforge:${code}:name`, name);
-      saveGameNightSession(response.data, name);
+      saveParentGameNightSession(response.data, name);
     });
   }
 

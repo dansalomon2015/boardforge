@@ -53,7 +53,11 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
   };
 
   const app = Fastify({ logger: options.logger ?? true });
-  await app.register(cors, { origin: config.webOrigin, credentials: false });
+  await app.register(cors, {
+    origin: config.webOrigin,
+    credentials: false,
+    methods: ["GET", "HEAD", "POST", "PATCH", "OPTIONS"],
+  });
 
   const io = new SocketServer(app.server, {
     cors: { origin: config.webOrigin },

@@ -29,6 +29,17 @@ describe("BoardForge HTTP application", () => {
     expect(games.json().games).toEqual(
       expect.arrayContaining([expect.objectContaining({ experienceId: "movie_mime" })]),
     );
+
+    const preflight = await app.inject({
+      method: "OPTIONS",
+      url: "/api/game-nights/NIGHT2/team",
+      headers: {
+        origin: "http://localhost:3000",
+        "access-control-request-method": "PATCH",
+      },
+    });
+    expect(preflight.statusCode).toBe(204);
+    expect(preflight.headers["access-control-allow-methods"]).toContain("PATCH");
   });
 
   it("creates a game night, forms teams, selects captains and launches a child room", async () => {
