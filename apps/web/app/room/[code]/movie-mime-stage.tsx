@@ -4,6 +4,7 @@ import type { ComposedGameView, GameAction } from "@boardforge/shared";
 import { GameSurface } from "../../../components/game-ui";
 import { GameNightReturn } from "./game-night-return";
 import { themeForRoom } from "./stage-shared";
+import { TurnTimerDial } from "./turn-timer";
 import movieMimeStyles from "./movie-mime.module.css";
 
 export function MovieMimeStage({
@@ -152,11 +153,7 @@ export function MovieMimeStage({
                 {isActivePlayer ? "Make them guess it." : `${activePlayer?.name ?? "The performer"} is on stage.`}
               </h1>
             </div>
-            <div className={movieMimeStyles.timer}>
-              <i />
-              <span>60</span>
-              <small>seconds</small>
-            </div>
+            <TurnTimerDial view={view} fallbackSeconds={60} />
           </div>
 
           {isActivePlayer && prompt?.prompt ? (

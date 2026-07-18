@@ -6,6 +6,7 @@ import { DrawingCanvas, GameSurface, TextAnswer } from "../../../components/game
 import type { SketchStroke } from "../../../components/game-ui";
 import { GameNightReturn } from "./game-night-return";
 import { themeForRoom } from "./stage-shared";
+import { TurnTimerDial } from "./turn-timer";
 import movieMimeStyles from "./movie-mime.module.css";
 
 export function DrawBattleStage({
@@ -162,11 +163,7 @@ export function DrawBattleStage({
               <p>Every line is live</p>
               <h1>{isActivePlayer ? "Draw the secret." : `What is ${activePlayer?.name ?? "the artist"} drawing?`}</h1>
             </div>
-            <div className={movieMimeStyles.timer}>
-              <i />
-              <span>75</span>
-              <small>seconds</small>
-            </div>
+            <TurnTimerDial view={view} fallbackSeconds={75} />
           </div>
           <div className={movieMimeStyles.drawingGrid}>
             <div className={movieMimeStyles.liveCanvas}>

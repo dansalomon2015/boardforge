@@ -48,12 +48,15 @@ import {
   gameNightSocketTeamSelectionSchema,
 } from "./game-night-schemas";
 import { issueReconnectToken, reconnectTokenMatches } from "./session-token";
+import { systemCountdownClock, type CountdownClock } from "./countdown-clock";
 import {
   checkpointChecksumMatches,
   emitRoom as broadcastRoom,
   enqueueRoom,
   persistedRoom,
   publicPlayers,
+  refreshRoomCountdown,
+  restoreRoomCountdown,
   restoreTimingStarts,
   sameRequestedAction,
   timingActionKind,
@@ -80,6 +83,7 @@ type RealtimeGatewayDependencies = {
   createRoomCode: () => string;
   blueprintStore: RealtimeRoomStore;
   restoreRooms: boolean;
+  countdownClock?: CountdownClock;
 };
 
 export async function registerRealtimeGateway({
@@ -91,8 +95,11 @@ export async function registerRealtimeGateway({
   createRoomCode,
   blueprintStore,
   restoreRooms,
+  countdownClock,
 }: RealtimeGatewayDependencies): Promise<void> {
-  const emitRoom = (room: Room) => broadcastRoom(io, room);
+  const clock = countdownClock ?? systemCountdownClock;
+  const countdownCancels = new Map<string, () => void>();
+  const emitRoom = (room: Room) => broadcastRoom(io, room, clock.now());
 
   const gameNightForRoom = (room: Room) =>
     room.gameNightId ? [...gameNights.values()].find((runtime) => runtime.record.id === room.gameNightId) : undefined;
@@ -118,6 +125,85 @@ export async function registerRealtimeGateway({
       runtime.record = nextRecord;
       emitGameNight(runtime);
     });
+  }
+
+  function cancelRoomCountdown(roomCode: string): void {
+    countdownCancels.get(roomCode)?.();
+    countdownCancels.delete(roomCode);
+  }
+
+  function scheduleRoomCountdown(room: Room, enteredPhaseAt: number): void {
+    cancelRoomCountdown(room.code);
+    const countdown = refreshRoomCountdown(room, enteredPhaseAt);
+    if (!countdown) return;
+    const expected = { ...countdown };
+    const cancel = clock.schedule(
+      () => {
+        countdownCancels.delete(room.code);
+        void expireRoomCountdown(room, expected).catch((error) =>
+          app.log.error({ err: error, roomCode: room.code }, "Failed to resolve an expired turn timer"),
+        );
+      },
+      Math.max(0, countdown.deadlineAt - clock.now()),
+    );
+    countdownCancels.set(room.code, cancel);
+  }
+
+  async function expireRoomCountdown(room: Room, expected: NonNullable<Room["countdown"]>): Promise<void> {
+    const changed = await enqueueRoom(room, async () => {
+      const countdown = room.countdown;
+      const currentState = room.state;
+      if (
+        !countdown ||
+        countdown.phaseVisit !== expected.phaseVisit ||
+        countdown.deadlineAt !== expected.deadlineAt ||
+        !currentState ||
+        currentState.template !== "composed" ||
+        room.spec.template !== "composed" ||
+        currentState.status !== "playing"
+      ) {
+        return false;
+      }
+      const now = clock.now();
+      if (now < countdown.deadlineAt) {
+        scheduleRoomCountdown(room, now);
+        return false;
+      }
+      const actorId = currentState.activePlayerId;
+      const actor = room.players.get(actorId);
+      if (!actor) throw new GameRuleError("The active player is unavailable for timer resolution.");
+      const idempotencyKey = `turn_timer_${currentState.phaseVisit}_${currentState.revision}`;
+      const action = {
+        type: "COMPOSED_ACTION" as const,
+        actionId: countdown.timeoutActionId,
+      };
+      const nextState = reduceComposedGame(
+        currentState,
+        { ...action, idempotencyKey },
+        actorId,
+        actor.isHost,
+        room.spec,
+      );
+      const event: RoomEventRecord = {
+        id: crypto.randomUUID(),
+        roomCode: room.code,
+        createdAt: new Date(now).toISOString(),
+        sequence: room.eventSequence + 1,
+        actorId,
+        actorIsHost: actor.isHost,
+        expectedRevision: currentState.revision,
+        resultingRevision: nextState.revision,
+        idempotencyKey,
+        action,
+      };
+      await blueprintStore.appendRoomEvent(persistedRoom(room, nextState), event);
+      room.state = nextState;
+      room.eventSequence = event.sequence;
+      scheduleRoomCountdown(room, now);
+      await synchronizeCompletedGameNight(room, nextState);
+      return true;
+    });
+    if (changed) emitRoom(room);
   }
 
   function acknowledge<T>(ack: ((response: SocketAck<T>) => void) | undefined, response: SocketAck<T>): void {
@@ -218,9 +304,12 @@ export async function registerRealtimeGateway({
           eventSequence: events.length,
           operationQueue: Promise.resolve(),
           timingStartedAtByPlayer: restoreTimingStarts(blueprint.spec, events),
+          countdown: null,
           state,
         };
+        restoreRoomCountdown(room, events, clock.now());
         rooms.set(room.code, room);
+        scheduleRoomCountdown(room, clock.now());
         await blueprintStore.saveRoom(persistedRoom(room));
         if (state?.template === "composed") await synchronizeCompletedGameNight(room, state);
       } catch (error) {
@@ -482,7 +571,7 @@ export async function registerRealtimeGateway({
           await blueprintStore.saveGameNight(parentGameNight.record);
           emitGameNight(parentGameNight);
         }
-        const view = viewFor(room, resolvedPlayerId);
+        const view = viewFor(room, resolvedPlayerId, clock.now());
         acknowledge(ack, {
           ok: true,
           data: {
@@ -531,7 +620,7 @@ export async function registerRealtimeGateway({
           }
           await blueprintStore.saveRoom(persistedRoom(room));
           emitRoom(room);
-          acknowledge(ack, { ok: true, data: { view: viewFor(room, parsed.playerId) as LobbyView } });
+          acknowledge(ack, { ok: true, data: { view: viewFor(room, parsed.playerId, clock.now()) as LobbyView } });
         } catch (error) {
           acknowledge(ack, { ok: false, error: socketError(error) });
         }
@@ -567,7 +656,7 @@ export async function registerRealtimeGateway({
           room.lobbyCaptainByTeam.set(parsed.teamId, parsed.captainPlayerId);
           await blueprintStore.saveRoom(persistedRoom(room));
           emitRoom(room);
-          acknowledge(ack, { ok: true, data: { view: viewFor(room, parsed.playerId) as LobbyView } });
+          acknowledge(ack, { ok: true, data: { view: viewFor(room, parsed.playerId, clock.now()) as LobbyView } });
         } catch (error) {
           acknowledge(ack, { ok: false, error: socketError(error) });
         }
@@ -585,7 +674,7 @@ export async function registerRealtimeGateway({
           const player = room.players.get(payload.playerId);
           if (!player?.isHost) throw new GameRuleError("Only the host can start the game.");
           if (room.state) throw new GameRuleError("The game has already started.");
-          const lobbyView = viewFor(room, payload.playerId);
+          const lobbyView = viewFor(room, payload.playerId, clock.now());
           if (lobbyView.kind !== "lobby" || !lobbyView.canStart) {
             throw new GameRuleError(
               lobbyView.kind === "lobby"
@@ -607,8 +696,9 @@ export async function registerRealtimeGateway({
           await blueprintStore.saveRoom({ ...persistedRoom(room, nextState), seed });
           room.seed = seed;
           room.state = nextState;
+          scheduleRoomCountdown(room, clock.now());
           emitRoom(room);
-          acknowledge(ack, { ok: true, data: { view: viewFor(room, payload.playerId) } });
+          acknowledge(ack, { ok: true, data: { view: viewFor(room, payload.playerId, clock.now()) } });
         } catch (error) {
           acknowledge(ack, { ok: false, error: socketError(error) });
         }
@@ -619,7 +709,7 @@ export async function registerRealtimeGateway({
       "game:action",
       async (payload: GameActionEnvelope, ack?: (response: SocketAck<{ revision: number }>) => void) => {
         try {
-          const receivedAt = Date.now();
+          const receivedAt = clock.now();
           const parsed = actionEnvelopeSchema.parse(payload);
           const code = parsed.code;
           const room = rooms.get(code);
@@ -639,6 +729,13 @@ export async function registerRealtimeGateway({
             if (!currentState) throw new GameRuleError("The game has not started.");
             if (currentState.revision !== parsed.expectedRevision) {
               throw new GameRuleError(`Stale room revision. Expected ${currentState.revision}.`);
+            }
+            if (
+              currentState.template === "composed" &&
+              room.countdown?.phaseVisit === currentState.phaseVisit &&
+              receivedAt >= room.countdown.deadlineAt
+            ) {
+              throw new GameRuleError("Time is up.");
             }
             const timingKind = timingActionKind(room.spec, parsed.action);
             let effectiveAction = parsed.action;
@@ -684,6 +781,7 @@ export async function registerRealtimeGateway({
             if (timingKind === "timing_start") room.timingStartedAtByPlayer.set(player.id, receivedAt);
             if (timingKind === "timing_stop") room.timingStartedAtByPlayer.delete(player.id);
             if (timingKind === "timing_advance") room.timingStartedAtByPlayer.clear();
+            scheduleRoomCountdown(room, receivedAt);
             if (nextState.template === "composed") await synchronizeCompletedGameNight(room, nextState);
             return { revision: nextState.revision, changed: true };
           });
@@ -732,5 +830,10 @@ export async function registerRealtimeGateway({
         emitRoom(room);
       }).catch((error) => app.log.error({ error, roomCode: room.code }, "Failed to persist disconnect"));
     });
+  });
+
+  app.addHook("onClose", async () => {
+    for (const cancel of countdownCancels.values()) cancel();
+    countdownCancels.clear();
   });
 }

@@ -5,6 +5,7 @@ import type { ComposedGameView, GameAction } from "@boardforge/shared";
 import { GameSurface, TextAnswer } from "../../../components/game-ui";
 import { GameNightReturn } from "./game-night-return";
 import { themeForRoom } from "./stage-shared";
+import { TurnTimerDial } from "./turn-timer";
 import movieMimeStyles from "./movie-mime.module.css";
 import soundCheckStyles from "./sound-check.module.css";
 
@@ -158,11 +159,7 @@ export function SoundCheckStage({
                 {isActivePlayer ? "Make the sound." : `What is ${activePlayer?.name ?? "the performer"} imitating?`}
               </h1>
             </div>
-            <div className={movieMimeStyles.timer}>
-              <i />
-              <span>60</span>
-              <small>seconds</small>
-            </div>
+            <TurnTimerDial view={view} fallbackSeconds={60} />
           </div>
           <div className={soundCheckStyles.performanceGrid}>
             <div className={soundCheckStyles.performanceStage}>

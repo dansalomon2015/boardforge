@@ -194,6 +194,12 @@ export type ComposedGameView = {
   teams: Array<{ id: string; name: string; color: string; playerIds: string[] }>;
   captainByTeam: Record<string, string>;
   scores: { global: number; players: Record<string, number>; teams: Record<string, number> };
+  turnTimer?: {
+    phaseVisit: number;
+    deadlineAt: number;
+    serverNow: number;
+    totalSeconds: number;
+  };
   components: ResolvedGameComponent[];
   availableActions: Array<{
     id: string;

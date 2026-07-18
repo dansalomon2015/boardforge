@@ -4,6 +4,7 @@ import type { ComposedGameView, GameAction } from "@boardforge/shared";
 import { GameSurface } from "../../../components/game-ui";
 import { GameNightReturn } from "./game-night-return";
 import { themeForRoom } from "./stage-shared";
+import { TurnTimerDial } from "./turn-timer";
 import movieMimeStyles from "./movie-mime.module.css";
 
 export function WordTrapStage({
@@ -151,11 +152,7 @@ export function WordTrapStage({
               <p>Choose every word carefully</p>
               <h1>{isActivePlayer ? "Make them guess it." : `${activePlayer?.name ?? "The clue giver"} is live.`}</h1>
             </div>
-            <div className={movieMimeStyles.timer}>
-              <i />
-              <span>60</span>
-              <small>seconds</small>
-            </div>
+            <TurnTimerDial view={view} fallbackSeconds={60} />
           </div>
           {isActivePlayer && prompt?.prompt ? (
             <div className={`${movieMimeStyles.revealedCard} ${movieMimeStyles.trapCard}`}>

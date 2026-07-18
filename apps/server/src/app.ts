@@ -27,6 +27,7 @@ import { registerBalanceRoutes } from "./balance-routes";
 import { allocateRoomCode, persistedRoom, type Room } from "./room-runtime";
 import { roomBodySchema } from "./room-schemas";
 import { registerRealtimeGateway } from "./realtime-gateway";
+import type { CountdownClock } from "./countdown-clock";
 
 export type BoardForgeServerOptions = {
   port?: number;
@@ -36,6 +37,7 @@ export type BoardForgeServerOptions = {
   requireDatabase?: boolean;
   logger?: boolean;
   restoreRooms?: boolean;
+  countdownClock?: CountdownClock;
 };
 
 export async function createBoardForgeServer(options: BoardForgeServerOptions = {}) {
@@ -173,6 +175,7 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
       eventSequence: 0,
       operationQueue: Promise.resolve(),
       timingStartedAtByPlayer: new Map(),
+      countdown: null,
       state: null,
     };
     await blueprintStore.saveRoom(persistedRoom(room));
@@ -200,6 +203,7 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
     createRoomCode,
     blueprintStore,
     restoreRooms: options.restoreRooms !== false,
+    ...(options.countdownClock ? { countdownClock: options.countdownClock } : {}),
   });
 
   app.addHook("onClose", async () => {

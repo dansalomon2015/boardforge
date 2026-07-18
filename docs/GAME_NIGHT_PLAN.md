@@ -188,6 +188,7 @@ Work:
 - Adapt ranked game specifications deterministically for two, three or four persistent teams and revalidate them before launch. **Completed.**
 - Add `End game night`, confirmation and a final podium. **Completed.**
 - Lock completed sessions while keeping history readable. **Completed.**
+- Synchronize timed turns from one server-authoritative deadline, including reconnect and automatic timeout resolution. **Completed.**
 - Add complete multiplayer, browser, accessibility, Docker and migration coverage.
 
 Acceptance tests:
