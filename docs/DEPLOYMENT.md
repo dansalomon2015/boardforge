@@ -1,10 +1,10 @@
 # Production deployment on AWS EC2
 
-BoardForge deploys to one Ubuntu EC2 instance with Docker Compose. Caddy terminates HTTPS and proxies the web and API containers; PostgreSQL is reachable only inside the Docker network. GitHub Actions transfers an immutable source archive, builds the containers on EC2 and runs a public health check.
+BoardForge deploys to one Ubuntu EC2 instance with Docker Compose. Caddy terminates HTTPS and proxies the web and API containers; PostgreSQL is reachable only inside the Docker network. GitHub Actions builds immutable application images on hosted runners, publishes them to GitHub Container Registry (GHCR), pulls them onto EC2 and runs a public health check.
 
 ## 1. AWS and DNS prerequisites
 
-Create an Ubuntu 24.04 LTS EC2 instance. A `t3.medium` is a sensible minimum for building both images on the instance; use at least 25 GB of gp3 storage. Attach an Elastic IP so DNS does not change after a restart.
+Create an Ubuntu 24.04 LTS EC2 instance. A `t3.small` with at least 16 GB of gp3 storage is a practical hackathon minimum; `t3.medium` provides safer runtime headroom. Container builds run on GitHub rather than EC2. Attach an Elastic IP so DNS does not change after a restart.
 
 The EC2 security group must allow:
 
@@ -42,21 +42,22 @@ Generate a database password locally with a password manager or `openssl rand -b
 
 ## 3. Configure the instance
 
-Run **Actions → Configure EC2 → Run workflow** once. It installs Docker Engine and the Compose plugin, enables Docker at boot, creates `/opt/boardforge`, configures a persistent 4 GB swap file to protect container builds from memory exhaustion, and configures UFW for SSH, HTTP and HTTPS.
+Run **Actions → Configure EC2 → Run workflow** once. It installs Docker Engine and the Compose plugin, enables Docker at boot, creates `/opt/boardforge`, clears stale Docker build cache, configures up to 2 GB of swap while always reserving 2 GB of disk space, and configures UFW for SSH, HTTP and HTTPS.
 
 The workflow assumes a fresh Ubuntu host and a user with passwordless `sudo`, as provided by the standard Ubuntu EC2 image. Confirm that the workflow succeeds before deploying.
 
-The configuration workflow is idempotent and can be rerun on an existing instance. If a deployment previously failed with `signal: killed` during `pnpm install` or `next build`, rerun **Configure EC2** to add the swap file, then rerun **Deploy production**. Production images are built sequentially to keep peak memory usage bounded.
+The configuration workflow is idempotent and can be rerun on an existing instance. A partial swap file left by a previous failed run is removed safely. If the root filesystem itself is full, expand the EC2 EBS volume before continuing; swap is deliberately skipped when less than 2.5 GB remains.
 
 ## 4. Deploy
 
 Every successful `CI` run on `main` triggers **Deploy production**. It:
 
 1. checks out the exact commit verified by CI;
-2. transfers a Git archive and a mode-`0600` runtime environment file over SSH;
-3. builds and starts `compose.production.yaml` on EC2;
-4. preserves PostgreSQL and Caddy data in named volumes;
-5. verifies the public API health endpoint and homepage over HTTPS.
+2. builds the server and web images on GitHub and publishes commit-addressed images to GHCR;
+3. transfers a Git archive and a mode-`0600` runtime environment file over SSH;
+4. authenticates with a short-lived workflow token, pulls the images and starts `compose.production.yaml` on EC2;
+5. preserves PostgreSQL and Caddy data in named volumes;
+6. verifies the public API health endpoint and homepage over HTTPS.
 
 The deployment can also be started manually from the Actions tab. Releases live under `/opt/boardforge/releases/<commit-sha>` and `/opt/boardforge/current` points to the active source release.
 
@@ -92,6 +93,9 @@ Choose a previous SHA from `/opt/boardforge/releases`, then run its Compose defi
 cd /opt/boardforge/releases/PREVIOUS_SHA
 docker compose --project-name boardforge \
   --env-file /opt/boardforge/shared/.env.production \
-  -f compose.production.yaml up --detach --build --remove-orphans
+  -f compose.production.yaml pull
+docker compose --project-name boardforge \
+  --env-file /opt/boardforge/shared/.env.production \
+  -f compose.production.yaml up --detach --no-build --remove-orphans
 ln -sfn /opt/boardforge/releases/PREVIOUS_SHA /opt/boardforge/current
 ```

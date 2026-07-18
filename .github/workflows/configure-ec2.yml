@@ -41,6 +41,14 @@ jobs:
           ssh -i ~/.ssh/boardforge -p "${EC2_SSH_PORT:-22}" "$EC2_USER@$EC2_HOST" \
             "SSH_PORT=${EC2_SSH_PORT:-22} bash -s" <<'REMOTE'
           set -Eeuo pipefail
+          if ! sudo swapon --show=NAME --noheadings | grep -qx '/swapfile'; then
+            sudo rm -f /swapfile
+          fi
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+          if command -v docker >/dev/null 2>&1; then
+            sudo docker builder prune --all --force || true
+          fi
           sudo apt-get update
           sudo apt-get install -y ca-certificates curl ufw
           sudo install -m 0755 -d /etc/apt/keyrings
@@ -54,14 +62,25 @@ jobs:
           sudo usermod -aG docker "$USER"
           sudo install -d -o "$USER" -g "$USER" /opt/boardforge/releases /opt/boardforge/shared
           if ! sudo swapon --show=NAME --noheadings | grep -qx '/swapfile'; then
-            if [ ! -f /swapfile ]; then
-              sudo fallocate -l 4G /swapfile
+            sudo rm -f /swapfile
+            available_mb=$(df -Pm / | awk 'NR == 2 { print $4 }')
+            reserve_mb=2048
+            desired_swap_mb=2048
+            swap_mb=$((available_mb - reserve_mb))
+            if [ "$swap_mb" -gt "$desired_swap_mb" ]; then
+              swap_mb=$desired_swap_mb
+            fi
+            if [ "$swap_mb" -ge 512 ]; then
+              sudo fallocate -l "${swap_mb}M" /swapfile
               sudo chmod 600 /swapfile
               sudo mkswap /swapfile
+              sudo swapon /swapfile
+            else
+              echo "Warning: less than 512 MB is available for swap; continuing without swap."
             fi
-            sudo swapon /swapfile
           fi
-          if ! grep -q '^/swapfile ' /etc/fstab; then
+          sudo sed -i '\|^/swapfile |d' /etc/fstab
+          if sudo swapon --show=NAME --noheadings | grep -qx '/swapfile'; then
             echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
           fi
           sudo ufw allow "$SSH_PORT/tcp"

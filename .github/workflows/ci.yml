@@ -40,4 +40,6 @@ jobs:
           API_DOMAIN: api.example.com
           POSTGRES_PASSWORD: ci-only-placeholder
           OPENAI_API_KEY: ci-only-placeholder
+          SERVER_IMAGE: boardforge-server:ci
+          WEB_IMAGE: boardforge-web:ci
         run: docker compose --env-file .env.example -f compose.production.yaml config --quiet

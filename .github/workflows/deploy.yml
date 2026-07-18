@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
   group: production
@@ -39,6 +40,15 @@ jobs:
         with:
           ref: ${{ steps.revision.outputs.sha }}
 
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
       - name: Validate required secrets
         env:
           APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
@@ -57,6 +67,28 @@ jobs:
           test -n "$OPENAI_API_KEY"
           test -n "$POSTGRES_PASSWORD"
 
+      - name: Build and publish server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/server/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/boardforge-server:${{ steps.revision.outputs.sha }}
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=max,scope=server
+
+      - name: Build and publish web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/boardforge-web:${{ steps.revision.outputs.sha }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://${{ secrets.API_DOMAIN }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
       - name: Prepare deployment files
         env:
           APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
@@ -68,6 +100,9 @@ jobs:
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           OPENAI_REVIEW_MODEL: ${{ secrets.OPENAI_REVIEW_MODEL }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          RELEASE_SHA: ${{ steps.revision.outputs.sha }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GHCR_TOKEN: ${{ github.token }}
         run: |
           install -m 700 -d ~/.ssh
           printf '%s\n' "$EC2_SSH_PRIVATE_KEY" > ~/.ssh/boardforge
@@ -81,8 +116,12 @@ jobs:
             printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
             printf 'OPENAI_MODEL=%s\n' "${OPENAI_MODEL:-gpt-5.6-terra}"
             printf 'OPENAI_REVIEW_MODEL=%s\n' "${OPENAI_REVIEW_MODEL:-gpt-5.6-luna}"
+            printf 'SERVER_IMAGE=ghcr.io/%s/boardforge-server:%s\n' "$REPOSITORY_OWNER" "$RELEASE_SHA"
+            printf 'WEB_IMAGE=ghcr.io/%s/boardforge-web:%s\n' "$REPOSITORY_OWNER" "$RELEASE_SHA"
           } > /tmp/boardforge.env
           chmod 600 /tmp/boardforge.env
+          printf '%s' "$GHCR_TOKEN" > /tmp/ghcr-token
+          chmod 600 /tmp/ghcr-token
 
       - name: Upload release
         env:
@@ -90,31 +129,33 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER }}
           EC2_SSH_PORT: ${{ secrets.EC2_SSH_PORT }}
           RELEASE_SHA: ${{ steps.revision.outputs.sha }}
+          GHCR_USER: ${{ github.actor }}
         run: |
           port="${EC2_SSH_PORT:-22}"
           scp -i ~/.ssh/boardforge -P "$port" /tmp/boardforge-release.tar.gz "$EC2_USER@$EC2_HOST:/tmp/boardforge-release.tar.gz"
           scp -i ~/.ssh/boardforge -P "$port" /tmp/boardforge.env "$EC2_USER@$EC2_HOST:/tmp/boardforge.env"
+          scp -i ~/.ssh/boardforge -P "$port" /tmp/ghcr-token "$EC2_USER@$EC2_HOST:/tmp/ghcr-token"
           ssh -i ~/.ssh/boardforge -p "$port" "$EC2_USER@$EC2_HOST" \
-            "RELEASE_SHA=$RELEASE_SHA bash -s" <<'REMOTE'
+            "RELEASE_SHA=$RELEASE_SHA GHCR_USER=$GHCR_USER bash -s" <<'REMOTE'
           set -Eeuo pipefail
+          trap 'rm -f /tmp/boardforge-release.tar.gz /tmp/boardforge.env /tmp/ghcr-token' EXIT
           release="/opt/boardforge/releases/$RELEASE_SHA"
           mkdir -p "$release"
           tar -xzf /tmp/boardforge-release.tar.gz -C "$release"
           install -m 600 /tmp/boardforge.env /opt/boardforge/shared/.env.production
           cd "$release"
           compose() {
-            COMPOSE_PARALLEL_LIMIT=1 docker compose \
+            docker compose \
               --project-name boardforge \
               --env-file /opt/boardforge/shared/.env.production \
               -f compose.production.yaml "$@"
           }
-          compose pull postgres caddy
-          compose build server
-          compose build web
+          docker login ghcr.io --username "$GHCR_USER" --password-stdin < /tmp/ghcr-token
+          compose pull
           compose up --detach --no-build --remove-orphans
+          docker logout ghcr.io
           ln -sfn "$release" /opt/boardforge/current
           docker image prune -f
-          rm -f /tmp/boardforge-release.tar.gz /tmp/boardforge.env
           REMOTE
 
       - name: Verify deployment

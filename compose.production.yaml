@@ -15,9 +15,7 @@ services:
       - boardforge-postgres:/var/lib/postgresql/data
 
   server:
-    build:
-      context: .
-      dockerfile: apps/server/Dockerfile
+    image: ${SERVER_IMAGE:?SERVER_IMAGE is required}
     restart: unless-stopped
     environment:
       PORT: 4000
@@ -35,11 +33,7 @@ services:
         condition: service_healthy
 
   web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: https://${API_DOMAIN:?API_DOMAIN is required}
+    image: ${WEB_IMAGE:?WEB_IMAGE is required}
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: https://${API_DOMAIN}
