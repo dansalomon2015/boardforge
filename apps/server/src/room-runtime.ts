@@ -188,7 +188,14 @@ export function viewFor(room: Room, playerId: string): RoomView {
     return view;
   }
   if (room.state.template === "composed" && room.spec.template === "composed") {
-    return projectComposedGameState(room.state, room.spec, players, room.code, playerId);
+    const view = projectComposedGameState(room.state, room.spec, players, room.code, playerId);
+    return {
+      ...view,
+      teams: view.teams.map((team) => ({
+        ...team,
+        ...(room.gameNightTeamPresentationByGameTeam.get(team.id) ?? {}),
+      })),
+    };
   }
   if (room.state.template !== "composed" && room.spec.template !== "composed") {
     return projectGameState(room.state, room.spec, players, room.code, playerId);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 import type { ComposedGameView, GameAction, JoinRoomResult, RoomView, SocketAck } from "@boardforge/shared";
 import { ComposedStageRouter } from "./composed-stages";
@@ -13,6 +13,7 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
+  const router = useRouter();
   const code = params.code.toUpperCase();
   const socketRef = useRef<Socket | null>(null);
   const viewRef = useRef<RoomView | null>(null);
@@ -22,10 +23,12 @@ export default function RoomPage() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [gameNightCode, setGameNightCode] = useState<string | null>(null);
   const [roomExperienceId, setRoomExperienceId] = useState<ComposedGameView["experienceId"] | undefined>();
 
   function saveParentGameNightSession(result: JoinRoomResult, playerName: string) {
     if (!result.gameNightId) return;
+    if (result.gameNightCode) setGameNightCode(result.gameNightCode);
     saveGameNightSession(result.gameNightId, {
       playerId: result.playerId,
       reconnectToken: result.reconnectToken,
@@ -84,6 +87,15 @@ export default function RoomPage() {
   useEffect(() => {
     viewRef.current = view;
   }, [view]);
+
+  const completedGameNightRoom = view?.kind === "composed" && view.status === "completed";
+  useEffect(() => {
+    if (!gameNightCode || !completedGameNightRoom) return;
+    const returnTimer = window.setTimeout(() => {
+      router.replace(`/game-night/${gameNightCode}?returned=1`);
+    }, 5_000);
+    return () => window.clearTimeout(returnTimer);
+  }, [completedGameNightRoom, gameNightCode, router]);
 
   function join(event: FormEvent) {
     event.preventDefault();
@@ -289,7 +301,13 @@ export default function RoomPage() {
         </section>
       ) : (
         <section className="game-layout">
-          <GameStage view={view} isHost={Boolean(self?.isHost)} pending={pending} sendAction={sendAction} />
+          <GameStage
+            view={view}
+            isHost={Boolean(self?.isHost)}
+            pending={pending}
+            gameNightCode={gameNightCode}
+            sendAction={sendAction}
+          />
           <PlayerRail view={view} />
         </section>
       )}
@@ -433,11 +451,13 @@ function GameStage({
   view,
   isHost,
   pending,
+  gameNightCode,
   sendAction,
 }: {
   view: Exclude<RoomView, { kind: "lobby" }>;
   isHost: boolean;
   pending: boolean;
+  gameNightCode: string | null;
   sendAction: (action: GameAction) => void;
 }) {
   if (view.kind === "hidden_roles") {
@@ -539,7 +559,15 @@ function GameStage({
   }
 
   if (view.kind === "composed") {
-    return <ComposedStageRouter view={view} isHost={isHost} pending={pending} sendAction={sendAction} />;
+    return (
+      <ComposedStageRouter
+        view={view}
+        isHost={isHost}
+        pending={pending}
+        gameNightCode={gameNightCode}
+        sendAction={sendAction}
+      />
+    );
   }
 
   const selfScore = view.scores[view.selfPlayerId] ?? 0;

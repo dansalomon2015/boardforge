@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { io as createSocketClient, type Socket } from "socket.io-client";
-import type { JoinRoomResult, SocketAck } from "@boardforge/shared";
+import type { ComposedGameView, JoinRoomResult, RoomView, SocketAck } from "@boardforge/shared";
 import { defaultMovieMimeSpec } from "@boardforge/game-spec";
 import { createBoardForgeServer } from "./app";
 
@@ -157,6 +157,7 @@ describe("realtime room gateway", () => {
     expect(childJoin.ok).toBe(true);
     if (!childJoin.ok) throw new Error(childJoin.error);
     expect(childJoin.data.gameNightId).toBe(host.view.id);
+    expect(childJoin.data.gameNightCode).toBe(host.view.code);
     expect(childJoin.data.playerId).toBe(host.playerId);
 
     const parentReconnect = await app.inject({
@@ -427,6 +428,94 @@ describe("realtime room gateway", () => {
         resolve,
       );
     });
-    expect(childJoin).toMatchObject({ ok: true, data: { playerId: guest.playerId, gameNightId: host.view.id } });
+    expect(childJoin).toMatchObject({
+      ok: true,
+      data: { playerId: guest.playerId, gameNightId: host.view.id, gameNightCode: host.view.code },
+    });
+
+    const hostChildJoin = await new Promise<SocketAck<JoinRoomResult>>((resolve) => {
+      client?.emit(
+        "room:join",
+        {
+          code: launched.data.roomCode,
+          name: "Maya",
+          playerId: host.playerId,
+          reconnectToken: host.reconnectToken,
+        },
+        resolve,
+      );
+    });
+    expect(hostChildJoin.ok).toBe(true);
+    if (!hostChildJoin.ok || !childJoin.ok) throw new Error("Both child-room joins must succeed.");
+
+    let hostRoomView: RoomView = hostChildJoin.data.view;
+    let guestRoomView: RoomView = childJoin.data.view;
+    client.on("room:state", (view: RoomView) => {
+      hostRoomView = view;
+    });
+    secondClient.on("room:state", (view: RoomView) => {
+      guestRoomView = view;
+    });
+    const started = await new Promise<SocketAck<{ view: RoomView }>>((resolve) => {
+      client?.emit("room:start", { code: launched.data.roomCode, playerId: host.playerId }, resolve);
+    });
+    expect(started.ok).toBe(true);
+    if (!started.ok) throw new Error(started.error);
+    hostRoomView = started.data.view;
+
+    const completedNight = waitForState<{
+      currentRoomCode: string | null;
+      history: Array<{ awards: Array<{ points: number }>; blueprintId: string }>;
+    }>(client, (view) => view.currentRoomCode === null && view.history.length === 1);
+
+    for (let turn = 0; turn < 80; turn += 1) {
+      if (hostRoomView.kind === "composed" && hostRoomView.status === "completed") break;
+      const actors = [
+        { socket: client, playerId: host.playerId, view: hostRoomView },
+        { socket: secondClient, playerId: guest.playerId, view: guestRoomView },
+      ];
+      const actor = actors.find(
+        (candidate): candidate is { socket: Socket; playerId: string; view: ComposedGameView } =>
+          candidate.view.kind === "composed" && candidate.view.availableActions.length > 0,
+      );
+      if (!actor) throw new Error(`No legal CineMimes action was available on turn ${turn}.`);
+      const available = actor.view.availableActions[0]!;
+      const previousRevision = actor.view.revision;
+      const nextState = new Promise<RoomView>((resolve) => {
+        const handler = (view: RoomView) => {
+          if (view.kind === "lobby" || view.revision <= previousRevision) return;
+          client?.off("room:state", handler);
+          resolve(view);
+        };
+        client?.on("room:state", handler);
+      });
+      const action = {
+        type: "COMPOSED_ACTION" as const,
+        actionId: available.id,
+        ...(available.id === "select_mimer" ? { payload: { targetPlayerId: actor.playerId } } : {}),
+      };
+      const submitted = await new Promise<SocketAck<{ revision: number }>>((resolve) => {
+        actor.socket.emit(
+          "game:action",
+          {
+            code: launched.data.roomCode,
+            playerId: actor.playerId,
+            expectedRevision: previousRevision,
+            idempotencyKey: crypto.randomUUID(),
+            action,
+          },
+          resolve,
+        );
+      });
+      expect(submitted.ok).toBe(true);
+      if (!submitted.ok) throw new Error(submitted.error);
+      hostRoomView = await nextState;
+    }
+
+    expect(hostRoomView).toMatchObject({ kind: "composed", status: "completed" });
+    expect(await completedNight).toMatchObject({
+      currentRoomCode: null,
+      history: [{ blueprintId: defaultMovieMimeSpec.id, awards: expect.arrayContaining([expect.any(Object)]) }],
+    });
   });
 });

@@ -8,10 +8,16 @@ import type { ComposedStageProps } from "./stage-shared";
 import { WordDuelStage } from "./word-duel-stage";
 import { WordTrapStage } from "./word-trap-stage";
 
-export function ComposedStageRouter({ view, isHost, pending, sendAction }: ComposedStageProps & { isHost: boolean }) {
+export function ComposedStageRouter({
+  view,
+  isHost,
+  pending,
+  gameNightCode,
+  sendAction,
+}: ComposedStageProps & { isHost: boolean; gameNightCode: string | null }) {
   switch (view.experienceId) {
     case "movie_mime":
-      return <MovieMimeStage view={view} pending={pending} sendAction={sendAction} />;
+      return <MovieMimeStage view={view} pending={pending} gameNightCode={gameNightCode} sendAction={sendAction} />;
     case "word_trap":
       return <WordTrapStage view={view} pending={pending} sendAction={sendAction} />;
     case "draw_battle":

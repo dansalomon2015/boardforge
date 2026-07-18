@@ -39,11 +39,14 @@ Completed:
 - Host-only captain selection and real-time child-room launch from the selected catalogue game.
 - Automatic identity handoff from the Game Night into the child room.
 - Persistent Game Night team names, colors, members and captains inside the child room, including after a server restart.
+- Automatic return from a completed child game to the shared Game Night board.
+- A server-authored result spotlight with normalized awards and an ordered, persistent game history.
+- A complete CineMimes vertical slice validated through all twenty rounds with two real-time players.
 
 Not completed:
 
-- Ordered game-history details and awarded-points UI.
-- Return-to-board flow, history animation and final podium.
+- A complete two-game browser regression covering the second launch and return.
+- End-of-night confirmation and final podium.
 
 ## P0 delivery plan
 
@@ -103,7 +106,7 @@ Acceptance tests:
 - Disconnecting marks a player offline without deleting them.
 - Teams are locked only while a child game is active.
 
-### Phase 4 — Persistent Game Night board (in progress)
+### Phase 4 — Persistent Game Night board (completed)
 
 Work:
 
@@ -129,7 +132,7 @@ Acceptance tests:
 - Compatibility changes when players or teams change.
 - Only the host can launch the next game.
 
-### Phase 5 — First complete vertical slice with CineMimes (in progress)
+### Phase 5 — First complete vertical slice with CineMimes (completed)
 
 Work:
 
@@ -147,7 +150,7 @@ Acceptance tests:
 - The game score does not leak into the global score.
 - Completion returns one normalized result to the Game Night.
 
-### Phase 6 — Result transition and replay loop
+### Phase 6 — Result transition and replay loop (in progress)
 
 Work:
 

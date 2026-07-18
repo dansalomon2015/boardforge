@@ -273,7 +273,20 @@ export type JoinRoomResult = {
   playerId: string;
   reconnectToken: string;
   gameNightId?: string | undefined;
+  gameNightCode?: string | undefined;
   view: RoomView;
+};
+
+export type GameNightHistoryEntry = {
+  ordinal: number;
+  gameInstanceId: string;
+  blueprintId: string;
+  winner: { kind: "players" | "teams" | "none"; ids: string[] };
+  awards: Array<{
+    teamId: string;
+    points: number;
+    reason: "win" | "tie";
+  }>;
 };
 
 export type GameNightView = {
@@ -294,6 +307,7 @@ export type GameNightView = {
   selectedBlueprintId: string | null;
   currentRoomCode: string | null;
   gamesPlayed: number;
+  history: GameNightHistoryEntry[];
 };
 
 export type JoinGameNightResult = {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { defaultMovieMimeSpec, defaultSecondSenseSpec } from "@boardforge/game-spec";
-import { createGameNightState, GameNightRuleError } from "@boardforge/game-engine";
+import { createGameNightState, GameNightRuleError, initializeComposedGame } from "@boardforge/game-engine";
 import type { GameNightSessionRecord } from "./persistence";
+import { viewForGameNight } from "./game-night-routes";
 import {
   createGameNightChildRoom,
   linkGameNightToChildRoom,
@@ -11,6 +12,7 @@ import {
   selectGameNightGame,
   selectGameNightTeam,
 } from "./game-night-runtime";
+import { viewFor } from "./room-runtime";
 
 const hostPlayerId = "00000000-0000-4000-8000-000000000001";
 const secondPlayerId = "00000000-0000-4000-8000-000000000002";
@@ -70,6 +72,19 @@ describe("game-night child rooms", () => {
     expect(room.gameNightTeamPresentationByGameTeam.get("team_2")).toMatchObject({ name: "Blue" });
     expect(room.state).toBeNull();
     expect(linkGameNightToChildRoom(night, room).currentRoomCode).toBe("CHILD2");
+
+    room.state = initializeComposedGame(
+      defaultMovieMimeSpec,
+      night.players,
+      "presentation-test",
+      Object.fromEntries(room.lobbyTeamByPlayer),
+      Object.fromEntries(room.lobbyCaptainByTeam),
+    );
+    const activeView = viewFor(room, hostPlayerId);
+    expect(activeView).toMatchObject({
+      kind: "composed",
+      teams: [expect.objectContaining({ name: "Red" }), expect.objectContaining({ name: "Blue" })],
+    });
   });
 
   it("does not require captain assignments for a game without captain-selected roles", () => {
@@ -192,6 +207,15 @@ describe("game-night child rooms", () => {
     expect(completed.currentRoomCode).toBeNull();
     expect(completed.state.scores).toEqual({ red: 0, blue: 3 });
     expect(completed.state.completedGames[0]?.winner).toEqual({ kind: "teams", ids: ["blue"] });
+    expect(viewForGameNight(completed, hostPlayerId).history).toEqual([
+      {
+        ordinal: 1,
+        gameInstanceId: "00000000-0000-4000-8000-000000000023",
+        blueprintId: "movie-blueprint",
+        winner: { kind: "teams", ids: ["blue"] },
+        awards: [{ teamId: "blue", points: 3, reason: "win" }],
+      },
+    ]);
     expect(recordCompletedChildGame(completed, room, completedState)).toEqual(completed);
   });
 });

@@ -467,6 +467,7 @@ export async function registerRealtimeGateway({
             playerId: resolvedPlayerId,
             reconnectToken: reconnectCredential.token,
             ...(room.gameNightId ? { gameNightId: room.gameNightId } : {}),
+            ...(parentGameNight ? { gameNightCode: parentGameNight.record.code } : {}),
             view,
           },
         });

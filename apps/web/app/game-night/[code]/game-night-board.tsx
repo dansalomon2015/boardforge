@@ -38,6 +38,15 @@ export function GameNightBoard({
   );
   const host = view.players.find((player) => player.isHost);
   const selectedGame = games.find((entry) => entry.id === view.selectedBlueprintId);
+  const latestResult = view.history[view.history.length - 1];
+  const latestAwards =
+    latestResult?.awards.map((award) => ({ ...award, team: view.teams.find((team) => team.id === award.teamId) })) ??
+    [];
+  const latestWinnerNames = latestAwards
+    .map((award) => award.team?.name)
+    .filter((name): name is string => Boolean(name));
+  const gameTitle = (blueprintId: string) =>
+    games.find((entry) => entry.id === blueprintId)?.game.title ?? "BoardForge Original";
 
   return (
     <main className={styles.boardPage}>
@@ -64,7 +73,9 @@ export function GameNightBoard({
             <h1>The night is on.</h1>
             <span>
               {view.isHost
-                ? "Your teams are set. Choose the game that will write the first score."
+                ? view.gamesPlayed
+                  ? "The standings are live. Choose the next game and keep the night moving."
+                  : "Your teams are set. Choose the game that will write the first score."
                 : `${host?.name ?? "The host"} is setting up what comes next.`}
             </span>
           </div>
@@ -74,6 +85,44 @@ export function GameNightBoard({
             <span>{view.gamesPlayed === 1 ? "game played" : "games played"}</span>
           </div>
         </header>
+
+        {latestResult ? (
+          <section className={styles.resultSpotlight}>
+            <div className={styles.resultMark}>
+              <small>Round {latestResult.ordinal.toString().padStart(2, "0")}</small>
+              <strong>✦</strong>
+            </div>
+            <div className={styles.resultCopy}>
+              <small>{gameTitle(latestResult.blueprintId)} · Final result</small>
+              <h2>
+                {latestWinnerNames.length > 1
+                  ? `${latestWinnerNames.join(" & ")} share the win.`
+                  : latestWinnerNames.length === 1
+                    ? `${latestWinnerNames[0]} takes the round.`
+                    : "A great game, all the way to the end."}
+              </h2>
+              <p>The result is locked and the Game Night standings are up to date.</p>
+            </div>
+            <div className={styles.resultAwards}>
+              {latestAwards.length ? (
+                latestAwards.map((award) => (
+                  <span key={award.teamId} style={{ "--team-color": award.team?.color ?? "#ffd54a" } as CSSProperties}>
+                    <i />
+                    <small>{award.team?.name ?? "Team"}</small>
+                    <strong>+{award.points}</strong>
+                    <b>pts</b>
+                  </span>
+                ))
+              ) : (
+                <span>
+                  <small>Global score</small>
+                  <strong>—</strong>
+                  <b>No points</b>
+                </span>
+              )}
+            </div>
+          </section>
+        ) : null}
 
         <div className={styles.boardGrid}>
           <section className={styles.standingsPanel}>
@@ -95,7 +144,9 @@ export function GameNightBoard({
                   >
                     <div className={styles.scoreRank}>
                       <i>{index + 1}</i>
-                      <span>{index === 0 ? "Leading" : "In the chase"}</span>
+                      <span>
+                        {index === 0 ? "Leading" : team.score === ranking[0]?.score ? "Tied for lead" : "In the chase"}
+                      </span>
                     </div>
                     <div className={styles.scoreValue}>
                       <strong>{team.score}</strong>
@@ -157,6 +208,46 @@ export function GameNightBoard({
             )}
           </aside>
         </div>
+        {view.history.length ? (
+          <section className={styles.historyPanel}>
+            <header>
+              <div>
+                <small>Tonight&apos;s story</small>
+                <h2>Every game leaves a mark.</h2>
+              </div>
+              <span>{view.history.length.toString().padStart(2, "0")} results saved</span>
+            </header>
+            <div className={styles.historyList}>
+              {[...view.history].reverse().map((result) => {
+                const awards = result.awards.map((award) => ({
+                  ...award,
+                  team: view.teams.find((team) => team.id === award.teamId),
+                }));
+                return (
+                  <article key={result.gameInstanceId}>
+                    <i>{result.ordinal.toString().padStart(2, "0")}</i>
+                    <div>
+                      <small>Game {result.ordinal}</small>
+                      <strong>{gameTitle(result.blueprintId)}</strong>
+                    </div>
+                    <div className={styles.historyAwards}>
+                      {awards.length ? (
+                        awards.map((award) => (
+                          <span key={award.teamId}>
+                            {award.team?.name ?? "Team"} <b>+{award.points}</b>
+                          </span>
+                        ))
+                      ) : (
+                        <span>No global points</span>
+                      )}
+                    </div>
+                    <b>Recorded ✓</b>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
         {!view.currentRoomCode ? (
           <GameNightCatalog
             games={games}

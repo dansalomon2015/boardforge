@@ -8,10 +8,12 @@ import movieMimeStyles from "./movie-mime.module.css";
 export function MovieMimeStage({
   view,
   pending,
+  gameNightCode,
   sendAction,
 }: {
   view: ComposedGameView;
   pending: boolean;
+  gameNightCode: string | null;
   sendAction: (action: GameAction) => void;
 }) {
   const theme = themeForRoom(view.theme);
@@ -71,9 +73,16 @@ export function MovieMimeStage({
           <span>That is a wrap</span>
           <div className={movieMimeStyles.trophy}>✦</div>
           <h1>{winnerNames.join(" & ") || "Perfect tie"}</h1>
-          <p>{winnerNames.length ? "wins tonight’s box office." : "The teams share top billing."}</p>
-          <a href="/">
-            Back to the collection <b>→</b>
+          <p>
+            {winnerNames.length > 1
+              ? "share tonight’s box office."
+              : winnerNames.length === 1
+                ? "wins tonight’s box office."
+                : "The teams share top billing."}
+          </p>
+          {gameNightCode ? <small>Global score saved · returning automatically</small> : null}
+          <a href={gameNightCode ? `/game-night/${gameNightCode}?returned=1` : "/"}>
+            {gameNightCode ? "See the night standings" : "Back to the collection"} <b>→</b>
           </a>
         </section>
       ) : view.phase.id === "select_mimer" ? (

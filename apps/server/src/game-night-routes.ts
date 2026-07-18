@@ -83,6 +83,7 @@ function allocateGameNightCode(gameNights: GameNightRuntimeMap): string {
 export function viewForGameNight(record: GameNightSessionRecord, playerId: string): GameNightView {
   const self = record.players.find((player) => player.id === playerId);
   if (!self) throw new GameNightRuleError("Unknown game-night player.");
+  const scoreEventById = new Map(record.state.scoreEvents.map((event) => [event.id, event]));
   return {
     id: record.id,
     code: record.code,
@@ -101,6 +102,16 @@ export function viewForGameNight(record: GameNightSessionRecord, playerId: strin
     selectedBlueprintId: record.state.selectedBlueprintId,
     currentRoomCode: record.currentRoomCode,
     gamesPlayed: record.state.completedGames.length,
+    history: record.state.completedGames.map((game, index) => ({
+      ordinal: index + 1,
+      gameInstanceId: game.gameInstanceId,
+      blueprintId: game.blueprintId,
+      winner: structuredClone(game.winner),
+      awards: game.scoreEventIds.flatMap((eventId) => {
+        const event = scoreEventById.get(eventId);
+        return event ? [{ teamId: event.teamId, points: event.points, reason: event.reason }] : [];
+      }),
+    })),
   };
 }
 
