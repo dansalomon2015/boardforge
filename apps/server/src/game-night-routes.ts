@@ -1,7 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { BoardGameSpec } from "@boardforge/game-spec";
 import { createGameNightState, GameNightRuleError } from "@boardforge/game-engine";
-import type { GameNightView, JoinGameNightResult } from "@boardforge/shared";
+import type {
+  GameNightCatalogEntry,
+  GameNightCompatibility,
+  GameNightView,
+  JoinGameNightResult,
+} from "@boardforge/shared";
+import { gameSummary } from "./game-catalog";
+import { evaluateGameNightCompatibility } from "./game-night-compatibility";
 import { createGameNightChildRoom, linkGameNightToChildRoom } from "./game-night-runtime";
 import type { BlueprintStore, GameNightSessionRecord } from "./persistence";
 import type { Room } from "./room-runtime";
@@ -68,7 +76,14 @@ type GameNightRouteDependencies = {
   blueprintStore: BlueprintStore;
   rooms: Map<string, Room>;
   createRoomCode: () => string;
+  gameNightCatalog: BoardGameSpec[];
 };
+
+class GameNightLaunchError extends GameNightRuleError {
+  constructor(readonly compatibility: GameNightCompatibility) {
+    super(compatibility.reasons[0]?.message ?? "This game is not compatible with the current Game Night.");
+  }
+}
 
 function allocateGameNightCode(gameNights: GameNightRuntimeMap): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -129,7 +144,7 @@ function gameNightError(error: unknown): { status: number; message: string } {
 
 export async function registerGameNightRoutes(
   app: FastifyInstance,
-  { blueprintStore, rooms, createRoomCode }: GameNightRouteDependencies,
+  { blueprintStore, rooms, createRoomCode, gameNightCatalog }: GameNightRouteDependencies,
 ): Promise<GameNightRuntimeMap> {
   const gameNights: GameNightRuntimeMap = new Map();
   for (const persisted of await blueprintStore.loadGameNights()) {
@@ -186,6 +201,23 @@ export async function registerGameNightRoutes(
       teams: runtime.record.state.teams.map((team) => ({ id: team.id, name: team.name, color: team.color })),
       currentRoomCode: runtime.record.currentRoomCode,
     };
+  });
+
+  app.get<{ Params: { code: string } }>("/api/game-nights/:code/catalog", async (request, reply) => {
+    const runtime = gameNights.get(request.params.code.toUpperCase());
+    if (!runtime) return reply.code(404).send({ error: "Game night not found." });
+    const games = await Promise.all(
+      gameNightCatalog.map(async (catalogSpec): Promise<GameNightCatalogEntry> => {
+        const blueprint = await blueprintStore.get(catalogSpec.id);
+        const spec = blueprint?.spec ?? catalogSpec;
+        return {
+          id: spec.id,
+          game: gameSummary(spec),
+          compatibility: evaluateGameNightCompatibility(runtime.record, spec, blueprint?.status === "release_ready"),
+        };
+      }),
+    );
+    return { games };
   });
 
   app.post<{ Params: { code: string } }>("/api/game-nights/:code/join", async (request, reply) => {
@@ -304,7 +336,13 @@ export async function registerGameNightRoutes(
         if (parsed.data.playerId !== runtime.record.hostPlayerId)
           throw new GameNightRuleError("Only the host can launch a game.");
         const blueprint = await blueprintStore.get(parsed.data.blueprintId);
-        if (blueprint?.status !== "release_ready") throw new GameNightRuleError("This game is not ready to play.");
+        if (!blueprint) throw new GameNightRuleError("Game not found.");
+        const compatibility = evaluateGameNightCompatibility(
+          runtime.record,
+          blueprint.spec,
+          blueprint.status === "release_ready",
+        );
+        if (!compatibility.compatible) throw new GameNightLaunchError(compatibility);
         const room = createGameNightChildRoom({
           session: runtime.record,
           blueprintId: blueprint.id,
@@ -321,6 +359,9 @@ export async function registerGameNightRoutes(
       });
       return reply.code(201).send({ code: launched.code, gameInstanceId: launched.gameInstanceId });
     } catch (error) {
+      if (error instanceof GameNightLaunchError) {
+        return reply.code(409).send({ error: error.message, compatibility: error.compatibility });
+      }
       const failure = gameNightError(error);
       return reply.code(failure.status).send({ error: failure.message });
     }

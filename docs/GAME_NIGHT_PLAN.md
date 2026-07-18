@@ -24,12 +24,14 @@ Completed:
 - Shared reconnect credentials across a Game Night and its active child room.
 - Automatic, idempotent result transfer from a completed child room to the global score ledger.
 - Recovery-time result reconciliation if the server stops during the completion transition.
+- A shared compatibility evaluator for player count, team structure, team sizes and captain requirements.
+- A Game Night catalogue API with actionable compatibility reasons, enforced again at launch.
 - Backend APIs to create and join a Game Night, select teams and captains, and launch a child game.
 
 Not completed:
 
 - Shared real-time lobby and board UI.
-- Game compatibility catalogue and explanations.
+- Game compatibility catalogue UI and explanations.
 - Return-to-board flow, history animation and final podium.
 
 ## P0 delivery plan

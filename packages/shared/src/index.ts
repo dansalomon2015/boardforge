@@ -301,4 +301,33 @@ export type JoinGameNightResult = {
   view: GameNightView;
 };
 
+export type GameNightCompatibilityReason = {
+  code:
+    | "NOT_RELEASE_READY"
+    | "ACTIVE_GAME"
+    | "NOT_IN_CATALOG"
+    | "TOO_FEW_PLAYERS"
+    | "TOO_MANY_PLAYERS"
+    | "UNASSIGNED_PLAYERS"
+    | "TEAM_COUNT_MISMATCH"
+    | "TEAM_TOO_SMALL"
+    | "TEAM_TOO_LARGE"
+    | "UNEVEN_TEAMS"
+    | "CAPTAIN_REQUIRED";
+  message: string;
+};
+
+export type GameNightCompatibility = {
+  compatible: boolean;
+  scoring: "ranked" | "unsupported";
+  requiresCaptains: boolean;
+  reasons: GameNightCompatibilityReason[];
+};
+
+export type GameNightCatalogEntry = {
+  id: string;
+  game: GameSummary;
+  compatibility: GameNightCompatibility;
+};
+
 export type SocketAck<T> = { ok: true; data: T } | { ok: false; error: string };

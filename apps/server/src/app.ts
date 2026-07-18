@@ -115,7 +115,12 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
 
   registerBalanceRoutes(app, { llm, blueprintStore });
 
-  const gameNights = await registerGameNightRoutes(app, { blueprintStore, rooms, createRoomCode });
+  const gameNights = await registerGameNightRoutes(app, {
+    blueprintStore,
+    rooms,
+    createRoomCode,
+    gameNightCatalog: [defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec],
+  });
 
   app.post("/api/rooms", async (request, reply) => {
     const parsed = roomBodySchema.safeParse(request.body);

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { defaultMovieMimeSpec } from "@boardforge/game-spec";
+import { defaultMovieMimeSpec, defaultSecondSenseSpec } from "@boardforge/game-spec";
 import { createBoardForgeServer } from "./app";
 
 let activeApp: FastifyInstance | undefined;
@@ -73,6 +73,38 @@ describe("BoardForge HTTP application", () => {
       expect(response.statusCode).toBe(200);
     }
 
+    const waitingForCaptains = await app.inject({ method: "GET", url: `/api/game-nights/${code}/catalog` });
+    expect(waitingForCaptains.statusCode).toBe(200);
+    expect(waitingForCaptains.json().games).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: defaultMovieMimeSpec.id,
+          compatibility: expect.objectContaining({
+            compatible: false,
+            requiresCaptains: true,
+            reasons: expect.arrayContaining([expect.objectContaining({ code: "CAPTAIN_REQUIRED" })]),
+          }),
+        }),
+      ]),
+    );
+
+    const unsupportedLaunch = await app.inject({
+      method: "POST",
+      url: `/api/game-nights/${code}/games`,
+      payload: {
+        playerId: host.playerId,
+        reconnectToken: host.reconnectToken,
+        blueprintId: defaultSecondSenseSpec.id,
+      },
+    });
+    expect(unsupportedLaunch.statusCode).toBe(409);
+    expect(unsupportedLaunch.json()).toMatchObject({
+      compatibility: {
+        compatible: false,
+        reasons: expect.arrayContaining([expect.objectContaining({ code: "NOT_IN_CATALOG" })]),
+      },
+    });
+
     for (const captain of [
       { teamId: "team_1", captainPlayerId: host.playerId },
       { teamId: "team_2", captainPlayerId: guest.playerId },
@@ -88,6 +120,10 @@ describe("BoardForge HTTP application", () => {
       });
       expect(response.statusCode).toBe(200);
     }
+
+    const compatibleCatalog = await app.inject({ method: "GET", url: `/api/game-nights/${code}/catalog` });
+    const movie = compatibleCatalog.json().games.find((game: { id: string }) => game.id === defaultMovieMimeSpec.id);
+    expect(movie.compatibility).toMatchObject({ compatible: true, reasons: [] });
 
     const launched = await app.inject({
       method: "POST",
