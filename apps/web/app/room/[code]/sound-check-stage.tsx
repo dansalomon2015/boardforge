@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ComposedGameView, GameAction } from "@boardforge/shared";
 import { GameSurface, TextAnswer } from "../../../components/game-ui";
 import { GameNightReturn } from "./game-night-return";
@@ -21,6 +21,7 @@ export function SoundCheckStage({
   sendAction: (action: GameAction) => void;
 }) {
   const [guess, setGuess] = useState("");
+  const [guessStatus, setGuessStatus] = useState<"idle" | "checking" | "miss">("idle");
   const theme = themeForRoom(view.theme);
   const activePlayer = view.players.find((player) => player.id === view.activePlayerId);
   const isActivePlayer = view.selfPlayerId === view.activePlayerId;
@@ -39,6 +40,11 @@ export function SoundCheckStage({
     view.winner?.kind === "teams"
       ? view.winner.ids.map((id) => view.teams.find((team) => team.id === id)?.name).filter(Boolean)
       : [];
+
+  useEffect(() => {
+    if (guessStatus !== "checking" || pending) return;
+    setGuessStatus(view.phase.id === "performing" ? "miss" : "idle");
+  }, [guessStatus, pending, view.phase.id]);
 
   function perform(actionId: string, payload?: Extract<GameAction, { type: "COMPOSED_ACTION" }>["payload"]) {
     sendAction({ type: "COMPOSED_ACTION", actionId, ...(payload ? { payload } : {}) });
@@ -194,19 +200,33 @@ export function SoundCheckStage({
                   <h2>Name that sound.</h2>
                   <p>Be the first to name it and win a point for your team.</p>
                   {guessAction ? (
-                    <TextAnswer
-                      theme={theme}
-                      label="Your guess"
-                      placeholder="What do you hear?"
-                      value={guess}
-                      onChange={setGuess}
-                      submitLabel="That’s it"
-                      disabled={pending}
-                      onSubmit={() => {
-                        perform(guessAction.id, { text: guess });
-                        setGuess("");
-                      }}
-                    />
+                    <>
+                      <TextAnswer
+                        className={soundCheckStyles.guessForm}
+                        theme={theme}
+                        label="Your guess"
+                        placeholder="What do you hear?"
+                        value={guess}
+                        onChange={(value) => {
+                          setGuess(value);
+                          setGuessStatus("idle");
+                        }}
+                        submitLabel="That’s it"
+                        disabled={pending}
+                        onSubmit={() => {
+                          setGuessStatus("checking");
+                          perform(guessAction.id, { text: guess });
+                          setGuess("");
+                        }}
+                      />
+                      <p className={soundCheckStyles.guessFeedback} aria-live="polite">
+                        {guessStatus === "checking"
+                          ? "Checking your answer…"
+                          : guessStatus === "miss"
+                            ? "Not a match yet. Keep listening."
+                            : "Type what you think the performer is imitating."}
+                      </p>
+                    </>
                   ) : (
                     <span className={soundCheckStyles.waiting}>Performers leave the guessing to everyone else.</span>
                   )}
