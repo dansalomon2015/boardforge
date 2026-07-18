@@ -2,27 +2,39 @@
 
 > Bring game night back, wherever everyone is.
 
-The internet is remarkably good at putting people on the same call. It is less successful at recreating the spontaneity, suspense and shared laughter of a game night when family and friends cannot be in the same room.
+The internet makes it easy to see and hear the people we care about. But a video call rarely feels like a real evening together. The little moments are missing: the nervous pause before an answer, the laughter when a mime goes terribly wrong, and the friendly arguments over who really won.
 
-BoardForge closes that gap. It is an immersive, mobile-first tabletop for playing together from anywhere. A host chooses a game and its atmosphere, shares a room code, and every player joins from their own device. Each screen becomes part of the table: revealing private clues, coordinating teams, capturing gestures and keeping every turn synchronized in real time.
+BoardForge was created to bring those moments back. It is a collection of social games made for friends and families, whether everyone is sitting around the same table or joining from different places.
 
-The experience is designed to feel like a shared place rather than another video-call utility. Twenty visual worlds let the group shape the mood of the evening, while carefully crafted interactions preserve the tension and delight of playing face to face.
+A host picks a game, chooses an atmosphere and shares a room code. Everyone joins from their own phone or computer, with nothing to install. From that point on, every screen becomes part of the game: one player may receive a secret word, another may become the performer, and the whole room stays together through every turn, timer and score.
 
-BoardForge is built for the OpenAI Build Week hackathon. Its games use authored and deterministic mechanics instead of AI-generated rules. OpenAI personalizes bounded creative content and supports virtual playtesting and balance critique, while the server remains authoritative over secrets, turns, timers, scores and winners.
+Each game has its own personality, visual world and way of using the device in your hand. OpenAI helps make a session feel personal by preparing content around the group’s chosen mood or topic. The rules themselves are carefully designed and tested, so the experience stays reliable and easy to understand.
+
+BoardForge was built for the OpenAI Build Week hackathon around one simple idea: distance should not make game night feel distant.
 
 ## Included games
 
-- Movie Mime - team charades with AI-curated movie cards.
-- Word Trap - describe a secret word without using its forbidden clues.
-- Draw Battle - fast team drawing rounds.
-- Sound Check - imitate sounds and let your team guess.
-- Story Chain - build a shared story around private twists.
-- Word Duel - discover your opponent's hidden word one letter at a time.
-- Second Sense - an elimination game of timing and intuition.
+- **Movie Mime** — perform a movie without saying a word while your team races to guess it.
+- **Word Trap** — help your team find a secret word without using any of the forbidden clues.
+- **Draw Battle** — turn a secret idea into a drawing before the clock runs out.
+- **Sound Check** — recreate a sound and hope your team understands what you mean.
+- **Story Chain** — write one story together, with private twists that send it in unexpected directions.
+- **Word Duel** — uncover your opponent’s hidden word one letter at a time before they uncover yours.
+- **Second Sense** — trust your sense of time and survive each round by stopping closest to the target.
 
-Twenty visual themes can be applied across the collection.
+The collection includes twenty visual themes, so the same game can feel playful, cinematic, nostalgic or completely chaotic depending on the night.
 
-## Safety and architecture
+## How a game night works
+
+1. Choose the game you want to play.
+2. Pick a theme and personalize the content when the game allows it.
+3. Create a private room and share its six-character code.
+4. Let everyone join from their own device.
+5. Follow the instructions on screen and play together in real time.
+
+## How it is built
+
+BoardForge uses AI to prepare creative content, not to invent or execute game logic. Every game runs through a deterministic TypeScript engine, and the server decides what happens next. This keeps the rules consistent and prevents private information from appearing on the wrong player’s screen.
 
 - Strict Zod schemas reject unknown or invalid structured content.
 - The server-authoritative engine owns state transitions, timers, scores and winners.
@@ -57,7 +69,7 @@ pnpm dev
 
 Open the web app at `http://localhost:3000`; API health is available at `http://localhost:4000/health`.
 
-The provider is explicit:
+BoardForge can run with either of these content providers:
 
 - `LLM_PROVIDER=openai` uses the OpenAI Responses API for bounded game content and review.
 - `LLM_PROVIDER=fake` uses deterministic local catalogues for offline development and repeatable tests.
@@ -92,7 +104,7 @@ Production uses the same container boundaries as local development on a single U
 
 ## Status
 
-The seven-game local collection, deterministic simulations, real-time rooms, persistence, reconnect flow and production builds are operational. The remaining hackathon work is quality hardening, browser regression coverage, hosted deployment and submission evidence.
+BoardForge currently includes seven playable games. Private rooms, real-time play, reconnection, persistent game state and production container builds are working. The project is now focused on polishing the experience, strengthening browser coverage and preparing the final hackathon demonstration.
 
 ## License
 
