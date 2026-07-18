@@ -57,7 +57,7 @@ const captainBodySchema = credentialsSchema
   .strict();
 const launchBodySchema = credentialsSchema.extend({ blueprintId: z.string().trim().min(1).max(160) }).strict();
 
-type GameNightRuntime = {
+export type GameNightRuntime = {
   record: GameNightSessionRecord;
   operationQueue: Promise<void>;
 };
@@ -113,7 +113,7 @@ function assertCredential(record: GameNightSessionRecord, playerId: string, reco
   }
 }
 
-function enqueueGameNight<T>(runtime: GameNightRuntime, operation: () => Promise<T>): Promise<T> {
+export function enqueueGameNight<T>(runtime: GameNightRuntime, operation: () => Promise<T>): Promise<T> {
   const result = runtime.operationQueue.then(operation, operation);
   runtime.operationQueue = result.then(
     () => undefined,

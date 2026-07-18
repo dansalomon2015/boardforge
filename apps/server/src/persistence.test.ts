@@ -144,8 +144,8 @@ describe("MemoryBlueprintStore", () => {
     });
     const completedGame = nextState.completedGames[0]!;
     const resultingSession = { ...initialSession, state: nextState };
-    await store.appendGameNightResult(resultingSession, completedGame, nextState.scoreEvents);
-    await store.appendGameNightResult(resultingSession, completedGame, nextState.scoreEvents);
+    await store.appendGameNightResult(resultingSession, completedGame, nextState.scoreEvents, "CHILD2");
+    await store.appendGameNightResult(resultingSession, completedGame, nextState.scoreEvents, "CHILD2");
 
     const restored = (await store.loadGameNights())[0];
     expect(restored?.state.scores).toEqual({ red: 3, blue: 0 });

@@ -20,7 +20,8 @@ import type {
   SocketAck,
 } from "@boardforge/shared";
 import type { RealtimeRoomStore, RoomEventRecord } from "./persistence";
-import type { GameNightRuntimeMap } from "./game-night-routes";
+import { enqueueGameNight, type GameNightRuntimeMap } from "./game-night-routes";
+import { recordCompletedChildGame } from "./game-night-runtime";
 import { issueReconnectToken, reconnectTokenMatches } from "./session-token";
 import {
   checkpointChecksumMatches,
@@ -65,6 +66,21 @@ export async function registerRealtimeGateway({
 
   const gameNightForRoom = (room: Room) =>
     room.gameNightId ? [...gameNights.values()].find((runtime) => runtime.record.id === room.gameNightId) : undefined;
+
+  async function synchronizeCompletedGameNight(room: Room, state: ComposedGameState): Promise<void> {
+    if (!room.gameNightId || state.status !== "completed") return;
+    const runtime = gameNightForRoom(room);
+    if (!runtime) throw new GameRuleError("The parent Game Night is unavailable.");
+    await enqueueGameNight(runtime, async () => {
+      const nextRecord = recordCompletedChildGame(runtime.record, room, state);
+      const completedGame = nextRecord.state.completedGames.find((game) => game.gameInstanceId === room.gameInstanceId);
+      if (!completedGame) throw new GameRuleError("The completed game was not added to the Game Night history.");
+      const scoreEventIds = new Set(completedGame.scoreEventIds);
+      const scoreEvents = nextRecord.state.scoreEvents.filter((event) => scoreEventIds.has(event.id));
+      await blueprintStore.appendGameNightResult(nextRecord, completedGame, scoreEvents, room.code);
+      runtime.record = nextRecord;
+    });
+  }
 
   function acknowledge<T>(ack: ((response: SocketAck<T>) => void) | undefined, response: SocketAck<T>): void {
     ack?.(response);
@@ -148,6 +164,7 @@ export async function registerRealtimeGateway({
         };
         rooms.set(room.code, room);
         await blueprintStore.saveRoom(persistedRoom(room));
+        if (state?.template === "composed") await synchronizeCompletedGameNight(room, state);
       } catch (error) {
         app.log.error({ roomCode: record.code, err: error }, "Persisted room failed validation and was not restored");
       }
@@ -423,6 +440,7 @@ export async function registerRealtimeGateway({
             if (timingKind === "timing_start") room.timingStartedAtByPlayer.set(player.id, receivedAt);
             if (timingKind === "timing_stop") room.timingStartedAtByPlayer.delete(player.id);
             if (timingKind === "timing_advance") room.timingStartedAtByPlayer.clear();
+            if (nextState.template === "composed") await synchronizeCompletedGameNight(room, nextState);
             return { revision: nextState.revision, changed: true };
           });
           if (result.changed) emitRoom(room);

@@ -111,6 +111,7 @@ export interface BlueprintStore {
     record: GameNightSessionRecord,
     completedGame: GameNightCompletedGame,
     scoreEvents: GameNightScoreEvent[],
+    roomCode: string,
   ): Promise<void>;
   health(): Promise<boolean>;
   close(): Promise<void>;
@@ -132,7 +133,7 @@ export type BalanceWorkflowStore = Pick<
 
 export type RealtimeRoomStore = Pick<
   BlueprintStore,
-  "get" | "loadRooms" | "saveRoom" | "appendRoomEvent" | "findRoomEvent" | "saveGameNight"
+  "get" | "loadRooms" | "saveRoom" | "appendRoomEvent" | "findRoomEvent" | "saveGameNight" | "appendGameNightResult"
 >;
 
 function parseSpec(input: unknown): BoardGameSpec {
@@ -334,6 +335,7 @@ export class MemoryBlueprintStore implements BlueprintStore {
     input: GameNightSessionRecord,
     completedGame: GameNightCompletedGame,
     scoreEvents: GameNightScoreEvent[],
+    _roomCode: string,
   ): Promise<void> {
     const record = parseGameNightSession(input);
     if (!this.records.has(completedGame.blueprintId))
@@ -922,6 +924,7 @@ class PostgresBlueprintStore implements BlueprintStore {
     input: GameNightSessionRecord,
     completedGame: GameNightCompletedGame,
     scoreEvents: GameNightScoreEvent[],
+    roomCode: string,
   ): Promise<void> {
     const record = parseGameNightSession(input);
     const persistedGame = record.state.completedGames.find(
@@ -968,7 +971,7 @@ class PostgresBlueprintStore implements BlueprintStore {
           record.id,
           record.state.completedGames.findIndex((game) => game.gameInstanceId === completedGame.gameInstanceId) + 1,
           completedGame.blueprintId,
-          record.currentRoomCode,
+          roomCode,
           completedGame.resultIdempotencyKey,
           JSON.stringify(completedGame.winner),
           JSON.stringify(completedGame.awardedTeamIds),

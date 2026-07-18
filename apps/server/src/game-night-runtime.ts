@@ -1,5 +1,10 @@
 import type { BoardGameSpec } from "@boardforge/game-spec";
-import { GameNightRuleError, validateComposedTeamSelection } from "@boardforge/game-engine";
+import {
+  GameNightRuleError,
+  recordGameNightResult,
+  validateComposedTeamSelection,
+  type ComposedGameState,
+} from "@boardforge/game-engine";
 import type { GameNightSessionRecord } from "./persistence";
 import type { Room } from "./room-runtime";
 
@@ -95,4 +100,37 @@ export function linkGameNightToChildRoom(
     currentRoomCode: room.code,
     state: { ...session.state, status: "playing" },
   };
+}
+
+export function recordCompletedChildGame(
+  session: GameNightSessionRecord,
+  room: Pick<Room, "blueprintId" | "code" | "gameInstanceId" | "gameNightId" | "gameNightTeamByGameTeam">,
+  state: Pick<ComposedGameState, "status" | "winner">,
+): GameNightSessionRecord {
+  if (!room.gameNightId || room.gameNightId !== session.id)
+    throw new GameNightRuleError("The room belongs to a different game night.");
+  if (!room.gameInstanceId) throw new GameNightRuleError("The child game has no game instance id.");
+  if (state.status !== "completed" || !state.winner)
+    throw new GameNightRuleError("The child game has not produced a final result.");
+
+  const winner =
+    state.winner.kind === "teams"
+      ? {
+          kind: "teams" as const,
+          ids: state.winner.ids.map((gameTeamId) => {
+            const gameNightTeamId = room.gameNightTeamByGameTeam.get(gameTeamId);
+            if (!gameNightTeamId)
+              throw new GameNightRuleError(`Game team ${gameTeamId} is not mapped to the parent game night.`);
+            return gameNightTeamId;
+          }),
+        }
+      : structuredClone(state.winner);
+  const nextState = recordGameNightResult(session.state, {
+    gameInstanceId: room.gameInstanceId,
+    blueprintId: room.blueprintId,
+    winner,
+    idempotencyKey: `result:${room.gameInstanceId}`,
+  });
+
+  return { ...session, state: nextState, currentRoomCode: null };
 }

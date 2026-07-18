@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { defaultMovieMimeSpec, defaultSecondSenseSpec } from "@boardforge/game-spec";
 import { createGameNightState, GameNightRuleError } from "@boardforge/game-engine";
 import type { GameNightSessionRecord } from "./persistence";
-import { createGameNightChildRoom, linkGameNightToChildRoom } from "./game-night-runtime";
+import { createGameNightChildRoom, linkGameNightToChildRoom, recordCompletedChildGame } from "./game-night-runtime";
 
 const hostPlayerId = "00000000-0000-4000-8000-000000000001";
 const secondPlayerId = "00000000-0000-4000-8000-000000000002";
@@ -100,5 +100,29 @@ describe("game-night child rooms", () => {
         gameInstanceId: "00000000-0000-4000-8000-000000000022",
       }),
     ).toThrow("Finish the current game");
+  });
+
+  it("translates a child-game winner into the persistent team and releases the board", () => {
+    const night = session();
+    const room = createGameNightChildRoom({
+      session: night,
+      blueprintId: "movie-blueprint",
+      spec: defaultMovieMimeSpec,
+      roomCode: "CHILD5",
+      gameInstanceId: "00000000-0000-4000-8000-000000000023",
+    });
+    const linked = linkGameNightToChildRoom(night, room);
+    const completedState = {
+      template: "composed" as const,
+      status: "completed" as const,
+      winner: { kind: "teams" as const, ids: ["team_2"] },
+    };
+
+    const completed = recordCompletedChildGame(linked, room, completedState);
+
+    expect(completed.currentRoomCode).toBeNull();
+    expect(completed.state.scores).toEqual({ red: 0, blue: 3 });
+    expect(completed.state.completedGames[0]?.winner).toEqual({ kind: "teams", ids: ["blue"] });
+    expect(recordCompletedChildGame(completed, room, completedState)).toEqual(completed);
   });
 });
