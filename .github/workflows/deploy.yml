@@ -161,7 +161,7 @@ jobs:
             exit 1
           fi
           docker logout ghcr.io
-          ln -sfn "$release" /opt/boardforge/current
+          sudo ln -sfn "$release" /opt/boardforge/current
           docker image prune -f
           REMOTE
 

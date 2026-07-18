@@ -99,5 +99,5 @@ docker compose --project-name boardforge \
 docker compose --project-name boardforge \
   --env-file /opt/boardforge/shared/.env.production \
   -f compose.production.yaml up --detach --no-build --remove-orphans
-ln -sfn /opt/boardforge/releases/PREVIOUS_SHA /opt/boardforge/current
+sudo ln -sfn /opt/boardforge/releases/PREVIOUS_SHA /opt/boardforge/current
 ```
