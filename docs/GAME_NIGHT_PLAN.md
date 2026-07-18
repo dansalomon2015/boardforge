@@ -53,10 +53,11 @@ Completed:
 - A confirmed, shared final podium with deterministic tie ranking, complete standings and readable game history.
 - Completed sessions locked against new games while remaining available to returning participants.
 - A real four-team browser launch through captain selection into a 16-round DrawBattle room, with no browser warnings or errors.
+- A recorded three-team browser launch through team creation, captain selection and an 18-round DrawBattle room, with no browser warnings or errors.
 
 Not completed:
 
-- Complete the three-team browser regression and full four-team game completions.
+- Complete full four-team game completions.
 
 ## P0 delivery plan
 
