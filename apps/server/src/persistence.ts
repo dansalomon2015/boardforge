@@ -62,6 +62,7 @@ export type RoomSessionRecord = {
   blueprintId: string;
   gameNightId: string | null;
   gameInstanceId: string | null;
+  gameNightTeamByGameTeam: Record<string, string>;
   players: PublicPlayer[];
   reconnectTokenHashes: Record<string, string>;
   lobbyTeamByPlayer: Record<string, string>;
@@ -393,6 +394,7 @@ type RoomSessionRow = {
   blueprint_id: string;
   game_night_id: string | null;
   game_instance_id: string | null;
+  game_night_team_by_game_team: Record<string, string>;
   players: PublicPlayer[];
   reconnect_token_hashes: Record<string, string>;
   lobby_team_by_player: Record<string, string>;
@@ -480,6 +482,7 @@ class PostgresBlueprintStore implements BlueprintStore {
       "0008_composed_experience_ids.sql",
       "0009_game_nights.sql",
       "0010_game_night_room_links.sql",
+      "0011_game_night_team_mapping.sql",
     ]) {
       const migration = await readFile(new URL(`../migrations/${filename}`, import.meta.url), "utf8");
       await this.pool.query(migration);
@@ -730,7 +733,8 @@ class PostgresBlueprintStore implements BlueprintStore {
 
   async loadRooms(): Promise<RoomSessionRecord[]> {
     const sessions = await this.pool.query<RoomSessionRow>(
-      `SELECT code, blueprint_id, game_night_id, game_instance_id, players, reconnect_token_hashes,
+      `SELECT code, blueprint_id, game_night_id, game_instance_id, game_night_team_by_game_team,
+              players, reconnect_token_hashes,
               lobby_team_by_player, lobby_captain_by_team,
               seed, checkpoint, checkpoint_checksum, checkpoint_revision
        FROM room_sessions
@@ -753,6 +757,7 @@ class PostgresBlueprintStore implements BlueprintStore {
       blueprintId: row.blueprint_id,
       gameNightId: row.game_night_id,
       gameInstanceId: row.game_instance_id,
+      gameNightTeamByGameTeam: row.game_night_team_by_game_team,
       players: row.players,
       reconnectTokenHashes: row.reconnect_token_hashes,
       lobbyTeamByPlayer: row.lobby_team_by_player,
@@ -768,13 +773,15 @@ class PostgresBlueprintStore implements BlueprintStore {
   async saveRoom(record: Omit<RoomSessionRecord, "events">): Promise<void> {
     await this.pool.query(
       `INSERT INTO room_sessions (
-         code, blueprint_id, game_night_id, game_instance_id, players, reconnect_token_hashes,
+         code, blueprint_id, game_night_id, game_instance_id, game_night_team_by_game_team,
+         players, reconnect_token_hashes,
          lobby_team_by_player, lobby_captain_by_team,
          seed, checkpoint, checkpoint_checksum, checkpoint_revision
-       ) VALUES ($1, $2, $3::uuid, $4::uuid, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9, $10::jsonb, $11, $12)
+       ) VALUES ($1, $2, $3::uuid, $4::uuid, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10, $11::jsonb, $12, $13)
        ON CONFLICT (code) DO UPDATE SET
          game_night_id = EXCLUDED.game_night_id,
          game_instance_id = EXCLUDED.game_instance_id,
+         game_night_team_by_game_team = EXCLUDED.game_night_team_by_game_team,
          players = EXCLUDED.players,
          reconnect_token_hashes = EXCLUDED.reconnect_token_hashes,
          lobby_team_by_player = EXCLUDED.lobby_team_by_player,
@@ -789,6 +796,7 @@ class PostgresBlueprintStore implements BlueprintStore {
         record.blueprintId,
         record.gameNightId,
         record.gameInstanceId,
+        JSON.stringify(record.gameNightTeamByGameTeam),
         JSON.stringify(record.players),
         JSON.stringify(record.reconnectTokenHashes),
         JSON.stringify(record.lobbyTeamByPlayer),

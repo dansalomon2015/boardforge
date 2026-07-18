@@ -52,6 +52,12 @@ describe("game-night child rooms", () => {
         ["team_2", secondPlayerId],
       ]),
     );
+    expect(room.gameNightTeamByGameTeam).toEqual(
+      new Map([
+        ["team_1", "red"],
+        ["team_2", "blue"],
+      ]),
+    );
     expect(room.state).toBeNull();
     expect(linkGameNightToChildRoom(night, room).currentRoomCode).toBe("CHILD2");
   });

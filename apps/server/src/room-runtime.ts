@@ -18,6 +18,7 @@ export type Room = {
   blueprintId: string;
   gameNightId: string | null;
   gameInstanceId: string | null;
+  gameNightTeamByGameTeam: Map<string, string>;
   spec: BoardGameSpec;
   players: Map<string, PublicPlayer>;
   socketByPlayer: Map<string, string>;
@@ -103,6 +104,7 @@ export function persistedRoom(room: Room, state: Room["state"] = room.state): Om
     blueprintId: room.blueprintId,
     gameNightId: room.gameNightId,
     gameInstanceId: room.gameInstanceId,
+    gameNightTeamByGameTeam: Object.fromEntries(room.gameNightTeamByGameTeam),
     players: publicPlayers(room),
     reconnectTokenHashes: Object.fromEntries(room.reconnectTokenHashes),
     lobbyTeamByPlayer: Object.fromEntries(room.lobbyTeamByPlayer),

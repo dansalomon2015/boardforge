@@ -89,6 +89,7 @@ export async function registerRealtimeGateway({
         const reconnectTokenHashes = persistedStringMapSchema.parse(record.reconnectTokenHashes);
         const lobbyTeamByPlayer = persistedStringMapSchema.parse(record.lobbyTeamByPlayer);
         const lobbyCaptainByTeam = persistedStringMapSchema.parse(record.lobbyCaptainByTeam);
+        const gameNightTeamByGameTeam = persistedStringMapSchema.parse(record.gameNightTeamByGameTeam);
         const events = record.events.map((event) => persistedEventSchema.parse(event));
         if (!record.seed && events.length) throw new Error("A lobby room cannot contain game events.");
         const state = record.seed
@@ -126,6 +127,7 @@ export async function registerRealtimeGateway({
           blueprintId: record.blueprintId,
           gameNightId: record.gameNightId,
           gameInstanceId: record.gameInstanceId,
+          gameNightTeamByGameTeam: new Map(Object.entries(gameNightTeamByGameTeam)),
           spec: blueprint.spec,
           players: new Map(players.map((player) => [player.id, player])),
           socketByPlayer: new Map(),

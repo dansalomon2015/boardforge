@@ -151,6 +151,7 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
       blueprintId,
       gameNightId: null,
       gameInstanceId: null,
+      gameNightTeamByGameTeam: new Map(),
       spec,
       players: new Map(),
       socketByPlayer: new Map(),

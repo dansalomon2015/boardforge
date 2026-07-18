@@ -74,6 +74,7 @@ describe("MemoryBlueprintStore", () => {
       blueprintId: "cinema-room",
       gameNightId: null,
       gameInstanceId: null,
+      gameNightTeamByGameTeam: {},
       players: [],
       reconnectTokenHashes: {},
       lobbyTeamByPlayer: {},

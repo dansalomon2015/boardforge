@@ -14,9 +14,13 @@ type CreateGameNightChildRoomInput = {
 function teamAssignmentsForSpec(
   session: GameNightSessionRecord,
   spec: BoardGameSpec,
-): { teamByPlayer: Map<string, string>; captainByTeam: Map<string, string> } {
+): {
+  teamByPlayer: Map<string, string>;
+  captainByTeam: Map<string, string>;
+  gameNightTeamByGameTeam: Map<string, string>;
+} {
   if (spec.template !== "composed" || spec.setup.mode !== "teams" || !spec.setup.teamPolicy) {
-    return { teamByPlayer: new Map(), captainByTeam: new Map() };
+    return { teamByPlayer: new Map(), captainByTeam: new Map(), gameNightTeamByGameTeam: new Map() };
   }
   const specTeams = spec.setup.teamPolicy.teams;
   if (specTeams.length !== session.state.teams.length) {
@@ -27,10 +31,12 @@ function teamAssignmentsForSpec(
 
   const teamByPlayer = new Map<string, string>();
   const captainByTeam = new Map<string, string>();
+  const gameNightTeamByGameTeam = new Map<string, string>();
   const requiresCaptains = spec.actions.some((action) => action.actor === "team_captain");
   session.state.teams.forEach((nightTeam, index) => {
     const specTeam = specTeams[index];
     if (!specTeam) throw new GameNightRuleError("The game team layout is incomplete.");
+    gameNightTeamByGameTeam.set(specTeam.id, nightTeam.id);
     for (const playerId of nightTeam.playerIds) teamByPlayer.set(playerId, specTeam.id);
     if (requiresCaptains) {
       if (!nightTeam.captainPlayerId)
@@ -42,7 +48,7 @@ function teamAssignmentsForSpec(
   const playerIds = session.players.map((player) => player.id);
   const assignment = validateComposedTeamSelection(spec, playerIds, Object.fromEntries(teamByPlayer));
   if (!assignment.ok) throw new GameNightRuleError(assignment.reason);
-  return { teamByPlayer, captainByTeam };
+  return { teamByPlayer, captainByTeam, gameNightTeamByGameTeam };
 }
 
 export function createGameNightChildRoom({
@@ -57,13 +63,14 @@ export function createGameNightChildRoom({
   if (session.players.length < spec.minPlayers || session.players.length > spec.maxPlayers) {
     throw new GameNightRuleError(`This game needs between ${spec.minPlayers} and ${spec.maxPlayers} players.`);
   }
-  const { teamByPlayer, captainByTeam } = teamAssignmentsForSpec(session, spec);
+  const { teamByPlayer, captainByTeam, gameNightTeamByGameTeam } = teamAssignmentsForSpec(session, spec);
 
   return {
     code: roomCode,
     blueprintId,
     gameNightId: session.id,
     gameInstanceId,
+    gameNightTeamByGameTeam,
     spec,
     players: new Map(session.players.map((player) => [player.id, { ...player, connected: false }])),
     socketByPlayer: new Map(),
