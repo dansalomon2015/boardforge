@@ -75,6 +75,7 @@ describe("MemoryBlueprintStore", () => {
       gameNightId: null,
       gameInstanceId: null,
       gameNightTeamByGameTeam: {},
+      gameNightTeamPresentationByGameTeam: {},
       players: [],
       reconnectTokenHashes: {},
       lobbyTeamByPlayer: {},

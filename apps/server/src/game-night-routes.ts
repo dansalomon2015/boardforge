@@ -2,15 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { BoardGameSpec } from "@boardforge/game-spec";
 import { createGameNightState, GameNightRuleError } from "@boardforge/game-engine";
-import type {
-  GameNightCatalogEntry,
-  GameNightCompatibility,
-  GameNightView,
-  JoinGameNightResult,
-} from "@boardforge/shared";
+import type { GameNightCatalogEntry, GameNightView, JoinGameNightResult } from "@boardforge/shared";
 import { gameSummary } from "./game-catalog";
 import { evaluateGameNightCompatibility } from "./game-night-compatibility";
-import { createGameNightChildRoom, linkGameNightToChildRoom, selectGameNightTeam } from "./game-night-runtime";
+import { GameNightLaunchError, launchGameNightGame } from "./game-night-launch";
+import { selectGameNightCaptain, selectGameNightTeam } from "./game-night-runtime";
 import { gameNightCredentialsSchema } from "./game-night-schemas";
 import type { BlueprintStore, GameNightSessionRecord } from "./persistence";
 import type { Room } from "./room-runtime";
@@ -73,12 +69,6 @@ type GameNightRouteDependencies = {
   createRoomCode: () => string;
   gameNightCatalog: BoardGameSpec[];
 };
-
-class GameNightLaunchError extends GameNightRuleError {
-  constructor(readonly compatibility: GameNightCompatibility) {
-    super(compatibility.reasons[0]?.message ?? "This game is not compatible with the current Game Night.");
-  }
-}
 
 function allocateGameNightCode(gameNights: GameNightRuntimeMap): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -297,11 +287,12 @@ export async function registerGameNightRoutes(
         if (parsed.data.playerId !== runtime.record.hostPlayerId)
           throw new GameNightRuleError("Only the host can choose captains.");
         if (runtime.record.currentRoomCode) throw new GameNightRuleError("Captains are locked during a game.");
-        const team = runtime.record.state.teams.find((candidate) => candidate.id === parsed.data.teamId);
-        if (!team) throw new GameNightRuleError("Unknown team.");
-        if (!team.playerIds.includes(parsed.data.captainPlayerId))
-          throw new GameNightRuleError("The captain must belong to the selected team.");
-        team.captainPlayerId = parsed.data.captainPlayerId;
+        runtime.record = selectGameNightCaptain(
+          runtime.record,
+          parsed.data.playerId,
+          parsed.data.teamId,
+          parsed.data.captainPlayerId,
+        );
         await blueprintStore.saveGameNight(runtime.record);
         return viewForGameNight(runtime.record, parsed.data.playerId);
       });
@@ -320,29 +311,14 @@ export async function registerGameNightRoutes(
     try {
       const launched = await enqueueGameNight(runtime, async () => {
         assertGameNightCredential(runtime.record, parsed.data.playerId, parsed.data.reconnectToken);
-        if (parsed.data.playerId !== runtime.record.hostPlayerId)
-          throw new GameNightRuleError("Only the host can launch a game.");
-        const blueprint = await blueprintStore.get(parsed.data.blueprintId);
-        if (!blueprint) throw new GameNightRuleError("Game not found.");
-        const compatibility = evaluateGameNightCompatibility(
-          runtime.record,
-          blueprint.spec,
-          blueprint.status === "release_ready",
-        );
-        if (!compatibility.compatible) throw new GameNightLaunchError(compatibility);
-        const room = createGameNightChildRoom({
-          session: runtime.record,
-          blueprintId: blueprint.id,
-          spec: blueprint.spec,
-          roomCode: createRoomCode(),
-          gameInstanceId: crypto.randomUUID(),
+        return launchGameNightGame({
+          runtime,
+          playerId: parsed.data.playerId,
+          blueprintId: parsed.data.blueprintId,
+          blueprintStore,
+          rooms,
+          createRoomCode,
         });
-        const linked = linkGameNightToChildRoom(runtime.record, room);
-        await blueprintStore.saveRoom(persistedRoom(room));
-        await blueprintStore.saveGameNight(linked);
-        runtime.record = linked;
-        rooms.set(room.code, room);
-        return room;
       });
       return reply.code(201).send({ code: launched.code, gameInstanceId: launched.gameInstanceId });
     } catch (error) {

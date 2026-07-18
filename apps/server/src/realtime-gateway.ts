@@ -32,11 +32,15 @@ import {
 import {
   openGameNightBoard,
   recordCompletedChildGame,
+  selectGameNightCaptain,
   selectGameNightGame,
   selectGameNightTeam,
 } from "./game-night-runtime";
+import { launchGameNightGame } from "./game-night-launch";
 import {
   gameNightSocketBoardOpenSchema,
+  gameNightSocketCaptainSelectionSchema,
+  gameNightSocketGameLaunchSchema,
   gameNightSocketGameSelectionSchema,
   gameNightSocketSessionSchema,
   gameNightSocketTeamSelectionSchema,
@@ -61,6 +65,7 @@ import {
   persistedEventSchema,
   persistedPlayersSchema,
   persistedStringMapSchema,
+  persistedTeamPresentationMapSchema,
   teamSelectionSchema,
 } from "./room-schemas";
 
@@ -70,6 +75,7 @@ type RealtimeGatewayDependencies = {
   rooms: Map<string, Room>;
   gameNights: GameNightRuntimeMap;
   gameNightCatalogIds: ReadonlySet<string>;
+  createRoomCode: () => string;
   blueprintStore: RealtimeRoomStore;
   restoreRooms: boolean;
 };
@@ -80,6 +86,7 @@ export async function registerRealtimeGateway({
   rooms,
   gameNights,
   gameNightCatalogIds,
+  createRoomCode,
   blueprintStore,
   restoreRooms,
 }: RealtimeGatewayDependencies): Promise<void> {
@@ -157,6 +164,9 @@ export async function registerRealtimeGateway({
         const lobbyTeamByPlayer = persistedStringMapSchema.parse(record.lobbyTeamByPlayer);
         const lobbyCaptainByTeam = persistedStringMapSchema.parse(record.lobbyCaptainByTeam);
         const gameNightTeamByGameTeam = persistedStringMapSchema.parse(record.gameNightTeamByGameTeam);
+        const gameNightTeamPresentationByGameTeam = persistedTeamPresentationMapSchema.parse(
+          record.gameNightTeamPresentationByGameTeam,
+        );
         const events = record.events.map((event) => persistedEventSchema.parse(event));
         if (!record.seed && events.length) throw new Error("A lobby room cannot contain game events.");
         const state = record.seed
@@ -195,6 +205,7 @@ export async function registerRealtimeGateway({
           gameNightId: record.gameNightId,
           gameInstanceId: record.gameInstanceId,
           gameNightTeamByGameTeam: new Map(Object.entries(gameNightTeamByGameTeam)),
+          gameNightTeamPresentationByGameTeam: new Map(Object.entries(gameNightTeamPresentationByGameTeam)),
           spec: blueprint.spec,
           players: new Map(players.map((player) => [player.id, player])),
           socketByPlayer: new Map(),
@@ -308,6 +319,71 @@ export async function registerRealtimeGateway({
             runtime.record = selectGameNightGame(runtime.record, parsed.playerId, blueprint.id);
             await blueprintStore.saveGameNight(runtime.record);
             acknowledge(ack, { ok: true, data: { view: viewForGameNight(runtime.record, parsed.playerId) } });
+            emitGameNight(runtime);
+          });
+        } catch (error) {
+          acknowledge(ack, { ok: false, error: socketError(error) });
+        }
+      },
+    );
+
+    socket.on(
+      "game-night:captain:select",
+      async (payload: unknown, ack?: (response: SocketAck<{ view: GameNightView }>) => void) => {
+        try {
+          const parsed = gameNightSocketCaptainSelectionSchema.parse(payload);
+          const runtime = gameNights.get(parsed.code);
+          if (!runtime) throw new GameNightRuleError("Game night not found.");
+          await enqueueGameNight(runtime, async () => {
+            assertSocketOwnsGameNightPlayer(socket, runtime, parsed.code, parsed.playerId);
+            if (!runtime.record.state.selectedBlueprintId) {
+              throw new GameNightRuleError("Choose the next game before selecting captains.");
+            }
+            runtime.record = selectGameNightCaptain(
+              runtime.record,
+              parsed.playerId,
+              parsed.teamId,
+              parsed.captainPlayerId,
+            );
+            await blueprintStore.saveGameNight(runtime.record);
+            acknowledge(ack, { ok: true, data: { view: viewForGameNight(runtime.record, parsed.playerId) } });
+            emitGameNight(runtime);
+          });
+        } catch (error) {
+          acknowledge(ack, { ok: false, error: socketError(error) });
+        }
+      },
+    );
+
+    socket.on(
+      "game-night:game:launch",
+      async (
+        payload: unknown,
+        ack?: (response: SocketAck<{ view: GameNightView; roomCode: string; gameInstanceId: string }>) => void,
+      ) => {
+        try {
+          const parsed = gameNightSocketGameLaunchSchema.parse(payload);
+          const runtime = gameNights.get(parsed.code);
+          if (!runtime) throw new GameNightRuleError("Game night not found.");
+          await enqueueGameNight(runtime, async () => {
+            assertSocketOwnsGameNightPlayer(socket, runtime, parsed.code, parsed.playerId);
+            if (runtime.record.state.selectedBlueprintId !== parsed.blueprintId) {
+              throw new GameNightRuleError("Choose this game on the Game Night board before launching it.");
+            }
+            const room = await launchGameNightGame({
+              runtime,
+              playerId: parsed.playerId,
+              blueprintId: parsed.blueprintId,
+              blueprintStore,
+              rooms,
+              createRoomCode,
+            });
+            const view = viewForGameNight(runtime.record, parsed.playerId);
+            if (!room.gameInstanceId) throw new GameNightRuleError("The game room has no instance id.");
+            acknowledge(ack, {
+              ok: true,
+              data: { view, roomCode: room.code, gameInstanceId: room.gameInstanceId },
+            });
             emitGameNight(runtime);
           });
         } catch (error) {

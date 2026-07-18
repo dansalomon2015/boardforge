@@ -12,6 +12,8 @@ type GameNightBoardProps = {
   games: GameNightCatalogEntry[];
   gamesLoading: boolean;
   onCopyInvite: () => void;
+  onLaunchGame: (blueprintId: string) => void;
+  onSelectCaptain: (teamId: string, captainPlayerId: string) => void;
   onSelectGame: (blueprintId: string) => void;
   pending: boolean;
   view: GameNightView;
@@ -25,6 +27,8 @@ export function GameNightBoard({
   games,
   gamesLoading,
   onCopyInvite,
+  onLaunchGame,
+  onSelectCaptain,
   onSelectGame,
   pending,
   view,
@@ -158,9 +162,13 @@ export function GameNightBoard({
             games={games}
             isHost={view.isHost}
             loading={gamesLoading}
+            onLaunch={onLaunchGame}
+            onSelectCaptain={onSelectCaptain}
             onSelect={onSelectGame}
             pending={pending}
             selectedBlueprintId={view.selectedBlueprintId}
+            teams={view.teams}
+            players={view.players}
           />
         ) : null}
       </section>

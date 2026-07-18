@@ -10,7 +10,7 @@ import {
   type GameState,
 } from "@boardforge/game-engine";
 import type { GameAction, LobbyView, PublicPlayer, RoomView } from "@boardforge/shared";
-import type { RoomEventRecord, RoomSessionRecord } from "./persistence";
+import type { GameNightTeamPresentation, RoomEventRecord, RoomSessionRecord } from "./persistence";
 import { gameSummary } from "./game-catalog";
 
 export type Room = {
@@ -19,6 +19,7 @@ export type Room = {
   gameNightId: string | null;
   gameInstanceId: string | null;
   gameNightTeamByGameTeam: Map<string, string>;
+  gameNightTeamPresentationByGameTeam: Map<string, GameNightTeamPresentation>;
   spec: BoardGameSpec;
   players: Map<string, PublicPlayer>;
   socketByPlayer: Map<string, string>;
@@ -105,6 +106,7 @@ export function persistedRoom(room: Room, state: Room["state"] = room.state): Om
     gameNightId: room.gameNightId,
     gameInstanceId: room.gameInstanceId,
     gameNightTeamByGameTeam: Object.fromEntries(room.gameNightTeamByGameTeam),
+    gameNightTeamPresentationByGameTeam: Object.fromEntries(room.gameNightTeamPresentationByGameTeam),
     players: publicPlayers(room),
     reconnectTokenHashes: Object.fromEntries(room.reconnectTokenHashes),
     lobbyTeamByPlayer: Object.fromEntries(room.lobbyTeamByPlayer),
@@ -170,6 +172,7 @@ export function viewFor(room: Room, playerId: string): RoomView {
             teamSetup: {
               teams: teamPolicy.teams.map((team) => ({
                 ...team,
+                ...(room.gameNightTeamPresentationByGameTeam.get(team.id) ?? {}),
                 playerIds: players.filter((player) => selectedTeams[player.id] === team.id).map((player) => player.id),
                 ...(room.lobbyCaptainByTeam.get(team.id)
                   ? { captainPlayerId: room.lobbyCaptainByTeam.get(team.id) }

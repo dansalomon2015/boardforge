@@ -38,6 +38,23 @@ export const gameNightSocketGameSelectionSchema = z
   })
   .strict();
 
+export const gameNightSocketCaptainSelectionSchema = z
+  .object({
+    code: gameNightCodeSchema,
+    playerId: z.string().uuid(),
+    teamId: z.string().min(1).max(80),
+    captainPlayerId: z.string().uuid(),
+  })
+  .strict();
+
+export const gameNightSocketGameLaunchSchema = z
+  .object({
+    code: gameNightCodeSchema,
+    playerId: z.string().uuid(),
+    blueprintId: z.string().trim().min(1).max(160),
+  })
+  .strict();
+
 const gameNightTeamSchema = z
   .object({
     id: z.string().min(1).max(80),

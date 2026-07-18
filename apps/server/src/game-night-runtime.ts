@@ -5,7 +5,7 @@ import {
   validateComposedTeamSelection,
   type ComposedGameState,
 } from "@boardforge/game-engine";
-import type { GameNightSessionRecord } from "./persistence";
+import type { GameNightSessionRecord, GameNightTeamPresentation } from "./persistence";
 import type { Room } from "./room-runtime";
 
 type CreateGameNightChildRoomInput = {
@@ -23,9 +23,15 @@ function teamAssignmentsForSpec(
   teamByPlayer: Map<string, string>;
   captainByTeam: Map<string, string>;
   gameNightTeamByGameTeam: Map<string, string>;
+  gameNightTeamPresentationByGameTeam: Map<string, GameNightTeamPresentation>;
 } {
   if (spec.template !== "composed" || spec.setup.mode !== "teams" || !spec.setup.teamPolicy) {
-    return { teamByPlayer: new Map(), captainByTeam: new Map(), gameNightTeamByGameTeam: new Map() };
+    return {
+      teamByPlayer: new Map(),
+      captainByTeam: new Map(),
+      gameNightTeamByGameTeam: new Map(),
+      gameNightTeamPresentationByGameTeam: new Map(),
+    };
   }
   const specTeams = spec.setup.teamPolicy.teams;
   if (specTeams.length !== session.state.teams.length) {
@@ -37,11 +43,16 @@ function teamAssignmentsForSpec(
   const teamByPlayer = new Map<string, string>();
   const captainByTeam = new Map<string, string>();
   const gameNightTeamByGameTeam = new Map<string, string>();
+  const gameNightTeamPresentationByGameTeam = new Map<string, GameNightTeamPresentation>();
   const requiresCaptains = spec.actions.some((action) => action.actor === "team_captain");
   session.state.teams.forEach((nightTeam, index) => {
     const specTeam = specTeams[index];
     if (!specTeam) throw new GameNightRuleError("The game team layout is incomplete.");
     gameNightTeamByGameTeam.set(specTeam.id, nightTeam.id);
+    gameNightTeamPresentationByGameTeam.set(specTeam.id, {
+      name: nightTeam.name,
+      color: nightTeam.color ?? specTeam.color,
+    });
     for (const playerId of nightTeam.playerIds) teamByPlayer.set(playerId, specTeam.id);
     if (requiresCaptains) {
       if (!nightTeam.captainPlayerId)
@@ -53,7 +64,7 @@ function teamAssignmentsForSpec(
   const playerIds = session.players.map((player) => player.id);
   const assignment = validateComposedTeamSelection(spec, playerIds, Object.fromEntries(teamByPlayer));
   if (!assignment.ok) throw new GameNightRuleError(assignment.reason);
-  return { teamByPlayer, captainByTeam, gameNightTeamByGameTeam };
+  return { teamByPlayer, captainByTeam, gameNightTeamByGameTeam, gameNightTeamPresentationByGameTeam };
 }
 
 export function createGameNightChildRoom({
@@ -68,7 +79,8 @@ export function createGameNightChildRoom({
   if (session.players.length < spec.minPlayers || session.players.length > spec.maxPlayers) {
     throw new GameNightRuleError(`This game needs between ${spec.minPlayers} and ${spec.maxPlayers} players.`);
   }
-  const { teamByPlayer, captainByTeam, gameNightTeamByGameTeam } = teamAssignmentsForSpec(session, spec);
+  const { teamByPlayer, captainByTeam, gameNightTeamByGameTeam, gameNightTeamPresentationByGameTeam } =
+    teamAssignmentsForSpec(session, spec);
 
   return {
     code: roomCode,
@@ -76,6 +88,7 @@ export function createGameNightChildRoom({
     gameNightId: session.id,
     gameInstanceId,
     gameNightTeamByGameTeam,
+    gameNightTeamPresentationByGameTeam,
     spec,
     players: new Map(session.players.map((player) => [player.id, { ...player, connected: false }])),
     socketByPlayer: new Map(),
@@ -166,6 +179,31 @@ export function selectGameNightGame(
   return {
     ...session,
     state: { ...session.state, selectedBlueprintId: blueprintId },
+  };
+}
+
+export function selectGameNightCaptain(
+  session: GameNightSessionRecord,
+  playerId: string,
+  teamId: string,
+  captainPlayerId: string,
+): GameNightSessionRecord {
+  if (playerId !== session.hostPlayerId) throw new GameNightRuleError("Only the host can choose captains.");
+  if (session.state.status === "completed") throw new GameNightRuleError("This Game Night is already complete.");
+  if (session.currentRoomCode) throw new GameNightRuleError("Captains are locked during a game.");
+  const target = session.state.teams.find((team) => team.id === teamId);
+  if (!target) throw new GameNightRuleError("Unknown team.");
+  if (!target.playerIds.includes(captainPlayerId)) {
+    throw new GameNightRuleError("The captain must belong to the selected team.");
+  }
+  if (target.captainPlayerId === captainPlayerId) return session;
+
+  return {
+    ...session,
+    state: {
+      ...session.state,
+      teams: session.state.teams.map((team) => (team.id === teamId ? { ...team, captainPlayerId } : { ...team })),
+    },
   };
 }
 

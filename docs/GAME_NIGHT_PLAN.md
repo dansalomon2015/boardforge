@@ -36,10 +36,12 @@ Completed:
 - A responsive live board with global standings, team members, presence and active-room recovery.
 - A responsive four-game catalogue with server-authored compatibility explanations.
 - Host-only next-game selection, synchronized live and restored with the Game Night session.
+- Host-only captain selection and real-time child-room launch from the selected catalogue game.
+- Automatic identity handoff from the Game Night into the child room.
+- Persistent Game Night team names, colors, members and captains inside the child room, including after a server restart.
 
 Not completed:
 
-- Captain configuration and child-room launch from the selected catalogue game.
 - Ordered game-history details and awarded-points UI.
 - Return-to-board flow, history animation and final podium.
 
@@ -127,7 +129,7 @@ Acceptance tests:
 - Compatibility changes when players or teams change.
 - Only the host can launch the next game.
 
-### Phase 5 — First complete vertical slice with CineMimes
+### Phase 5 — First complete vertical slice with CineMimes (in progress)
 
 Work:
 

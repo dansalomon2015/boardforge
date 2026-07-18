@@ -7,6 +7,7 @@ import {
   linkGameNightToChildRoom,
   openGameNightBoard,
   recordCompletedChildGame,
+  selectGameNightCaptain,
   selectGameNightGame,
   selectGameNightTeam,
 } from "./game-night-runtime";
@@ -65,6 +66,8 @@ describe("game-night child rooms", () => {
         ["team_2", "blue"],
       ]),
     );
+    expect(room.gameNightTeamPresentationByGameTeam.get("team_1")).toMatchObject({ name: "Red" });
+    expect(room.gameNightTeamPresentationByGameTeam.get("team_2")).toMatchObject({ name: "Blue" });
     expect(room.state).toBeNull();
     expect(linkGameNightToChildRoom(night, room).currentRoomCode).toBe("CHILD2");
   });
@@ -126,6 +129,20 @@ describe("game-night child rooms", () => {
     expect(selected.state.selectedBlueprintId).toBe("movie-blueprint");
     expect(night.state.selectedBlueprintId).toBeNull();
     expect(selectGameNightGame(selected, hostPlayerId, "movie-blueprint")).toBe(selected);
+  });
+
+  it("lets the host choose a captain from the selected team without mutating the session", () => {
+    const night = session();
+    night.state.teams = night.state.teams.map(({ captainPlayerId: _captain, ...team }) => team);
+
+    expect(() => selectGameNightCaptain(night, secondPlayerId, "red", hostPlayerId)).toThrow("Only the host");
+    expect(() => selectGameNightCaptain(night, hostPlayerId, "red", secondPlayerId)).toThrow(
+      "must belong to the selected team",
+    );
+    const selected = selectGameNightCaptain(night, hostPlayerId, "red", hostPlayerId);
+
+    expect(selected.state.teams[0]?.captainPlayerId).toBe(hostPlayerId);
+    expect(night.state.teams[0]?.captainPlayerId).toBeUndefined();
   });
 
   it("rejects incompatible team counts and concurrent child rooms", () => {

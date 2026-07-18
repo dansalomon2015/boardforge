@@ -1,4 +1,5 @@
-import type { GameNightCatalogEntry } from "@boardforge/shared";
+import type { CSSProperties } from "react";
+import type { GameNightCatalogEntry, GameNightView, PublicPlayer } from "@boardforge/shared";
 import styles from "./page.module.css";
 
 const gameMarks: Record<string, string> = {
@@ -12,19 +13,29 @@ type GameNightCatalogProps = {
   games: GameNightCatalogEntry[];
   isHost: boolean;
   loading: boolean;
+  onLaunch: (blueprintId: string) => void;
   onSelect: (blueprintId: string) => void;
+  onSelectCaptain: (teamId: string, captainPlayerId: string) => void;
   pending: boolean;
+  players: PublicPlayer[];
   selectedBlueprintId: string | null;
+  teams: GameNightView["teams"];
 };
 
 export function GameNightCatalog({
   games,
   isHost,
   loading,
+  onLaunch,
   onSelect,
+  onSelectCaptain,
   pending,
+  players,
   selectedBlueprintId,
+  teams,
 }: GameNightCatalogProps) {
+  const selectedGame = games.find((entry) => entry.id === selectedBlueprintId);
+
   return (
     <section className={styles.gameShelf}>
       <header className={styles.gameShelfHeader}>
@@ -38,6 +49,89 @@ export function GameNightCatalog({
             : "Browse the collection while your host chooses what the room will play next."}
         </p>
       </header>
+
+      {selectedGame ? (
+        <section className={styles.gameSetup} data-game={selectedGame.game.experienceId ?? "generic"}>
+          <div className={styles.setupIntro}>
+            <span>Next game</span>
+            <strong>{gameMarks[selectedGame.game.experienceId ?? "generic"] ?? "BF"}</strong>
+            <div>
+              <small>Team setup</small>
+              <h3>{selectedGame.game.title}</h3>
+              <p>Each captain will choose the active player when their team&apos;s turn begins.</p>
+            </div>
+          </div>
+          {selectedGame.compatibility.requiresCaptains ? (
+            <div className={styles.captainGrid}>
+              {teams.map((team) => {
+                const members = players.filter((player) => team.playerIds.includes(player.id));
+                return (
+                  <article key={team.id} style={{ "--team-color": team.color } as CSSProperties}>
+                    <header>
+                      <i />
+                      <span>
+                        <small>Choose captain</small>
+                        <strong>{team.name}</strong>
+                      </span>
+                      <b>{team.captainPlayerId ? "✓" : "—"}</b>
+                    </header>
+                    <div>
+                      {members.map((player) => {
+                        const selected = team.captainPlayerId === player.id;
+                        return isHost ? (
+                          <button
+                            aria-label={`Choose ${player.name} as captain of ${team.name}`}
+                            aria-pressed={selected}
+                            disabled={pending}
+                            key={player.id}
+                            onClick={() => onSelectCaptain(team.id, player.id)}
+                            type="button"
+                          >
+                            <i>{player.name.slice(0, 1).toUpperCase()}</i>
+                            <span>{player.name}</span>
+                            <b>{selected ? "Captain" : "Choose"}</b>
+                          </button>
+                        ) : (
+                          <span className={selected ? styles.captainChosen : ""} key={player.id}>
+                            <i>{player.name.slice(0, 1).toUpperCase()}</i>
+                            <b>{player.name}</b>
+                            <small>{selected ? "Captain" : "Team member"}</small>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
+          <footer className={styles.setupFooter}>
+            <div>
+              <i className={selectedGame.compatibility.compatible ? styles.setupReady : ""} />
+              <span>
+                <strong>{selectedGame.compatibility.compatible ? "Teams are ready" : "A few choices remain"}</strong>
+                <small>
+                  {selectedGame.compatibility.compatible
+                    ? "BoardForge has checked every player and team."
+                    : (selectedGame.compatibility.reasons[0]?.message ?? "Complete the setup to continue.")}
+                </small>
+              </span>
+            </div>
+            {isHost ? (
+              <button
+                disabled={!selectedGame.compatibility.compatible || pending}
+                onClick={() => onLaunch(selectedGame.id)}
+                type="button"
+              >
+                <span>{pending ? "Preparing the room…" : `Start ${selectedGame.game.title}`}</span>
+                <b>→</b>
+              </button>
+            ) : (
+              <p>The game will open automatically when the host starts it.</p>
+            )}
+          </footer>
+        </section>
+      ) : null}
 
       {loading ? (
         <div className={styles.shelfLoading}>

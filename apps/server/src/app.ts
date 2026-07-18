@@ -162,6 +162,7 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
       gameNightId: null,
       gameInstanceId: null,
       gameNightTeamByGameTeam: new Map(),
+      gameNightTeamPresentationByGameTeam: new Map(),
       spec,
       players: new Map(),
       socketByPlayer: new Map(),
@@ -196,6 +197,7 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
     rooms,
     gameNights,
     gameNightCatalogIds: new Set(gameNightCatalog.map((game) => game.id)),
+    createRoomCode,
     blueprintStore,
     restoreRooms: options.restoreRooms !== false,
   });

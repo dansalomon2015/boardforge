@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { io, type Socket } from "socket.io-client";
 import type { GameNightCatalogEntry, GameNightView, JoinGameNightResult, SocketAck } from "@boardforge/shared";
@@ -26,6 +26,7 @@ type GameNightPreview = {
 
 export default function GameNightLobbyPage() {
   const params = useParams<{ code: string }>();
+  const router = useRouter();
   const code = params.code.toUpperCase();
   const socketRef = useRef<Socket | null>(null);
   const [preview, setPreview] = useState<GameNightPreview | null>(null);
@@ -118,6 +119,20 @@ export default function GameNightLobbyPage() {
       socketRef.current = null;
     };
   }, [code, view?.id]);
+
+  useEffect(() => {
+    const roomCode = view?.currentRoomCode;
+    if (!view || !roomCode) return;
+    const stored = readGameNightSession(view.id);
+    if (!stored) {
+      setError("Your Game Night identity could not be transferred to the active game.");
+      return;
+    }
+    localStorage.setItem(`boardforge:${roomCode}:playerId`, stored.playerId);
+    localStorage.setItem(`boardforge:${roomCode}:reconnectToken`, stored.reconnectToken);
+    localStorage.setItem(`boardforge:${roomCode}:name`, stored.name);
+    router.push(`/room/${roomCode}`);
+  }, [router, view?.currentRoomCode, view?.id]);
 
   const assigned = useMemo(() => new Set(view?.teams.flatMap((team) => team.playerIds) ?? []), [view]);
   const unassignedPlayers = view?.players.filter((player) => !assigned.has(player.id)) ?? [];
@@ -233,6 +248,46 @@ export default function GameNightLobbyPage() {
     );
   }
 
+  function selectCaptain(teamId: string, captainPlayerId: string) {
+    if (!view?.isHost) return;
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      setError("The live connection is still starting. Try again in a moment.");
+      return;
+    }
+    setPending(true);
+    setError("");
+    socket.emit(
+      "game-night:captain:select",
+      { code, playerId: view.selfPlayerId, teamId, captainPlayerId },
+      (response: SocketAck<{ view: GameNightView }>) => {
+        setPending(false);
+        if (response.ok) setView(response.data.view);
+        else setError(response.error);
+      },
+    );
+  }
+
+  function launchGame(blueprintId: string) {
+    if (!view?.isHost) return;
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      setError("The live connection is still starting. Try again in a moment.");
+      return;
+    }
+    setPending(true);
+    setError("");
+    socket.emit(
+      "game-night:game:launch",
+      { code, playerId: view.selfPlayerId, blueprintId },
+      (response: SocketAck<{ view: GameNightView; roomCode: string; gameInstanceId: string }>) => {
+        setPending(false);
+        if (response.ok) setView(response.data.view);
+        else setError(response.error);
+      },
+    );
+  }
+
   async function copyInvite() {
     await navigator.clipboard.writeText(`${window.location.origin}/game-night/${code}`);
     setCopied(true);
@@ -306,6 +361,8 @@ export default function GameNightLobbyPage() {
         games={games}
         gamesLoading={gamesLoading}
         onCopyInvite={() => void copyInvite()}
+        onLaunchGame={launchGame}
+        onSelectCaptain={selectCaptain}
         onSelectGame={selectGame}
         pending={pending}
         view={view}

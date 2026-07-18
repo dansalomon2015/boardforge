@@ -209,7 +209,7 @@ describe("realtime room gateway", () => {
       url: "/api/game-nights",
       payload: { hostName: "Maya", teams: [{ name: "Red" }, { name: "Blue" }] },
     });
-    const host = created.json<{ playerId: string; reconnectToken: string; view: { code: string } }>();
+    const host = created.json<{ playerId: string; reconnectToken: string; view: { code: string; id: string } }>();
     const joined = await app.inject({
       method: "POST",
       url: `/api/game-nights/${host.view.code}/join`,
@@ -350,5 +350,83 @@ describe("realtime room gateway", () => {
         },
       },
     });
+
+    const unauthorizedCaptain = await new Promise<SocketAck<{ view: { selfPlayerId: string } }>>((resolve) => {
+      secondClient?.emit(
+        "game-night:captain:select",
+        { code: host.view.code, playerId: guest.playerId, teamId: "team_2", captainPlayerId: guest.playerId },
+        resolve,
+      );
+    });
+    expect(unauthorizedCaptain).toMatchObject({ ok: false, error: "Only the host can choose captains." });
+
+    const captainsReady = waitForState<{
+      teams: Array<{ id: string; captainPlayerId?: string }>;
+    }>(
+      secondClient,
+      (view) =>
+        view.teams.find((team) => team.id === "team_1")?.captainPlayerId === host.playerId &&
+        view.teams.find((team) => team.id === "team_2")?.captainPlayerId === guest.playerId,
+    );
+    for (const captain of [
+      { teamId: "team_1", captainPlayerId: host.playerId },
+      { teamId: "team_2", captainPlayerId: guest.playerId },
+    ]) {
+      const captainSelection = await new Promise<SocketAck<{ view: { selfPlayerId: string } }>>((resolve) => {
+        client?.emit(
+          "game-night:captain:select",
+          { code: host.view.code, playerId: host.playerId, ...captain },
+          resolve,
+        );
+      });
+      expect(captainSelection.ok).toBe(true);
+    }
+    expect(await captainsReady).toMatchObject({
+      teams: expect.arrayContaining([
+        expect.objectContaining({ id: "team_1", captainPlayerId: host.playerId }),
+        expect.objectContaining({ id: "team_2", captainPlayerId: guest.playerId }),
+      ]),
+    });
+
+    const unauthorizedLaunch = await new Promise<SocketAck<{ roomCode: string }>>((resolve) => {
+      secondClient?.emit(
+        "game-night:game:launch",
+        { code: host.view.code, playerId: guest.playerId, blueprintId: defaultMovieMimeSpec.id },
+        resolve,
+      );
+    });
+    expect(unauthorizedLaunch).toMatchObject({ ok: false, error: "Only the host can launch a game." });
+
+    const guestLaunchUpdate = waitForState<{ currentRoomCode: string | null }>(
+      secondClient,
+      (view) => view.currentRoomCode !== null,
+    );
+    const launched = await new Promise<
+      SocketAck<{ view: { currentRoomCode: string | null }; roomCode: string; gameInstanceId: string }>
+    >((resolve) => {
+      client?.emit(
+        "game-night:game:launch",
+        { code: host.view.code, playerId: host.playerId, blueprintId: defaultMovieMimeSpec.id },
+        resolve,
+      );
+    });
+    expect(launched.ok).toBe(true);
+    if (!launched.ok) throw new Error(launched.error);
+    expect(launched.data.view.currentRoomCode).toBe(launched.data.roomCode);
+    expect(await guestLaunchUpdate).toMatchObject({ currentRoomCode: launched.data.roomCode });
+
+    const childJoin = await new Promise<SocketAck<JoinRoomResult>>((resolve) => {
+      secondClient?.emit(
+        "room:join",
+        {
+          code: launched.data.roomCode,
+          name: "Noah",
+          playerId: guest.playerId,
+          reconnectToken: guest.reconnectToken,
+        },
+        resolve,
+      );
+    });
+    expect(childJoin).toMatchObject({ ok: true, data: { playerId: guest.playerId, gameNightId: host.view.id } });
   });
 });
