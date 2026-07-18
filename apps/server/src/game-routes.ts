@@ -29,7 +29,7 @@ import {
   wordTrapSetupSchema,
 } from "@boardforge/game-spec";
 import { runComposedPlaytest } from "@boardforge/game-engine";
-import type { GameContentProvider } from "@boardforge/llm";
+import { LocalCatalogLlmProvider, type GameContentProvider } from "@boardforge/llm";
 import type { GameCatalogStore } from "./persistence";
 import { gameSummary } from "./game-catalog";
 import { aiProviderErrorMessage } from "./provider-error";
@@ -39,7 +39,42 @@ type GameRouteDependencies = {
   blueprintStore: GameCatalogStore;
 };
 
+type PreparedContent<T> = {
+  content: T;
+  provider: string;
+  fallbackUsed: boolean;
+};
+
+async function prepareContent<T>(
+  app: FastifyInstance,
+  primaryProvider: GameContentProvider,
+  localProvider: GameContentProvider,
+  label: string,
+  primary: () => Promise<T>,
+  fallback: () => Promise<T>,
+): Promise<PreparedContent<T>> {
+  try {
+    return { content: await primary(), provider: primaryProvider.name, fallbackUsed: false };
+  } catch (error) {
+    app.log.warn(
+      {
+        operation: label,
+        provider: primaryProvider.name,
+        message: error instanceof Error ? error.message : "Unknown content provider error",
+      },
+      "AI content unavailable; using the audited local catalogue",
+    );
+    return {
+      content: await fallback(),
+      provider: `fallback:${localProvider.name}`,
+      fallbackUsed: true,
+    };
+  }
+}
+
 export function registerGameRoutes(app: FastifyInstance, { llm, blueprintStore }: GameRouteDependencies): void {
+  const localContent = new LocalCatalogLlmProvider();
+
   app.get("/api/games", async () => ({
     games: [
       defaultMovieMimeSpec,
@@ -90,16 +125,28 @@ export function registerGameRoutes(app: FastifyInstance, { llm, blueprintStore }
     const setup = setupResult.data;
 
     try {
-      const pack = setup.preferences
-        ? await llm.generateMovieMimePack(setup)
-        : createRandomMovieMimePack(setup, crypto.randomUUID());
+      const prepared = setup.preferences
+        ? await prepareContent(
+            app,
+            llm,
+            localContent,
+            "movie_mime_selection",
+            () => llm.generateMovieMimePack(setup),
+            async () => ({ ...(await localContent.generateMovieMimePack(setup)), source: "random" as const }),
+          )
+        : {
+            content: createRandomMovieMimePack(setup, crypto.randomUUID()),
+            provider: "catalog-random",
+            fallbackUsed: false,
+          };
+      const pack = prepared.content;
       const spec = createMovieMimeSpec(pack);
       const blueprintId = `${spec.id}-${crypto.randomUUID().slice(0, 8)}`;
       await blueprintStore.saveBlueprint({
         id: blueprintId,
         spec,
         status: "playtesting",
-        provider: setup.preferences ? llm.name : "catalog-random",
+        provider: prepared.provider,
         ...(setup.preferences ? { prompt: setup.preferences } : {}),
       });
       const playtest = runComposedPlaytest(spec, {
@@ -112,6 +159,7 @@ export function registerGameRoutes(app: FastifyInstance, { llm, blueprintStore }
         blueprintId,
         releaseStatus,
         source: pack.source,
+        fallbackUsed: prepared.fallbackUsed,
         themeId: pack.themeId,
         filmCount: pack.films.length,
         game: gameSummary(spec),
@@ -167,16 +215,28 @@ export function registerGameRoutes(app: FastifyInstance, { llm, blueprintStore }
     const setup = setupResult.data;
 
     try {
-      const pack = setup.preferences
-        ? await llm.generateWordTrapPack(setup)
-        : createRandomWordTrapPack(setup, crypto.randomUUID());
+      const prepared = setup.preferences
+        ? await prepareContent(
+            app,
+            llm,
+            localContent,
+            "word_trap_selection",
+            () => llm.generateWordTrapPack(setup),
+            async () => ({ ...(await localContent.generateWordTrapPack(setup)), source: "random" as const }),
+          )
+        : {
+            content: createRandomWordTrapPack(setup, crypto.randomUUID()),
+            provider: "catalog-random",
+            fallbackUsed: false,
+          };
+      const pack = prepared.content;
       const spec = createWordTrapSpec(pack);
       const blueprintId = `${spec.id}-${crypto.randomUUID().slice(0, 8)}`;
       await blueprintStore.saveBlueprint({
         id: blueprintId,
         spec,
         status: "playtesting",
-        provider: setup.preferences ? llm.name : "catalog-random",
+        provider: prepared.provider,
         ...(setup.preferences ? { prompt: setup.preferences } : {}),
       });
       const playtest = runComposedPlaytest(spec, { simulations: 24, seed: `release:${blueprintId}` });
@@ -186,6 +246,7 @@ export function registerGameRoutes(app: FastifyInstance, { llm, blueprintStore }
         blueprintId,
         releaseStatus,
         source: pack.source,
+        fallbackUsed: prepared.fallbackUsed,
         themeId: pack.themeId,
         cardCount: pack.cards.length,
         game: gameSummary(spec),

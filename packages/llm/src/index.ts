@@ -305,7 +305,7 @@ function normalizedPrompt(prompt: string): string {
   return prompt.trim().replace(/\s+/g, " ");
 }
 
-export class FakeLlmProvider implements LlmProvider {
+export class LocalCatalogLlmProvider implements LlmProvider {
   readonly name = "procedural-local";
 
   async generateMovieMimePack(setupInput: MovieMimeSetupInput): Promise<MimeFilmPack> {
@@ -522,6 +522,9 @@ export class FakeLlmProvider implements LlmProvider {
     };
   }
 }
+
+/** Backwards-compatible name used by deterministic tests and offline development. */
+export class FakeLlmProvider extends LocalCatalogLlmProvider {}
 
 function requireParsedOutput<T>(value: T | null, operation: string): T {
   if (value === null) {

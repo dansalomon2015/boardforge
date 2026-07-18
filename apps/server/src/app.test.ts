@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { defaultMovieMimeSpec, defaultSecondSenseSpec } from "@boardforge/game-spec";
+import { FakeLlmProvider } from "@boardforge/llm";
 import { createBoardForgeServer } from "./app";
 
 let activeApp: FastifyInstance | undefined;
@@ -11,6 +12,53 @@ afterEach(async () => {
 });
 
 describe("BoardForge HTTP application", () => {
+  it("falls back to audited local movie and word catalogues when AI content is unavailable", async () => {
+    class UnavailableContentProvider extends FakeLlmProvider {
+      override async generateMovieMimePack(): Promise<never> {
+        throw new Error("OpenAI quota expired");
+      }
+
+      override async generateWordTrapPack(): Promise<never> {
+        throw new Error("OpenAI quota expired");
+      }
+    }
+
+    const { app } = await createBoardForgeServer({
+      databaseUrl: null,
+      llmProvider: "fake",
+      gameContentProvider: new UnavailableContentProvider(),
+      logger: false,
+      restoreRooms: false,
+    });
+    activeApp = app;
+
+    const movie = await app.inject({
+      method: "POST",
+      url: "/api/movie-mime/blueprints",
+      payload: { themeId: "noir", filmCount: 8, preferences: "family comedy classics" },
+    });
+    expect(movie.statusCode).toBe(201);
+    expect(movie.json()).toMatchObject({
+      source: "random",
+      fallbackUsed: true,
+      filmCount: 8,
+      releaseStatus: "release_ready",
+    });
+
+    const words = await app.inject({
+      method: "POST",
+      url: "/api/word-trap/blueprints",
+      payload: { themeId: "disco", cardCount: 8, preferences: "food and travel" },
+    });
+    expect(words.statusCode).toBe(201);
+    expect(words.json()).toMatchObject({
+      source: "random",
+      fallbackUsed: true,
+      cardCount: 8,
+      releaseStatus: "release_ready",
+    });
+  });
+
   it("builds without opening a port and exposes health/catalogue routes", async () => {
     const { app } = await createBoardForgeServer({
       databaseUrl: null,

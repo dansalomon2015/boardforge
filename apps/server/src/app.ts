@@ -38,6 +38,7 @@ export type BoardForgeServerOptions = {
   logger?: boolean;
   restoreRooms?: boolean;
   countdownClock?: CountdownClock;
+  gameContentProvider?: GameContentProvider;
   storyBookProvider?: Pick<GameContentProvider, "generateStoryBook">;
 };
 
@@ -87,6 +88,7 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
     reviewModel: config.openAiReviewModel,
     onTelemetry: (telemetry) => app.log.info({ llmUsage: telemetry }, "OpenAI workflow usage"),
   });
+  const gameContentProvider = options.gameContentProvider ?? llm;
   const seededBlueprints: BlueprintRecord[] = availableDemoSpecs.map((spec) => {
     const playtest =
       spec.template === "composed"
@@ -118,7 +120,7 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
     databaseReady: blueprintStore.mode === "postgres" && (await blueprintStore.health().catch(() => false)),
   }));
 
-  registerGameRoutes(app, { llm, blueprintStore });
+  registerGameRoutes(app, { llm: gameContentProvider, blueprintStore });
 
   registerBalanceRoutes(app, { llm, blueprintStore });
 
@@ -204,7 +206,7 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
     gameNightCatalogIds: new Set(gameNightCatalog.map((game) => game.id)),
     createRoomCode,
     blueprintStore,
-    storyBookProvider: options.storyBookProvider ?? llm,
+    storyBookProvider: options.storyBookProvider ?? gameContentProvider,
     restoreRooms: options.restoreRooms !== false,
     ...(options.countdownClock ? { countdownClock: options.countdownClock } : {}),
   });
