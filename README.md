@@ -82,6 +82,10 @@ docker compose up --build
 
 PostgreSQL is exposed on local port `5433`. Blueprints, rooms, rotating reconnect credentials, accepted actions and append-only room events survive server restarts.
 
+## Deploy
+
+Production uses the same container boundaries as local development on a single Ubuntu EC2 instance, with Caddy providing HTTPS and GitHub Actions handling configuration, verification and deployment. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the AWS prerequisites, required GitHub secrets, first-time setup, deployment and rollback procedures.
+
 ## Status
 
 The seven-game local collection, deterministic simulations, real-time rooms, persistence, reconnect flow and production builds are operational. The remaining hackathon work is quality hardening, browser regression coverage, hosted deployment and submission evidence.

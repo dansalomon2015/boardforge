@@ -1,0 +1,124 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - name: Resolve revision
+        id: revision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            echo "sha=$WORKFLOW_RUN_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=$CURRENT_SHA" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.revision.outputs.sha }}
+
+      - name: Validate required secrets
+        env:
+          APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
+          API_DOMAIN: ${{ secrets.API_DOMAIN }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        run: |
+          test -n "$APP_DOMAIN"
+          test -n "$API_DOMAIN"
+          test -n "$EC2_HOST"
+          test -n "$EC2_USER"
+          test -n "$EC2_SSH_PRIVATE_KEY"
+          test -n "$OPENAI_API_KEY"
+          test -n "$POSTGRES_PASSWORD"
+
+      - name: Prepare deployment files
+        env:
+          APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
+          API_DOMAIN: ${{ secrets.API_DOMAIN }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          EC2_SSH_PORT: ${{ secrets.EC2_SSH_PORT }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          OPENAI_REVIEW_MODEL: ${{ secrets.OPENAI_REVIEW_MODEL }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_PRIVATE_KEY" > ~/.ssh/boardforge
+          chmod 600 ~/.ssh/boardforge
+          ssh-keyscan -p "${EC2_SSH_PORT:-22}" -H "$EC2_HOST" >> ~/.ssh/known_hosts
+          git archive --format=tar HEAD | gzip -9 > /tmp/boardforge-release.tar.gz
+          {
+            printf 'APP_DOMAIN=%s\n' "$APP_DOMAIN"
+            printf 'API_DOMAIN=%s\n' "$API_DOMAIN"
+            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+            printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+            printf 'OPENAI_MODEL=%s\n' "${OPENAI_MODEL:-gpt-5.6-terra}"
+            printf 'OPENAI_REVIEW_MODEL=%s\n' "${OPENAI_REVIEW_MODEL:-gpt-5.6-luna}"
+          } > /tmp/boardforge.env
+          chmod 600 /tmp/boardforge.env
+
+      - name: Upload release
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_PORT: ${{ secrets.EC2_SSH_PORT }}
+          RELEASE_SHA: ${{ steps.revision.outputs.sha }}
+        run: |
+          port="${EC2_SSH_PORT:-22}"
+          scp -i ~/.ssh/boardforge -P "$port" /tmp/boardforge-release.tar.gz "$EC2_USER@$EC2_HOST:/tmp/boardforge-release.tar.gz"
+          scp -i ~/.ssh/boardforge -P "$port" /tmp/boardforge.env "$EC2_USER@$EC2_HOST:/tmp/boardforge.env"
+          ssh -i ~/.ssh/boardforge -p "$port" "$EC2_USER@$EC2_HOST" \
+            "RELEASE_SHA=$RELEASE_SHA bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          release="/opt/boardforge/releases/$RELEASE_SHA"
+          mkdir -p "$release"
+          tar -xzf /tmp/boardforge-release.tar.gz -C "$release"
+          install -m 600 /tmp/boardforge.env /opt/boardforge/shared/.env.production
+          cd "$release"
+          docker compose --project-name boardforge --env-file /opt/boardforge/shared/.env.production -f compose.production.yaml up --detach --build --remove-orphans
+          ln -sfn "$release" /opt/boardforge/current
+          docker image prune -f
+          rm -f /tmp/boardforge-release.tar.gz /tmp/boardforge.env
+          REMOTE
+
+      - name: Verify deployment
+        env:
+          APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
+          API_DOMAIN: ${{ secrets.API_DOMAIN }}
+        run: |
+          for attempt in {1..24}; do
+            echo "Health check attempt $attempt of 24"
+            if curl --fail --silent --show-error "https://$API_DOMAIN/health" >/dev/null && \
+              curl --fail --silent --show-error "https://$APP_DOMAIN/" >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1

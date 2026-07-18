@@ -1,0 +1,63 @@
+name: Configure EC2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  configure:
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - name: Validate required secrets
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+        run: |
+          test -n "$EC2_HOST"
+          test -n "$EC2_USER"
+          test -n "$EC2_SSH_PRIVATE_KEY"
+
+      - name: Prepare SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          EC2_SSH_PORT: ${{ secrets.EC2_SSH_PORT }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_PRIVATE_KEY" > ~/.ssh/boardforge
+          chmod 600 ~/.ssh/boardforge
+          ssh-keyscan -p "${EC2_SSH_PORT:-22}" -H "$EC2_HOST" >> ~/.ssh/known_hosts
+
+      - name: Install and configure Docker
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_PORT: ${{ secrets.EC2_SSH_PORT }}
+        run: |
+          ssh -i ~/.ssh/boardforge -p "${EC2_SSH_PORT:-22}" "$EC2_USER@$EC2_HOST" \
+            "SSH_PORT=${EC2_SSH_PORT:-22} bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates curl ufw
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          . /etc/os-release
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${UBUNTU_CODENAME:-$VERSION_CODENAME} stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+          sudo systemctl enable --now docker
+          sudo usermod -aG docker "$USER"
+          sudo install -d -o "$USER" -g "$USER" /opt/boardforge/releases /opt/boardforge/shared
+          sudo ufw allow "$SSH_PORT/tcp"
+          sudo ufw allow 80/tcp
+          sudo ufw allow 443/tcp
+          sudo ufw allow 443/udp
+          sudo ufw --force enable
+          docker --version
+          docker compose version
+          REMOTE
