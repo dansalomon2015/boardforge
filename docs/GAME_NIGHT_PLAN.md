@@ -54,10 +54,13 @@ Completed:
 - Completed sessions locked against new games while remaining available to returning participants.
 - A real four-team browser launch through captain selection into a 16-round DrawBattle room, with no browser warnings or errors.
 - A recorded three-team browser launch through team creation, captain selection and an 18-round DrawBattle room, with no browser warnings or errors.
+- A complete four-team DrawBattle regression across all 16 adapted rounds, including a mid-game reconnect and every team taking its turn.
+- Four-team result normalization back to the parent board, with deterministic tie awards and cumulative scores for every persistent team.
 
 Not completed:
 
-- Complete full four-team game completions.
+- Complete the final accessibility and responsive audit.
+- Run the production deployment and PostgreSQL migration smoke tests on the target environment.
 
 ## P0 delivery plan
 
