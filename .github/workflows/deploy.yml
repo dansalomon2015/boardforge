@@ -102,7 +102,16 @@ jobs:
           tar -xzf /tmp/boardforge-release.tar.gz -C "$release"
           install -m 600 /tmp/boardforge.env /opt/boardforge/shared/.env.production
           cd "$release"
-          docker compose --project-name boardforge --env-file /opt/boardforge/shared/.env.production -f compose.production.yaml up --detach --build --remove-orphans
+          compose() {
+            COMPOSE_PARALLEL_LIMIT=1 docker compose \
+              --project-name boardforge \
+              --env-file /opt/boardforge/shared/.env.production \
+              -f compose.production.yaml "$@"
+          }
+          compose pull postgres caddy
+          compose build server
+          compose build web
+          compose up --detach --no-build --remove-orphans
           ln -sfn "$release" /opt/boardforge/current
           docker image prune -f
           rm -f /tmp/boardforge-release.tar.gz /tmp/boardforge.env

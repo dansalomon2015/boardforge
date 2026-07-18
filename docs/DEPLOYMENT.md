@@ -42,9 +42,11 @@ Generate a database password locally with a password manager or `openssl rand -b
 
 ## 3. Configure the instance
 
-Run **Actions → Configure EC2 → Run workflow** once. It installs Docker Engine and the Compose plugin, enables Docker at boot, creates `/opt/boardforge`, and configures UFW for SSH, HTTP and HTTPS.
+Run **Actions → Configure EC2 → Run workflow** once. It installs Docker Engine and the Compose plugin, enables Docker at boot, creates `/opt/boardforge`, configures a persistent 4 GB swap file to protect container builds from memory exhaustion, and configures UFW for SSH, HTTP and HTTPS.
 
 The workflow assumes a fresh Ubuntu host and a user with passwordless `sudo`, as provided by the standard Ubuntu EC2 image. Confirm that the workflow succeeds before deploying.
+
+The configuration workflow is idempotent and can be rerun on an existing instance. If a deployment previously failed with `signal: killed` during `pnpm install` or `next build`, rerun **Configure EC2** to add the swap file, then rerun **Deploy production**. Production images are built sequentially to keep peak memory usage bounded.
 
 ## 4. Deploy
 

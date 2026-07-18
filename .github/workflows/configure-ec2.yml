@@ -53,6 +53,17 @@ jobs:
           sudo systemctl enable --now docker
           sudo usermod -aG docker "$USER"
           sudo install -d -o "$USER" -g "$USER" /opt/boardforge/releases /opt/boardforge/shared
+          if ! sudo swapon --show=NAME --noheadings | grep -qx '/swapfile'; then
+            if [ ! -f /swapfile ]; then
+              sudo fallocate -l 4G /swapfile
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+            fi
+            sudo swapon /swapfile
+          fi
+          if ! grep -q '^/swapfile ' /etc/fstab; then
+            echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+          fi
           sudo ufw allow "$SSH_PORT/tcp"
           sudo ufw allow 80/tcp
           sudo ufw allow 443/tcp
@@ -60,4 +71,5 @@ jobs:
           sudo ufw --force enable
           docker --version
           docker compose version
+          free -h
           REMOTE
