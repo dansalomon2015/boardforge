@@ -8,9 +8,15 @@ import {
   type BoardGameSpec,
   type ComposedBalancePatch,
 } from "@boardforge/game-spec";
-import type { ComposedPlaytestReport } from "@boardforge/game-engine";
+import type {
+  ComposedPlaytestReport,
+  GameNightCompletedGame,
+  GameNightScoreEvent,
+  GameNightState,
+} from "@boardforge/game-engine";
 import { composedGameCritiqueSchema, type ComposedGameCritique } from "@boardforge/llm";
 import type { GameAction, PublicPlayer } from "@boardforge/shared";
+import { gameNightSessionSchema } from "./game-night-schemas";
 
 export type BlueprintStatus = "draft" | "validating" | "playtesting" | "release_ready" | "needs_review";
 
@@ -65,6 +71,15 @@ export type RoomSessionRecord = {
   events: RoomEventRecord[];
 };
 
+export type GameNightSessionRecord = {
+  id: string;
+  code: string;
+  hostPlayerId: string;
+  players: PublicPlayer[];
+  state: GameNightState;
+  currentRoomCode: string | null;
+};
+
 export interface BlueprintStore {
   readonly mode: "memory" | "postgres";
   get(id: string): Promise<BlueprintRecord | undefined>;
@@ -86,6 +101,13 @@ export interface BlueprintStore {
   saveRoom(record: Omit<RoomSessionRecord, "events">): Promise<void>;
   appendRoomEvent(record: Omit<RoomSessionRecord, "events">, event: RoomEventRecord): Promise<void>;
   findRoomEvent(roomCode: string, idempotencyKey: string): Promise<RoomEventRecord | undefined>;
+  loadGameNights(): Promise<GameNightSessionRecord[]>;
+  saveGameNight(record: GameNightSessionRecord): Promise<void>;
+  appendGameNightResult(
+    record: GameNightSessionRecord,
+    completedGame: GameNightCompletedGame,
+    scoreEvents: GameNightScoreEvent[],
+  ): Promise<void>;
   health(): Promise<boolean>;
   close(): Promise<void>;
 }
@@ -124,6 +146,26 @@ function cloneRecord(record: BlueprintRecord): BlueprintRecord {
   return structuredClone(record);
 }
 
+function parseGameNightSession(input: unknown): GameNightSessionRecord {
+  const parsed = gameNightSessionSchema.safeParse(input);
+  if (!parsed.success) throw new Error("Refusing invalid persisted game-night session.");
+  const record = parsed.data;
+  if (record.state.id !== record.id) throw new Error("Game-night state id does not match its session.");
+  const playerIds = new Set(record.players.map((player) => player.id));
+  const host = record.players.find((player) => player.id === record.hostPlayerId);
+  if (!host?.isHost) throw new Error("Game-night host must be present in the player list.");
+  const assignedPlayerIds = record.state.teams.flatMap((team) => team.playerIds);
+  if (new Set(assignedPlayerIds).size !== assignedPlayerIds.length)
+    throw new Error("A game-night player cannot belong to multiple teams.");
+  if (assignedPlayerIds.some((playerId) => !playerIds.has(playerId)))
+    throw new Error("Game-night teams cannot contain unknown players.");
+  for (const team of record.state.teams) {
+    if (team.captainPlayerId && !team.playerIds.includes(team.captainPlayerId))
+      throw new Error("A game-night captain must belong to their team.");
+  }
+  return record;
+}
+
 function parseBalancePatch(input: unknown): ComposedBalancePatch {
   const parsed = composedBalancePatchSchema.safeParse(input);
   if (!parsed.success) throw new Error("Refusing invalid persisted balance patch.");
@@ -142,6 +184,7 @@ export class MemoryBlueprintStore implements BlueprintStore {
   private readonly balancePatches = new Map<string, BalancePatchRecord>();
   private readonly roomRecords = new Map<string, Omit<RoomSessionRecord, "events">>();
   private readonly roomEvents = new Map<string, RoomEventRecord[]>();
+  private readonly gameNights = new Map<string, GameNightSessionRecord>();
 
   async get(id: string): Promise<BlueprintRecord | undefined> {
     const record = this.records.get(id);
@@ -274,6 +317,45 @@ export class MemoryBlueprintStore implements BlueprintStore {
     return event ? structuredClone(event) : undefined;
   }
 
+  async loadGameNights(): Promise<GameNightSessionRecord[]> {
+    return [...this.gameNights.values()].map((record) => structuredClone(record));
+  }
+
+  async saveGameNight(input: GameNightSessionRecord): Promise<void> {
+    const record = parseGameNightSession(input);
+    this.gameNights.set(record.id, structuredClone(record));
+  }
+
+  async appendGameNightResult(
+    input: GameNightSessionRecord,
+    completedGame: GameNightCompletedGame,
+    scoreEvents: GameNightScoreEvent[],
+  ): Promise<void> {
+    const record = parseGameNightSession(input);
+    if (!this.records.has(completedGame.blueprintId))
+      throw new Error(`Unknown blueprint: ${completedGame.blueprintId}`);
+    const existing = this.gameNights.get(record.id);
+    if (!existing) throw new Error(`Unknown game night: ${record.id}`);
+    const existingGame = existing.state.completedGames.find(
+      (game) =>
+        game.gameInstanceId === completedGame.gameInstanceId ||
+        game.resultIdempotencyKey === completedGame.resultIdempotencyKey,
+    );
+    if (existingGame) {
+      if (isDeepStrictEqual(existingGame, completedGame)) return;
+      throw new Error("Conflicting game-night result.");
+    }
+    const persistedGame = record.state.completedGames.find(
+      (game) => game.gameInstanceId === completedGame.gameInstanceId,
+    );
+    if (!persistedGame || !isDeepStrictEqual(persistedGame, completedGame))
+      throw new Error("Game-night snapshot does not contain the appended result.");
+    const persistedEvents = record.state.scoreEvents.filter((event) => completedGame.scoreEventIds.includes(event.id));
+    if (!isDeepStrictEqual(persistedEvents, scoreEvents))
+      throw new Error("Game-night snapshot does not contain the appended score events.");
+    this.gameNights.set(record.id, structuredClone(record));
+  }
+
   async health(): Promise<boolean> {
     return true;
   }
@@ -329,6 +411,24 @@ type RoomEventRow = {
   action: GameAction;
 };
 
+type GameNightRow = {
+  id: string;
+  code: string;
+  host_player_id: string;
+  players: PublicPlayer[];
+  state: unknown;
+  current_room_code: string | null;
+};
+
+type GameNightGameRow = {
+  id: string;
+  blueprint_id: string;
+  result_idempotency_key: string;
+  winner: GameNightCompletedGame["winner"];
+  awarded_team_ids: string[];
+  score_event_ids: string[];
+};
+
 function roomEventFromRow(row: RoomEventRow): RoomEventRecord {
   return {
     id: row.id,
@@ -372,6 +472,7 @@ class PostgresBlueprintStore implements BlueprintStore {
       "0006_compilation_jobs.sql",
       "0007_room_captains.sql",
       "0008_composed_experience_ids.sql",
+      "0009_game_nights.sql",
     ]) {
       const migration = await readFile(new URL(`../migrations/${filename}`, import.meta.url), "utf8");
       await this.pool.query(migration);
@@ -749,6 +850,125 @@ class PostgresBlueprintStore implements BlueprintStore {
       [roomCode, idempotencyKey],
     );
     return result.rows[0] ? roomEventFromRow(result.rows[0]) : undefined;
+  }
+
+  async loadGameNights(): Promise<GameNightSessionRecord[]> {
+    const result = await this.pool.query<GameNightRow>(
+      `SELECT id, code, host_player_id, players, state, current_room_code
+       FROM game_nights
+       ORDER BY created_at`,
+    );
+    return result.rows.map((row) =>
+      parseGameNightSession({
+        id: row.id,
+        code: row.code,
+        hostPlayerId: row.host_player_id,
+        players: row.players,
+        state: row.state,
+        currentRoomCode: row.current_room_code,
+      }),
+    );
+  }
+
+  async saveGameNight(input: GameNightSessionRecord): Promise<void> {
+    const record = parseGameNightSession(input);
+    await this.pool.query(
+      `INSERT INTO game_nights (id, code, host_player_id, players, state, current_room_code)
+       VALUES ($1::uuid, $2, $3::uuid, $4::jsonb, $5::jsonb, $6)
+       ON CONFLICT (id) DO UPDATE SET
+         players = EXCLUDED.players,
+         state = EXCLUDED.state,
+         current_room_code = EXCLUDED.current_room_code,
+         updated_at = now()`,
+      [
+        record.id,
+        record.code,
+        record.hostPlayerId,
+        JSON.stringify(record.players),
+        JSON.stringify(record.state),
+        record.currentRoomCode,
+      ],
+    );
+  }
+
+  async appendGameNightResult(
+    input: GameNightSessionRecord,
+    completedGame: GameNightCompletedGame,
+    scoreEvents: GameNightScoreEvent[],
+  ): Promise<void> {
+    const record = parseGameNightSession(input);
+    const persistedGame = record.state.completedGames.find(
+      (game) => game.gameInstanceId === completedGame.gameInstanceId,
+    );
+    const persistedEvents = record.state.scoreEvents.filter((event) => completedGame.scoreEventIds.includes(event.id));
+    if (!persistedGame || !isDeepStrictEqual(persistedGame, completedGame))
+      throw new Error("Game-night snapshot does not contain the appended result.");
+    if (!isDeepStrictEqual(persistedEvents, scoreEvents))
+      throw new Error("Game-night snapshot does not contain the appended score events.");
+
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const existing = await client.query<GameNightGameRow>(
+        `SELECT id, blueprint_id, result_idempotency_key, winner, awarded_team_ids, score_event_ids
+         FROM game_night_games
+         WHERE game_night_id = $1::uuid AND (id = $2::uuid OR result_idempotency_key = $3)
+         FOR UPDATE`,
+        [record.id, completedGame.gameInstanceId, completedGame.resultIdempotencyKey],
+      );
+      const existingRow = existing.rows[0];
+      if (existingRow) {
+        const existingGame: GameNightCompletedGame = {
+          gameInstanceId: existingRow.id,
+          blueprintId: existingRow.blueprint_id,
+          resultIdempotencyKey: existingRow.result_idempotency_key,
+          winner: existingRow.winner,
+          awardedTeamIds: existingRow.awarded_team_ids,
+          scoreEventIds: existingRow.score_event_ids,
+        };
+        if (!isDeepStrictEqual(existingGame, completedGame)) throw new Error("Conflicting game-night result.");
+        await client.query("COMMIT");
+        return;
+      }
+
+      await client.query(
+        `INSERT INTO game_night_games (
+           id, game_night_id, ordinal, blueprint_id, room_code, result_idempotency_key,
+           winner, awarded_team_ids, score_event_ids
+         ) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb)`,
+        [
+          completedGame.gameInstanceId,
+          record.id,
+          record.state.completedGames.findIndex((game) => game.gameInstanceId === completedGame.gameInstanceId) + 1,
+          completedGame.blueprintId,
+          record.currentRoomCode,
+          completedGame.resultIdempotencyKey,
+          JSON.stringify(completedGame.winner),
+          JSON.stringify(completedGame.awardedTeamIds),
+          JSON.stringify(completedGame.scoreEventIds),
+        ],
+      );
+      for (const event of scoreEvents) {
+        await client.query(
+          `INSERT INTO game_night_score_events (
+             game_night_id, id, game_instance_id, team_id, points, reason
+           ) VALUES ($1::uuid, $2, $3::uuid, $4, $5, $6)`,
+          [record.id, event.id, event.gameInstanceId, event.teamId, event.points, event.reason],
+        );
+      }
+      await client.query(
+        `UPDATE game_nights SET players = $2::jsonb, state = $3::jsonb,
+           current_room_code = $4, updated_at = now()
+         WHERE id = $1::uuid`,
+        [record.id, JSON.stringify(record.players), JSON.stringify(record.state), record.currentRoomCode],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async health(): Promise<boolean> {
