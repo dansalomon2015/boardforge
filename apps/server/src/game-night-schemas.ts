@@ -63,6 +63,7 @@ export const gameNightSessionSchema = z
         })
         .strict(),
     ),
+    reconnectTokenHashes: z.record(z.string().uuid(), z.string().min(20).max(160)),
     state: gameNightStateSchema,
     currentRoomCode: z
       .string()

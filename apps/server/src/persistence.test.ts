@@ -72,6 +72,8 @@ describe("MemoryBlueprintStore", () => {
     const session = {
       code: "ABC234",
       blueprintId: "cinema-room",
+      gameNightId: null,
+      gameInstanceId: null,
       players: [],
       reconnectTokenHashes: {},
       lobbyTeamByPlayer: {},
@@ -127,6 +129,7 @@ describe("MemoryBlueprintStore", () => {
       code: "NIGHT2",
       hostPlayerId,
       players,
+      reconnectTokenHashes: {},
       state: initialState,
       currentRoomCode: null,
     };
@@ -164,6 +167,7 @@ describe("MemoryBlueprintStore", () => {
         code: "NIGHT2",
         hostPlayerId,
         players: [{ id: hostPlayerId, name: "Maya", isHost: false, connected: true }],
+        reconnectTokenHashes: {},
         state,
         currentRoomCode: null,
       }),

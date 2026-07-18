@@ -60,6 +60,8 @@ export type RoomEventRecord = {
 export type RoomSessionRecord = {
   code: string;
   blueprintId: string;
+  gameNightId: string | null;
+  gameInstanceId: string | null;
   players: PublicPlayer[];
   reconnectTokenHashes: Record<string, string>;
   lobbyTeamByPlayer: Record<string, string>;
@@ -76,6 +78,7 @@ export type GameNightSessionRecord = {
   code: string;
   hostPlayerId: string;
   players: PublicPlayer[];
+  reconnectTokenHashes: Record<string, string>;
   state: GameNightState;
   currentRoomCode: string | null;
 };
@@ -388,6 +391,8 @@ type BalancePatchRow = {
 type RoomSessionRow = {
   code: string;
   blueprint_id: string;
+  game_night_id: string | null;
+  game_instance_id: string | null;
   players: PublicPlayer[];
   reconnect_token_hashes: Record<string, string>;
   lobby_team_by_player: Record<string, string>;
@@ -416,6 +421,7 @@ type GameNightRow = {
   code: string;
   host_player_id: string;
   players: PublicPlayer[];
+  reconnect_token_hashes: Record<string, string>;
   state: unknown;
   current_room_code: string | null;
 };
@@ -473,6 +479,7 @@ class PostgresBlueprintStore implements BlueprintStore {
       "0007_room_captains.sql",
       "0008_composed_experience_ids.sql",
       "0009_game_nights.sql",
+      "0010_game_night_room_links.sql",
     ]) {
       const migration = await readFile(new URL(`../migrations/${filename}`, import.meta.url), "utf8");
       await this.pool.query(migration);
@@ -723,7 +730,8 @@ class PostgresBlueprintStore implements BlueprintStore {
 
   async loadRooms(): Promise<RoomSessionRecord[]> {
     const sessions = await this.pool.query<RoomSessionRow>(
-      `SELECT code, blueprint_id, players, reconnect_token_hashes, lobby_team_by_player, lobby_captain_by_team,
+      `SELECT code, blueprint_id, game_night_id, game_instance_id, players, reconnect_token_hashes,
+              lobby_team_by_player, lobby_captain_by_team,
               seed, checkpoint, checkpoint_checksum, checkpoint_revision
        FROM room_sessions
        ORDER BY created_at`,
@@ -743,6 +751,8 @@ class PostgresBlueprintStore implements BlueprintStore {
     return sessions.rows.map((row) => ({
       code: row.code,
       blueprintId: row.blueprint_id,
+      gameNightId: row.game_night_id,
+      gameInstanceId: row.game_instance_id,
       players: row.players,
       reconnectTokenHashes: row.reconnect_token_hashes,
       lobbyTeamByPlayer: row.lobby_team_by_player,
@@ -758,10 +768,13 @@ class PostgresBlueprintStore implements BlueprintStore {
   async saveRoom(record: Omit<RoomSessionRecord, "events">): Promise<void> {
     await this.pool.query(
       `INSERT INTO room_sessions (
-         code, blueprint_id, players, reconnect_token_hashes, lobby_team_by_player, lobby_captain_by_team,
+         code, blueprint_id, game_night_id, game_instance_id, players, reconnect_token_hashes,
+         lobby_team_by_player, lobby_captain_by_team,
          seed, checkpoint, checkpoint_checksum, checkpoint_revision
-       ) VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8::jsonb, $9, $10)
+       ) VALUES ($1, $2, $3::uuid, $4::uuid, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9, $10::jsonb, $11, $12)
        ON CONFLICT (code) DO UPDATE SET
+         game_night_id = EXCLUDED.game_night_id,
+         game_instance_id = EXCLUDED.game_instance_id,
          players = EXCLUDED.players,
          reconnect_token_hashes = EXCLUDED.reconnect_token_hashes,
          lobby_team_by_player = EXCLUDED.lobby_team_by_player,
@@ -774,6 +787,8 @@ class PostgresBlueprintStore implements BlueprintStore {
       [
         record.code,
         record.blueprintId,
+        record.gameNightId,
+        record.gameInstanceId,
         JSON.stringify(record.players),
         JSON.stringify(record.reconnectTokenHashes),
         JSON.stringify(record.lobbyTeamByPlayer),
@@ -854,7 +869,7 @@ class PostgresBlueprintStore implements BlueprintStore {
 
   async loadGameNights(): Promise<GameNightSessionRecord[]> {
     const result = await this.pool.query<GameNightRow>(
-      `SELECT id, code, host_player_id, players, state, current_room_code
+      `SELECT id, code, host_player_id, players, reconnect_token_hashes, state, current_room_code
        FROM game_nights
        ORDER BY created_at`,
     );
@@ -864,6 +879,7 @@ class PostgresBlueprintStore implements BlueprintStore {
         code: row.code,
         hostPlayerId: row.host_player_id,
         players: row.players,
+        reconnectTokenHashes: row.reconnect_token_hashes,
         state: row.state,
         currentRoomCode: row.current_room_code,
       }),
@@ -873,10 +889,12 @@ class PostgresBlueprintStore implements BlueprintStore {
   async saveGameNight(input: GameNightSessionRecord): Promise<void> {
     const record = parseGameNightSession(input);
     await this.pool.query(
-      `INSERT INTO game_nights (id, code, host_player_id, players, state, current_room_code)
-       VALUES ($1::uuid, $2, $3::uuid, $4::jsonb, $5::jsonb, $6)
+      `INSERT INTO game_nights (
+         id, code, host_player_id, players, reconnect_token_hashes, state, current_room_code
+       ) VALUES ($1::uuid, $2, $3::uuid, $4::jsonb, $5::jsonb, $6::jsonb, $7)
        ON CONFLICT (id) DO UPDATE SET
          players = EXCLUDED.players,
+         reconnect_token_hashes = EXCLUDED.reconnect_token_hashes,
          state = EXCLUDED.state,
          current_room_code = EXCLUDED.current_room_code,
          updated_at = now()`,
@@ -885,6 +903,7 @@ class PostgresBlueprintStore implements BlueprintStore {
         record.code,
         record.hostPlayerId,
         JSON.stringify(record.players),
+        JSON.stringify(record.reconnectTokenHashes),
         JSON.stringify(record.state),
         record.currentRoomCode,
       ],
@@ -957,10 +976,16 @@ class PostgresBlueprintStore implements BlueprintStore {
         );
       }
       await client.query(
-        `UPDATE game_nights SET players = $2::jsonb, state = $3::jsonb,
-           current_room_code = $4, updated_at = now()
+        `UPDATE game_nights SET players = $2::jsonb, reconnect_token_hashes = $3::jsonb,
+           state = $4::jsonb, current_room_code = $5, updated_at = now()
          WHERE id = $1::uuid`,
-        [record.id, JSON.stringify(record.players), JSON.stringify(record.state), record.currentRoomCode],
+        [
+          record.id,
+          JSON.stringify(record.players),
+          JSON.stringify(record.reconnectTokenHashes),
+          JSON.stringify(record.state),
+          record.currentRoomCode,
+        ],
       );
       await client.query("COMMIT");
     } catch (error) {

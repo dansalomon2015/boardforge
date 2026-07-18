@@ -146,6 +146,8 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
     const room: Room = {
       code,
       blueprintId,
+      gameNightId: null,
+      gameInstanceId: null,
       spec,
       players: new Map(),
       socketByPlayer: new Map(),

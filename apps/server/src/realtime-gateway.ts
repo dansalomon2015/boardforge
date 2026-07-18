@@ -124,6 +124,8 @@ export async function registerRealtimeGateway({
         const room: Room = {
           code: record.code,
           blueprintId: record.blueprintId,
+          gameNightId: record.gameNightId,
+          gameInstanceId: record.gameInstanceId,
           spec: blueprint.spec,
           players: new Map(players.map((player) => [player.id, player])),
           socketByPlayer: new Map(),
