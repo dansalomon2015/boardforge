@@ -42,10 +42,12 @@ Completed:
 - Automatic return from a completed child game to the shared Game Night board.
 - A server-authored result spotlight with normalized awards and an ordered, persistent game history.
 - A complete CineMimes vertical slice validated through all twenty rounds with two real-time players.
+- A two-game replay regression from CineMimes to WordTrap with preserved identities, teams, captains and cumulative scores.
+- Consistent Game Night return actions for CineMimes, WordTrap, DrawBattle and SoundCheck.
 
 Not completed:
 
-- A complete two-game browser regression covering the second launch and return.
+- Complete multiplayer regressions for DrawBattle and SoundCheck.
 - End-of-night confirmation and final podium.
 
 ## P0 delivery plan
@@ -150,7 +152,7 @@ Acceptance tests:
 - The game score does not leak into the global score.
 - Completion returns one normalized result to the Game Night.
 
-### Phase 6 — Result transition and replay loop (in progress)
+### Phase 6 — Result transition and replay loop (completed)
 
 Work:
 

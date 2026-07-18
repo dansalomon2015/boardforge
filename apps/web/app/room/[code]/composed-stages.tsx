@@ -19,11 +19,11 @@ export function ComposedStageRouter({
     case "movie_mime":
       return <MovieMimeStage view={view} pending={pending} gameNightCode={gameNightCode} sendAction={sendAction} />;
     case "word_trap":
-      return <WordTrapStage view={view} pending={pending} sendAction={sendAction} />;
+      return <WordTrapStage view={view} pending={pending} gameNightCode={gameNightCode} sendAction={sendAction} />;
     case "draw_battle":
-      return <DrawBattleStage view={view} pending={pending} sendAction={sendAction} />;
+      return <DrawBattleStage view={view} pending={pending} gameNightCode={gameNightCode} sendAction={sendAction} />;
     case "sound_check":
-      return <SoundCheckStage view={view} pending={pending} sendAction={sendAction} />;
+      return <SoundCheckStage view={view} pending={pending} gameNightCode={gameNightCode} sendAction={sendAction} />;
     case "story_chain":
       return <StoryChainStage view={view} pending={pending} sendAction={sendAction} />;
     case "word_duel":

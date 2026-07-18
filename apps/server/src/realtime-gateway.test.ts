@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { io as createSocketClient, type Socket } from "socket.io-client";
 import type { ComposedGameView, JoinRoomResult, RoomView, SocketAck } from "@boardforge/shared";
-import { defaultMovieMimeSpec } from "@boardforge/game-spec";
+import { defaultMovieMimeSpec, defaultWordTrapSpec } from "@boardforge/game-spec";
 import { createBoardForgeServer } from "./app";
 
 describe("realtime room gateway", () => {
@@ -456,66 +456,148 @@ describe("realtime room gateway", () => {
     secondClient.on("room:state", (view: RoomView) => {
       guestRoomView = view;
     });
-    const started = await new Promise<SocketAck<{ view: RoomView }>>((resolve) => {
-      client?.emit("room:start", { code: launched.data.roomCode, playerId: host.playerId }, resolve);
-    });
-    expect(started.ok).toBe(true);
-    if (!started.ok) throw new Error(started.error);
-    hostRoomView = started.data.view;
-
-    const completedNight = waitForState<{
+    type CompletedNightView = {
       currentRoomCode: string | null;
       history: Array<{ awards: Array<{ points: number }>; blueprintId: string }>;
-    }>(client, (view) => view.currentRoomCode === null && view.history.length === 1);
-
-    for (let turn = 0; turn < 80; turn += 1) {
-      if (hostRoomView.kind === "composed" && hostRoomView.status === "completed") break;
-      const actors = [
-        { socket: client, playerId: host.playerId, view: hostRoomView },
-        { socket: secondClient, playerId: guest.playerId, view: guestRoomView },
-      ];
-      const actor = actors.find(
-        (candidate): candidate is { socket: Socket; playerId: string; view: ComposedGameView } =>
-          candidate.view.kind === "composed" && candidate.view.availableActions.length > 0,
+      teams: Array<{ id: string; score: number }>;
+    };
+    const playChildRoom = async (
+      roomCode: string,
+      selectActionId: string,
+      expectedHistoryLength: number,
+      gameName: string,
+    ): Promise<CompletedNightView> => {
+      const completedNight = waitForState<CompletedNightView>(
+        client!,
+        (view) => view.currentRoomCode === null && view.history.length === expectedHistoryLength,
       );
-      if (!actor) throw new Error(`No legal CineMimes action was available on turn ${turn}.`);
-      const available = actor.view.availableActions[0]!;
-      const previousRevision = actor.view.revision;
-      const nextState = new Promise<RoomView>((resolve) => {
-        const handler = (view: RoomView) => {
-          if (view.kind === "lobby" || view.revision <= previousRevision) return;
-          client?.off("room:state", handler);
-          resolve(view);
-        };
-        client?.on("room:state", handler);
+      const started = await new Promise<SocketAck<{ view: RoomView }>>((resolve) => {
+        client?.emit("room:start", { code: roomCode, playerId: host.playerId }, resolve);
       });
-      const action = {
-        type: "COMPOSED_ACTION" as const,
-        actionId: available.id,
-        ...(available.id === "select_mimer" ? { payload: { targetPlayerId: actor.playerId } } : {}),
-      };
-      const submitted = await new Promise<SocketAck<{ revision: number }>>((resolve) => {
-        actor.socket.emit(
-          "game:action",
-          {
-            code: launched.data.roomCode,
-            playerId: actor.playerId,
-            expectedRevision: previousRevision,
-            idempotencyKey: crypto.randomUUID(),
-            action,
-          },
-          resolve,
-        );
-      });
-      expect(submitted.ok).toBe(true);
-      if (!submitted.ok) throw new Error(submitted.error);
-      hostRoomView = await nextState;
-    }
+      expect(started.ok).toBe(true);
+      if (!started.ok) throw new Error(started.error);
+      hostRoomView = started.data.view;
 
-    expect(hostRoomView).toMatchObject({ kind: "composed", status: "completed" });
-    expect(await completedNight).toMatchObject({
+      for (let turn = 0; turn < 80; turn += 1) {
+        if (hostRoomView.kind === "composed" && hostRoomView.status === "completed") break;
+        const actors = [
+          { socket: client, playerId: host.playerId, view: hostRoomView },
+          { socket: secondClient, playerId: guest.playerId, view: guestRoomView },
+        ];
+        const actor = actors.find(
+          (candidate): candidate is { socket: Socket; playerId: string; view: ComposedGameView } =>
+            candidate.view.kind === "composed" && candidate.view.availableActions.length > 0,
+        );
+        if (!actor) throw new Error(`No legal ${gameName} action was available on turn ${turn}.`);
+        const available = actor.view.availableActions[0]!;
+        const previousRevision = actor.view.revision;
+        const nextState = new Promise<RoomView>((resolve) => {
+          const handler = (view: RoomView) => {
+            if (view.kind === "lobby" || view.revision <= previousRevision) return;
+            client?.off("room:state", handler);
+            resolve(view);
+          };
+          client?.on("room:state", handler);
+        });
+        const action = {
+          type: "COMPOSED_ACTION" as const,
+          actionId: available.id,
+          ...(available.id === selectActionId ? { payload: { targetPlayerId: actor.playerId } } : {}),
+        };
+        const submitted = await new Promise<SocketAck<{ revision: number }>>((resolve) => {
+          actor.socket.emit(
+            "game:action",
+            {
+              code: roomCode,
+              playerId: actor.playerId,
+              expectedRevision: previousRevision,
+              idempotencyKey: crypto.randomUUID(),
+              action,
+            },
+            resolve,
+          );
+        });
+        expect(submitted.ok).toBe(true);
+        if (!submitted.ok) throw new Error(submitted.error);
+        hostRoomView = await nextState;
+      }
+
+      expect(hostRoomView).toMatchObject({ kind: "composed", status: "completed" });
+      return completedNight;
+    };
+
+    const firstCompletedNight = await playChildRoom(launched.data.roomCode, "select_mimer", 1, "CineMimes");
+    expect(firstCompletedNight).toMatchObject({
       currentRoomCode: null,
       history: [{ blueprintId: defaultMovieMimeSpec.id, awards: expect.arrayContaining([expect.any(Object)]) }],
+    });
+
+    const selectedSecondGame = await new Promise<SocketAck<{ view: { selectedBlueprintId: string | null } }>>(
+      (resolve) => {
+        client?.emit(
+          "game-night:game:select",
+          { code: host.view.code, playerId: host.playerId, blueprintId: defaultWordTrapSpec.id },
+          resolve,
+        );
+      },
+    );
+    expect(selectedSecondGame).toMatchObject({
+      ok: true,
+      data: { view: { selectedBlueprintId: defaultWordTrapSpec.id } },
+    });
+    const secondLaunch = await new Promise<
+      SocketAck<{ view: { currentRoomCode: string | null }; roomCode: string; gameInstanceId: string }>
+    >((resolve) => {
+      client?.emit(
+        "game-night:game:launch",
+        { code: host.view.code, playerId: host.playerId, blueprintId: defaultWordTrapSpec.id },
+        resolve,
+      );
+    });
+    expect(secondLaunch.ok).toBe(true);
+    if (!secondLaunch.ok) throw new Error(secondLaunch.error);
+
+    const secondGuestJoin = await new Promise<SocketAck<JoinRoomResult>>((resolve) => {
+      secondClient?.emit(
+        "room:join",
+        {
+          code: secondLaunch.data.roomCode,
+          name: "Noah",
+          playerId: guest.playerId,
+          reconnectToken: childJoin.data.reconnectToken,
+        },
+        resolve,
+      );
+    });
+    const secondHostJoin = await new Promise<SocketAck<JoinRoomResult>>((resolve) => {
+      client?.emit(
+        "room:join",
+        {
+          code: secondLaunch.data.roomCode,
+          name: "Maya",
+          playerId: host.playerId,
+          reconnectToken: hostChildJoin.data.reconnectToken,
+        },
+        resolve,
+      );
+    });
+    expect(secondGuestJoin.ok).toBe(true);
+    expect(secondHostJoin.ok).toBe(true);
+    if (!secondGuestJoin.ok || !secondHostJoin.ok) throw new Error("Both players must enter the second game.");
+    guestRoomView = secondGuestJoin.data.view;
+    hostRoomView = secondHostJoin.data.view;
+
+    const secondCompletedNight = await playChildRoom(secondLaunch.data.roomCode, "select_clue_giver", 2, "WordTrap");
+    expect(secondCompletedNight).toMatchObject({
+      currentRoomCode: null,
+      history: [
+        { blueprintId: defaultMovieMimeSpec.id },
+        { blueprintId: defaultWordTrapSpec.id, awards: [{ points: 3 }] },
+      ],
+      teams: expect.arrayContaining([
+        expect.objectContaining({ id: "team_1", score: 4 }),
+        expect.objectContaining({ id: "team_2", score: 1 }),
+      ]),
     });
   });
 });

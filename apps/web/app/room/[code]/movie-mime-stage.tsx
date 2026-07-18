@@ -2,6 +2,7 @@
 
 import type { ComposedGameView, GameAction } from "@boardforge/shared";
 import { GameSurface } from "../../../components/game-ui";
+import { GameNightReturn } from "./game-night-return";
 import { themeForRoom } from "./stage-shared";
 import movieMimeStyles from "./movie-mime.module.css";
 
@@ -80,10 +81,7 @@ export function MovieMimeStage({
                 ? "wins tonight’s box office."
                 : "The teams share top billing."}
           </p>
-          {gameNightCode ? <small>Global score saved · returning automatically</small> : null}
-          <a href={gameNightCode ? `/game-night/${gameNightCode}?returned=1` : "/"}>
-            {gameNightCode ? "See the night standings" : "Back to the collection"} <b>→</b>
-          </a>
+          <GameNightReturn gameNightCode={gameNightCode} />
         </section>
       ) : view.phase.id === "select_mimer" ? (
         <section className={movieMimeStyles.castingStage}>

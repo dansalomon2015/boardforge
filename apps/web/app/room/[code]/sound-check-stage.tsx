@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ComposedGameView, GameAction } from "@boardforge/shared";
 import { GameSurface, TextAnswer } from "../../../components/game-ui";
+import { GameNightReturn } from "./game-night-return";
 import { themeForRoom } from "./stage-shared";
 import movieMimeStyles from "./movie-mime.module.css";
 import soundCheckStyles from "./sound-check.module.css";
@@ -10,10 +11,12 @@ import soundCheckStyles from "./sound-check.module.css";
 export function SoundCheckStage({
   view,
   pending,
+  gameNightCode,
   sendAction,
 }: {
   view: ComposedGameView;
   pending: boolean;
+  gameNightCode: string | null;
   sendAction: (action: GameAction) => void;
 }) {
   const [guess, setGuess] = useState("");
@@ -69,10 +72,14 @@ export function SoundCheckStage({
           <span>The final track has ended</span>
           <div className={`${movieMimeStyles.trophy} ${soundCheckStyles.recordTrophy}`}>◖</div>
           <h1>{winnerNames.join(" & ") || "Perfect tie"}</h1>
-          <p>{winnerNames.length ? "wins tonight’s SoundCheck session." : "The teams share the final mix."}</p>
-          <a href="/">
-            Back to the collection <b>→</b>
-          </a>
+          <p>
+            {winnerNames.length > 1
+              ? "share tonight’s SoundCheck session."
+              : winnerNames.length === 1
+                ? "wins tonight’s SoundCheck session."
+                : "The teams share the final mix."}
+          </p>
+          <GameNightReturn gameNightCode={gameNightCode} />
         </section>
       ) : view.phase.id === "select_performer" ? (
         <section className={`${movieMimeStyles.castingStage} ${soundCheckStyles.casting}`}>
