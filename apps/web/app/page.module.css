@@ -2,8 +2,10 @@
 .nav { width: min(1240px, calc(100% - 48px)); height: 86px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,.12); }
 .brand { display: inline-flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; font: 700 19px 'Space Grotesk', sans-serif; }
 .brandMark { width: 37px; height: 37px; display: grid; place-items: center; color: #0b0b0b; background: #ffd54a; border-radius: 50%; font-size: 10px; letter-spacing: -.3px; }
-.join { display: flex; gap: 7px; }
+.join { display: flex; align-items: center; gap: 7px; }
+.join > span { margin-right: 3px; color: #8f897f; font-size: 9px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; }
 .join input { width: 105px; padding: 10px 12px; color: white; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.17); border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 2px; text-align: center; }
+.join input:focus, .heroJoinInput:focus { outline: 2px solid #ffd54a; outline-offset: 2px; }
 .join button { padding: 10px 15px; color: #0b0b0b; background: #f7f2e8; border: 0; border-radius: 999px; font-size: 11px; font-weight: 900; }
 .join button:disabled { opacity: .35; }
 .hero { position: relative; width: min(1240px, calc(100% - 48px)); min-height: 730px; margin: 0 auto; display: grid; grid-template-columns: 1fr .86fr; gap: 70px; align-items: center; }
@@ -19,7 +21,16 @@
 .primaryAction { gap: 34px; color: #0b0b0b; background: #ffd54a; }
 .primaryAction b { font-size: 18px; }
 .secondaryAction { color: #f7f2e8; border: 1px solid rgba(255,255,255,.18); }
-.proof { display: flex; gap: 10px; margin-top: 42px; }
+.heroJoin { max-width: 620px; margin-top: 25px; display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center; padding: 16px 17px 16px 20px; background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.14); border-radius: 17px; box-shadow: 0 18px 50px rgba(0,0,0,.18); }
+.heroJoin > div:first-child { display: grid; gap: 3px; }
+.heroJoin strong { color: #f7f2e8; font: 700 15px 'Space Grotesk', sans-serif; }
+.heroJoin span { color: #837e75; font-size: 10px; }
+.heroJoinControls { display: flex; gap: 8px; }
+.heroJoinInput { width: 126px; min-width: 0; padding: 12px 11px; color: white; background: #111; border: 1px solid rgba(255,255,255,.22); border-radius: 10px; font-size: 11px; font-weight: 900; letter-spacing: 1.6px; text-align: center; text-transform: uppercase; }
+.heroJoin button { min-width: 118px; padding: 0 14px; color: #0b0b0b; background: #f7f2e8; border: 0; border-radius: 10px; font-size: 10px; font-weight: 900; }
+.heroJoin button b { margin-left: 6px; font-size: 14px; }
+.heroJoin button:disabled { cursor: not-allowed; opacity: .32; }
+.proof { display: flex; gap: 10px; margin-top: 28px; }
 .proof span { min-width: 120px; display: grid; gap: 3px; padding: 11px 13px; color: #777168; border-left: 1px solid rgba(255,255,255,.15); font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; }
 .proof b { color: #f7f2e8; font: 700 17px 'Space Grotesk', sans-serif; letter-spacing: -.5px; }
 .heroVisual { position: relative; z-index: 1; width: 470px; height: 570px; justify-self: end; perspective: 1200px; }
@@ -80,12 +91,17 @@
 @media (max-width: 560px) {
   .nav { width: calc(100% - 30px); height: 72px; }
   .brand > span:last-child { display: none; }
-  .join input { width: 82px; }
+  .join > span { display: none; }
+  .join input { width: 100px; }
   .join button { padding: 9px 11px; }
   .hero { width: calc(100% - 34px); min-height: auto; padding-top: 62px; gap: 48px; }
   .hero h1 { font-size: 58px; letter-spacing: -4px; }
   .lead { font-size: 15px; }
   .heroActions { align-items: stretch; flex-direction: column; }
+  .heroJoin { grid-template-columns: 1fr; gap: 13px; padding: 17px; }
+  .heroJoinControls { width: 100%; }
+  .heroJoinInput { flex: 1; width: auto; }
+  .heroJoin button { min-width: 122px; }
   .proof { display: grid; grid-template-columns: repeat(3,1fr); }
   .proof span { min-width: 0; padding-left: 8px; }
   .heroVisual { width: 310px; height: 430px; transform: scale(.9); transform-origin: top center; }

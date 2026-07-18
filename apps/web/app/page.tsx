@@ -15,6 +15,18 @@ export default function HomePage() {
     router.push(`/room/${joinCode.trim().toUpperCase()}`);
   }
 
+  const joinInput = (className?: string) => (
+    <input
+      aria-label="Six-character room code"
+      className={className}
+      inputMode="text"
+      maxLength={6}
+      onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
+      placeholder="ROOM CODE"
+      value={joinCode}
+    />
+  );
+
   return (
     <main className={styles.page}>
       <nav className={styles.nav}>
@@ -23,13 +35,8 @@ export default function HomePage() {
           <span>BoardForge</span>
         </Link>
         <form className={styles.join} onSubmit={joinRoom}>
-          <input
-            aria-label="Room code"
-            maxLength={6}
-            onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
-            placeholder="CODE"
-            value={joinCode}
-          />
+          <span>Already invited?</span>
+          {joinInput()}
           <button type="submit" disabled={joinCode.trim().length !== 6}>
             Join
           </button>
@@ -42,22 +49,31 @@ export default function HomePage() {
             <span /> Make tonight one to remember.
           </p>
           <h1>
-            Your game night,
+            Feel closer.
             <br />
-            <em>beautifully made.</em>
+            <em>Play together.</em>
           </h1>
           <p className={styles.lead}>
-            Pick a game, make it yours, and invite everyone in. BoardForge sets the scene for laughter, rivalry, and the
-            stories you will retell tomorrow.
+            BoardForge turns every phone into part of a shared game table. Beautifully crafted social games bring the
+            laughter, rivalry, and little moments of a real game night—wherever your people are.
           </p>
           <div className={styles.heroActions}>
-            <Link className={styles.primaryAction} href="/games/movie-mime">
+            <a className={styles.primaryAction} href="#games">
               Choose tonight&apos;s game <b>↗</b>
-            </Link>
-            <a className={styles.secondaryAction} href="#games">
-              Explore the collection
             </a>
           </div>
+          <form className={styles.heroJoin} onSubmit={joinRoom}>
+            <div>
+              <strong>Joining someone?</strong>
+              <span>Enter the code they shared with you.</span>
+            </div>
+            <div className={styles.heroJoinControls}>
+              {joinInput(styles.heroJoinInput)}
+              <button type="submit" disabled={joinCode.trim().length !== 6}>
+                Enter room <b>→</b>
+              </button>
+            </div>
+          </form>
           <div className={styles.proof}>
             <span>
               <b>Pick</b> your mood
@@ -125,8 +141,8 @@ export default function HomePage() {
             </h2>
           </div>
           <p>
-            Seven games, seven completely different moods. Choose your favorite, add your people, and let the night take
-            it from there.
+            Seven crafted experiences, each with its own look, rhythm, and way to play. AI personalizes the content;
+            BoardForge keeps every game polished, reliable, and ready for the room.
           </p>
         </div>
 
