@@ -2,6 +2,12 @@ export type GameNightTeam = {
   id: string;
   name: string;
   playerIds: string[];
+  captainPlayerId?: string | undefined;
+};
+
+export type GameNightAssignments = {
+  teamByPlayer: Record<string, string>;
+  captainByTeam: Record<string, string>;
 };
 
 export type GameNightScorePolicy = {
@@ -84,6 +90,11 @@ export function createGameNightState(id: string, teams: GameNightTeam[]): GameNi
   const playerIds = teams.flatMap((team) => team.playerIds);
   if (new Set(playerIds).size !== playerIds.length)
     throw new GameNightRuleError("A player cannot belong to more than one game-night team.");
+  for (const team of teams) {
+    if (team.captainPlayerId && !team.playerIds.includes(team.captainPlayerId)) {
+      throw new GameNightRuleError(`Captain for team ${team.id} must belong to that team.`);
+    }
+  }
 
   return {
     id,
@@ -93,6 +104,20 @@ export function createGameNightState(id: string, teams: GameNightTeam[]): GameNi
     completedGames: [],
     scoreEvents: [],
   };
+}
+
+export function gameNightAssignments(state: GameNightState, requiresCaptains: boolean): GameNightAssignments {
+  const teamByPlayer = Object.fromEntries(
+    state.teams.flatMap((team) => team.playerIds.map((playerId) => [playerId, team.id] as const)),
+  );
+  const captainByTeam: Record<string, string> = {};
+  if (requiresCaptains) {
+    for (const team of state.teams) {
+      if (!team.captainPlayerId) throw new GameNightRuleError(`Choose a captain for ${team.name} before starting.`);
+      captainByTeam[team.id] = team.captainPlayerId;
+    }
+  }
+  return { teamByPlayer, captainByTeam };
 }
 
 export function recordGameNightResult(
