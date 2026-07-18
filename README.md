@@ -55,7 +55,7 @@ packages/llm         bounded content and review provider abstraction
 packages/shared      transport contracts and shared utilities
 ```
 
-Design and delivery notes live in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/BACKLOG.md](docs/BACKLOG.md), [docs/DELIVERY_PLAN.md](docs/DELIVERY_PLAN.md) and [docs/PROGRESS.md](docs/PROGRESS.md).
+Design and delivery notes live in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/GAME_NIGHT_PLAN.md](docs/GAME_NIGHT_PLAN.md), [docs/BACKLOG.md](docs/BACKLOG.md), [docs/DELIVERY_PLAN.md](docs/DELIVERY_PLAN.md) and [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## Run locally
 
