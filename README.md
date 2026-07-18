@@ -92,4 +92,8 @@ The seven-game local collection, deterministic simulations, real-time rooms, per
 
 ## License
 
-BoardForge is licensed under the MIT license.
+BoardForge is proprietary software and is **not open source**. The repository
+is made available for review and hackathon evaluation only. No permission is
+granted to use, copy, modify, redistribute, host, sell, or create derivative
+works from the code without prior written authorization from the copyright
+holder. See [LICENSE](LICENSE) for the complete terms.
