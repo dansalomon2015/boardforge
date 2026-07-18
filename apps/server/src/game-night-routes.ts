@@ -213,6 +213,13 @@ export async function registerGameNightRoutes(
         }
         const credential = issueReconnectToken();
         runtime.record.reconnectTokenHashes[player.id] = credential.hash;
+        const activeRoom = runtime.record.currentRoomCode ? rooms.get(runtime.record.currentRoomCode) : undefined;
+        if (runtime.record.currentRoomCode && !activeRoom)
+          throw new GameNightRuleError("The active game room is unavailable.");
+        if (activeRoom) {
+          activeRoom.reconnectTokenHashes.set(player.id, credential.hash);
+          await blueprintStore.saveRoom(persistedRoom(activeRoom));
+        }
         await blueprintStore.saveGameNight(runtime.record);
         return {
           playerId: player.id,

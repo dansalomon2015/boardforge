@@ -272,6 +272,7 @@ export type JoinRoomPayload = {
 export type JoinRoomResult = {
   playerId: string;
   reconnectToken: string;
+  gameNightId?: string | undefined;
   view: RoomView;
 };
 

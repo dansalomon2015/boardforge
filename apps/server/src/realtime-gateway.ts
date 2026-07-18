@@ -20,6 +20,7 @@ import type {
   SocketAck,
 } from "@boardforge/shared";
 import type { RealtimeRoomStore, RoomEventRecord } from "./persistence";
+import type { GameNightRuntimeMap } from "./game-night-routes";
 import { issueReconnectToken, reconnectTokenMatches } from "./session-token";
 import {
   checkpointChecksumMatches,
@@ -47,6 +48,7 @@ type RealtimeGatewayDependencies = {
   app: FastifyInstance;
   io: SocketServer;
   rooms: Map<string, Room>;
+  gameNights: GameNightRuntimeMap;
   blueprintStore: RealtimeRoomStore;
   restoreRooms: boolean;
 };
@@ -55,10 +57,14 @@ export async function registerRealtimeGateway({
   app,
   io,
   rooms,
+  gameNights,
   blueprintStore,
   restoreRooms,
 }: RealtimeGatewayDependencies): Promise<void> {
   const emitRoom = (room: Room) => broadcastRoom(io, room);
+
+  const gameNightForRoom = (room: Room) =>
+    room.gameNightId ? [...gameNights.values()].find((runtime) => runtime.record.id === room.gameNightId) : undefined;
 
   function acknowledge<T>(ack: ((response: SocketAck<T>) => void) | undefined, response: SocketAck<T>): void {
     ack?.(response);
@@ -159,6 +165,9 @@ export async function registerRealtimeGateway({
 
         let playerId = parsed.playerId;
         let player = playerId ? room.players.get(playerId) : undefined;
+        if (room.gameNightId && !playerId) {
+          throw new GameRuleError("Join this game through its Game Night board.");
+        }
         if (playerId) {
           const expectedHash = room.reconnectTokenHashes.get(playerId);
           if (
@@ -193,6 +202,15 @@ export async function registerRealtimeGateway({
         const previousSocketId = room.socketByPlayer.get(resolvedPlayerId);
         const reconnectCredential = issueReconnectToken();
         room.reconnectTokenHashes.set(resolvedPlayerId, reconnectCredential.hash);
+        const parentGameNight = gameNightForRoom(room);
+        if (room.gameNightId && !parentGameNight) throw new GameRuleError("The parent Game Night is unavailable.");
+        if (parentGameNight) {
+          parentGameNight.record.reconnectTokenHashes[resolvedPlayerId] = reconnectCredential.hash;
+          const parentPlayer = parentGameNight.record.players.find((candidate) => candidate.id === resolvedPlayerId);
+          if (!parentPlayer) throw new GameRuleError("The player does not belong to the parent Game Night.");
+          parentPlayer.name = player.name;
+          parentPlayer.connected = true;
+        }
         room.socketByPlayer.set(resolvedPlayerId, socket.id);
         socket.data.roomCode = room.code;
         socket.data.playerId = resolvedPlayerId;
@@ -203,10 +221,16 @@ export async function registerRealtimeGateway({
         }
 
         await blueprintStore.saveRoom(persistedRoom(room));
+        if (parentGameNight) await blueprintStore.saveGameNight(parentGameNight.record);
         const view = viewFor(room, resolvedPlayerId);
         acknowledge(ack, {
           ok: true,
-          data: { playerId: resolvedPlayerId, reconnectToken: reconnectCredential.token, view },
+          data: {
+            playerId: resolvedPlayerId,
+            reconnectToken: reconnectCredential.token,
+            ...(room.gameNightId ? { gameNightId: room.gameNightId } : {}),
+            view,
+          },
         });
         emitRoom(room);
       } catch (error) {
@@ -422,6 +446,12 @@ export async function registerRealtimeGateway({
         player.connected = false;
         room.socketByPlayer.delete(playerId);
         await blueprintStore.saveRoom(persistedRoom(room));
+        const parentGameNight = gameNightForRoom(room);
+        const parentPlayer = parentGameNight?.record.players.find((candidate) => candidate.id === playerId);
+        if (parentGameNight && parentPlayer) {
+          parentPlayer.connected = false;
+          await blueprintStore.saveGameNight(parentGameNight.record);
+        }
         emitRoom(room);
       }).catch((error) => app.log.error({ error, roomCode: room.code }, "Failed to persist disconnect"));
     });

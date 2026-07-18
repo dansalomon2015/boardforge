@@ -23,6 +23,13 @@ export default function RoomPage() {
   const [pending, setPending] = useState(false);
   const [roomExperienceId, setRoomExperienceId] = useState<ComposedGameView["experienceId"] | undefined>();
 
+  function saveGameNightSession(result: JoinRoomResult, playerName: string) {
+    if (!result.gameNightId) return;
+    localStorage.setItem(`boardforge:game-night:${result.gameNightId}:playerId`, result.playerId);
+    localStorage.setItem(`boardforge:game-night:${result.gameNightId}:reconnectToken`, result.reconnectToken);
+    localStorage.setItem(`boardforge:game-night:${result.gameNightId}:name`, playerName);
+  }
+
   useEffect(() => {
     fetch(`${apiUrl}/api/rooms/${code}`)
       .then((response) =>
@@ -51,6 +58,7 @@ export default function RoomPage() {
             setPlayerId(response.data.playerId);
             setView(response.data.view);
             localStorage.setItem(`boardforge:${code}:reconnectToken`, response.data.reconnectToken);
+            saveGameNightSession(response.data, savedName);
           } else {
             localStorage.removeItem(`boardforge:${code}:playerId`);
             localStorage.removeItem(`boardforge:${code}:reconnectToken`);
@@ -89,6 +97,7 @@ export default function RoomPage() {
       localStorage.setItem(`boardforge:${code}:playerId`, response.data.playerId);
       localStorage.setItem(`boardforge:${code}:reconnectToken`, response.data.reconnectToken);
       localStorage.setItem(`boardforge:${code}:name`, name);
+      saveGameNightSession(response.data, name);
     });
   }
 
