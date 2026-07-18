@@ -21,12 +21,12 @@
     "fastify": "latest",
     "pg": "latest",
     "socket.io": "latest",
+    "tsx": "latest",
     "zod": "latest"
   },
   "devDependencies": {
     "@types/pg": "latest",
     "socket.io-client": "^4.8.3",
-    "tsx": "latest",
     "typescript": "5.9.3",
     "vitest": "latest"
   }
