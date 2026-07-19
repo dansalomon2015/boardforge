@@ -25,6 +25,7 @@ const moods = [
   { id: "family", emoji: "☀", name: "Family", line: "Warm, playful adventure" },
 ] as const;
 const lengths = [
+  { id: "mini", name: "Tiny Tale", chapters: 4, time: "6–10 min" },
   { id: "quick", name: "Quick Tale", chapters: 8, time: "12–18 min" },
   { id: "full", name: "Full Story", chapters: 12, time: "20–30 min" },
   { id: "epic", name: "Epic", chapters: 16, time: "30–45 min" },

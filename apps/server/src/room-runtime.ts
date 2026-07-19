@@ -9,13 +9,17 @@ import {
   type ComposedGameState,
   type GameState,
 } from "@boardforge/game-engine";
-import type { GameAction, LobbyView, PublicPlayer, RoomView } from "@boardforge/shared";
-import type { RoomEventRecord, RoomSessionRecord } from "./persistence";
+import type { GameAction, LobbyView, PublicPlayer, RoomView, StoryBookState } from "@boardforge/shared";
+import type { GameNightTeamPresentation, RoomEventRecord, RoomSessionRecord } from "./persistence";
 import { gameSummary } from "./game-catalog";
 
 export type Room = {
   code: string;
   blueprintId: string;
+  gameNightId: string | null;
+  gameInstanceId: string | null;
+  gameNightTeamByGameTeam: Map<string, string>;
+  gameNightTeamPresentationByGameTeam: Map<string, GameNightTeamPresentation>;
   spec: BoardGameSpec;
   players: Map<string, PublicPlayer>;
   socketByPlayer: Map<string, string>;
@@ -26,8 +30,62 @@ export type Room = {
   eventSequence: number;
   operationQueue: Promise<void>;
   timingStartedAtByPlayer: Map<string, number>;
+  countdown: RoomCountdown | null;
+  storyBook: StoryBookState | null;
   state: GameState | ComposedGameState | null;
 };
+
+export type RoomCountdown = {
+  phaseVisit: number;
+  deadlineAt: number;
+  totalSeconds: number;
+  timeoutActionId: string;
+};
+
+function countdownPolicy(
+  spec: BoardGameSpec,
+  state: GameState | ComposedGameState | null,
+): Pick<RoomCountdown, "totalSeconds" | "timeoutActionId"> | null {
+  if (state?.template !== "composed" || state.status !== "playing" || spec.template !== "composed") return null;
+  const phase = spec.phases.find((candidate) => candidate.id === state.phaseId);
+  if (!phase) return null;
+  const timer = spec.components.find(
+    (component) => phase.componentIds.includes(component.id) && component.kind === "timer",
+  );
+  const timeoutAction = spec.actions.find(
+    (action) => phase.actionIds.includes(action.id) && action.kind === "advance" && action.actor === "active_player",
+  );
+  return timer?.kind === "timer" && timeoutAction
+    ? { totalSeconds: timer.seconds, timeoutActionId: timeoutAction.id }
+    : null;
+}
+
+export function refreshRoomCountdown(room: Room, enteredPhaseAt: number): RoomCountdown | null {
+  const policy = countdownPolicy(room.spec, room.state);
+  if (!policy || room.state?.template !== "composed") {
+    room.countdown = null;
+    return null;
+  }
+  if (room.countdown?.phaseVisit === room.state.phaseVisit) return room.countdown;
+  room.countdown = {
+    phaseVisit: room.state.phaseVisit,
+    deadlineAt: enteredPhaseAt + policy.totalSeconds * 1_000,
+    ...policy,
+  };
+  return room.countdown;
+}
+
+export function restoreRoomCountdown(
+  room: Room,
+  events: RoomEventRecord[],
+  restoredAt = Date.now(),
+): RoomCountdown | null {
+  const state = room.state;
+  if (state?.template !== "composed") return refreshRoomCountdown(room, restoredAt);
+  const entryAction = [...state.actions].reverse().find((action) => action.phaseVisit < state.phaseVisit);
+  const entryEvent = entryAction ? events.find((event) => event.sequence === entryAction.sequence) : undefined;
+  return refreshRoomCountdown(room, entryEvent ? Date.parse(entryEvent.createdAt) : restoredAt);
+}
 
 export type TimingActionKind = "timing_start" | "timing_stop" | "timing_advance";
 
@@ -99,6 +157,10 @@ export function persistedRoom(room: Room, state: Room["state"] = room.state): Om
   return {
     code: room.code,
     blueprintId: room.blueprintId,
+    gameNightId: room.gameNightId,
+    gameInstanceId: room.gameInstanceId,
+    gameNightTeamByGameTeam: Object.fromEntries(room.gameNightTeamByGameTeam),
+    gameNightTeamPresentationByGameTeam: Object.fromEntries(room.gameNightTeamPresentationByGameTeam),
     players: publicPlayers(room),
     reconnectTokenHashes: Object.fromEntries(room.reconnectTokenHashes),
     lobbyTeamByPlayer: Object.fromEntries(room.lobbyTeamByPlayer),
@@ -107,6 +169,7 @@ export function persistedRoom(room: Room, state: Room["state"] = room.state): Om
     checkpoint: state,
     checkpointChecksum: state ? stateChecksum(state) : null,
     checkpointRevision: state?.revision ?? null,
+    storyBook: room.storyBook,
   };
 }
 
@@ -119,7 +182,7 @@ export function enqueueRoom<T>(room: Room, operation: () => Promise<T>): Promise
   return result;
 }
 
-export function viewFor(room: Room, playerId: string): RoomView {
+export function viewFor(room: Room, playerId: string, serverNow = Date.now()): RoomView {
   const players = publicPlayers(room);
   if (!room.state) {
     const playerIds = players.map((player) => player.id);
@@ -164,6 +227,7 @@ export function viewFor(room: Room, playerId: string): RoomView {
             teamSetup: {
               teams: teamPolicy.teams.map((team) => ({
                 ...team,
+                ...(room.gameNightTeamPresentationByGameTeam.get(team.id) ?? {}),
                 playerIds: players.filter((player) => selectedTeams[player.id] === team.id).map((player) => player.id),
                 ...(room.lobbyCaptainByTeam.get(team.id)
                   ? { captainPlayerId: room.lobbyCaptainByTeam.get(team.id) }
@@ -179,7 +243,27 @@ export function viewFor(room: Room, playerId: string): RoomView {
     return view;
   }
   if (room.state.template === "composed" && room.spec.template === "composed") {
-    return projectComposedGameState(room.state, room.spec, players, room.code, playerId);
+    const view = projectComposedGameState(room.state, room.spec, players, room.code, playerId);
+    return {
+      ...view,
+      ...(room.spec.experienceId === "story_chain" && room.state.status === "completed"
+        ? { storyBook: room.storyBook ?? { status: "idle" as const } }
+        : {}),
+      ...(room.countdown
+        ? {
+            turnTimer: {
+              phaseVisit: room.countdown.phaseVisit,
+              deadlineAt: room.countdown.deadlineAt,
+              serverNow,
+              totalSeconds: room.countdown.totalSeconds,
+            },
+          }
+        : {}),
+      teams: view.teams.map((team) => ({
+        ...team,
+        ...(room.gameNightTeamPresentationByGameTeam.get(team.id) ?? {}),
+      })),
+    };
   }
   if (room.state.template !== "composed" && room.spec.template !== "composed") {
     return projectGameState(room.state, room.spec, players, room.code, playerId);
@@ -187,9 +271,9 @@ export function viewFor(room: Room, playerId: string): RoomView {
   throw new GameRuleError("State and GameSpec templates do not match.");
 }
 
-export function emitRoom(io: SocketServer, room: Room): void {
+export function emitRoom(io: SocketServer, room: Room, serverNow = Date.now()): void {
   for (const [playerId, socketId] of room.socketByPlayer.entries()) {
     if (!room.players.get(playerId)?.connected) continue;
-    io.to(socketId).emit("room:state", viewFor(room, playerId));
+    io.to(socketId).emit("room:state", viewFor(room, playerId, serverNow));
   }
 }

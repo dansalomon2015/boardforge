@@ -15,5 +15,5 @@ test-results/
 *.log
 pnpm-debug.log*
 
-# Demo video source assets, generated media, and render outputs
-/artifacts/demo-video/
+# Demo and test video source assets, generated media, and render outputs
+/artifacts/

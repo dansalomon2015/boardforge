@@ -138,6 +138,7 @@ interface GameContentProvider {
   generateDrawBattlePack(input): Promise<DrawBattlePack>;
   generateSoundCheckPack(input): Promise<SoundCheckPack>;
   generateStoryChainPack(input): Promise<StoryChainPack>;
+  generateStoryBook(manuscript): Promise<StoryBook>;
 }
 
 interface GameReviewProvider {
@@ -147,6 +148,8 @@ interface GameReviewProvider {
 ```
 
 Content calls cannot change rules. Their outputs pass strict content schemas and are converted into an authored game spec by repository code. Invalid or unavailable model output falls back to audited local catalogues with honest source labels.
+
+StoryChain bookbinding is an explicit post-game action. The server sends one compact payload containing only the public opening, accepted contributions and author names; room state, secret twists and the event ledger never cross the model boundary. Concurrent requests share one persisted generation state, the response uses a strict schema with at most four chapters, storage is disabled at the API boundary and output tokens are capped. The resulting book is persisted with the room and broadcast to every connected player.
 
 After deterministic simulations, critique receives a compact redacted structure and telemetry—not private room state. A balance patch may modify only allowlisted numeric parameters. The server applies it to a new immutable revision, validates the complete spec, reruns simulations and requires explicit acceptance.
 

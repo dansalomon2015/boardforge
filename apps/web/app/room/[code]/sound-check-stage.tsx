@@ -1,22 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ComposedGameView, GameAction } from "@boardforge/shared";
 import { GameSurface, TextAnswer } from "../../../components/game-ui";
+import { GameNightReturn } from "./game-night-return";
 import { themeForRoom } from "./stage-shared";
+import { TurnTimerDial } from "./turn-timer";
 import movieMimeStyles from "./movie-mime.module.css";
 import soundCheckStyles from "./sound-check.module.css";
 
 export function SoundCheckStage({
   view,
   pending,
+  gameNightCode,
   sendAction,
 }: {
   view: ComposedGameView;
   pending: boolean;
+  gameNightCode: string | null;
   sendAction: (action: GameAction) => void;
 }) {
   const [guess, setGuess] = useState("");
+  const [guessStatus, setGuessStatus] = useState<"idle" | "checking" | "miss">("idle");
   const theme = themeForRoom(view.theme);
   const activePlayer = view.players.find((player) => player.id === view.activePlayerId);
   const isActivePlayer = view.selfPlayerId === view.activePlayerId;
@@ -35,6 +40,11 @@ export function SoundCheckStage({
     view.winner?.kind === "teams"
       ? view.winner.ids.map((id) => view.teams.find((team) => team.id === id)?.name).filter(Boolean)
       : [];
+
+  useEffect(() => {
+    if (guessStatus !== "checking" || pending) return;
+    setGuessStatus(view.phase.id === "performing" ? "miss" : "idle");
+  }, [guessStatus, pending, view.phase.id]);
 
   function perform(actionId: string, payload?: Extract<GameAction, { type: "COMPOSED_ACTION" }>["payload"]) {
     sendAction({ type: "COMPOSED_ACTION", actionId, ...(payload ? { payload } : {}) });
@@ -69,10 +79,14 @@ export function SoundCheckStage({
           <span>The final track has ended</span>
           <div className={`${movieMimeStyles.trophy} ${soundCheckStyles.recordTrophy}`}>◖</div>
           <h1>{winnerNames.join(" & ") || "Perfect tie"}</h1>
-          <p>{winnerNames.length ? "wins tonight’s SoundCheck session." : "The teams share the final mix."}</p>
-          <a href="/">
-            Back to the collection <b>→</b>
-          </a>
+          <p>
+            {winnerNames.length > 1
+              ? "share tonight’s SoundCheck session."
+              : winnerNames.length === 1
+                ? "wins tonight’s SoundCheck session."
+                : "The teams share the final mix."}
+          </p>
+          <GameNightReturn gameNightCode={gameNightCode} />
         </section>
       ) : view.phase.id === "select_performer" ? (
         <section className={`${movieMimeStyles.castingStage} ${soundCheckStyles.casting}`}>
@@ -151,11 +165,7 @@ export function SoundCheckStage({
                 {isActivePlayer ? "Make the sound." : `What is ${activePlayer?.name ?? "the performer"} imitating?`}
               </h1>
             </div>
-            <div className={movieMimeStyles.timer}>
-              <i />
-              <span>60</span>
-              <small>seconds</small>
-            </div>
+            <TurnTimerDial view={view} fallbackSeconds={60} />
           </div>
           <div className={soundCheckStyles.performanceGrid}>
             <div className={soundCheckStyles.performanceStage}>
@@ -190,19 +200,33 @@ export function SoundCheckStage({
                   <h2>Name that sound.</h2>
                   <p>Be the first to name it and win a point for your team.</p>
                   {guessAction ? (
-                    <TextAnswer
-                      theme={theme}
-                      label="Your guess"
-                      placeholder="What do you hear?"
-                      value={guess}
-                      onChange={setGuess}
-                      submitLabel="That’s it"
-                      disabled={pending}
-                      onSubmit={() => {
-                        perform(guessAction.id, { text: guess });
-                        setGuess("");
-                      }}
-                    />
+                    <>
+                      <TextAnswer
+                        className={soundCheckStyles.guessForm}
+                        theme={theme}
+                        label="Your guess"
+                        placeholder="What do you hear?"
+                        value={guess}
+                        onChange={(value) => {
+                          setGuess(value);
+                          setGuessStatus("idle");
+                        }}
+                        submitLabel="That’s it"
+                        disabled={pending}
+                        onSubmit={() => {
+                          setGuessStatus("checking");
+                          perform(guessAction.id, { text: guess });
+                          setGuess("");
+                        }}
+                      />
+                      <p className={soundCheckStyles.guessFeedback} aria-live="polite">
+                        {guessStatus === "checking"
+                          ? "Checking your answer…"
+                          : guessStatus === "miss"
+                            ? "Not a match yet. Keep listening."
+                            : "Type what you think the performer is imitating."}
+                      </p>
+                    </>
                   ) : (
                     <span className={soundCheckStyles.waiting}>Performers leave the guessing to everyone else.</span>
                   )}

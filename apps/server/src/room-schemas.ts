@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { storyBookSchema } from "@boardforge/game-spec";
 
 export const roomBodySchema = z
   .object({
@@ -102,6 +103,34 @@ export const persistedPlayersSchema = z
   .max(12);
 
 export const persistedStringMapSchema = z.record(z.string(), z.string());
+
+export const persistedTeamPresentationMapSchema = z.record(
+  z.string(),
+  z
+    .object({
+      name: z.string().trim().min(1).max(80),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    })
+    .strict(),
+);
+
+export const persistedStoryBookStateSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("idle") }).strict(),
+  z.object({ status: z.literal("generating") }).strict(),
+  z.object({ status: z.literal("ready"), book: storyBookSchema }).strict(),
+  z.object({ status: z.literal("failed"), message: z.string().trim().min(1).max(180) }).strict(),
+]);
+
+export const storyBookRequestSchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .length(6)
+      .transform((value) => value.toUpperCase()),
+    playerId: z.string().uuid(),
+  })
+  .strict();
 
 export const persistedEventSchema = z
   .object({

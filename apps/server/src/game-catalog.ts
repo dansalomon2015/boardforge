@@ -2,6 +2,8 @@ import type { BoardGameSpec } from "@boardforge/game-spec";
 import type { GameSummary } from "@boardforge/shared";
 
 export function gameSummary(spec: BoardGameSpec): GameSummary {
+  const turnTimer =
+    spec.template === "composed" ? spec.components.find((component) => component.kind === "timer") : null;
   return {
     template: spec.template,
     title: spec.title,
@@ -10,7 +12,13 @@ export function gameSummary(spec: BoardGameSpec): GameSummary {
     maxPlayers: spec.maxPlayers,
     durationMinutes: spec.template === "composed" ? (spec.suggestedDurationMinutes ?? 15) : spec.durationMinutes,
     accent: spec.template === "composed" ? (typeof spec.theme === "string" ? spec.theme : "violet") : spec.accent,
-    ...(spec.template === "composed" ? { experienceId: spec.experienceId } : {}),
+    ...(spec.template === "composed"
+      ? {
+          experienceId: spec.experienceId,
+          rounds: spec.setup.rounds,
+          ...(turnTimer?.kind === "timer" ? { turnSeconds: turnTimer.seconds } : {}),
+        }
+      : {}),
   };
 }
 

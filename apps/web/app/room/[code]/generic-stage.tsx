@@ -32,6 +32,7 @@ import {
 } from "../../../components/game-ui";
 import type { SketchStroke } from "../../../components/game-ui";
 import { themeForRoom } from "./stage-shared";
+import { useTurnCountdown } from "./turn-timer";
 
 export function ComposedStage({
   view,
@@ -43,6 +44,7 @@ export function ComposedStage({
   sendAction: (action: GameAction) => void;
 }) {
   const [answer, setAnswer] = useState("");
+  const remainingTurnSeconds = useTurnCountdown(view.turnTimer, 60);
   const theme = themeForRoom(view.theme);
   const playerName = (id: string) => view.players.find((player) => player.id === id)?.name ?? "Player";
 
@@ -249,7 +251,7 @@ export function ComposedStage({
             return (
               <GameTimer
                 theme={theme}
-                seconds={data.seconds ?? 60}
+                seconds={view.turnTimer ? remainingTurnSeconds : (data.seconds ?? 60)}
                 totalSeconds={data.seconds ?? 60}
                 {...(data.label ? { label: data.label } : {})}
                 key={component.id}

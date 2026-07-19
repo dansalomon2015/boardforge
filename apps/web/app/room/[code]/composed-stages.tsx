@@ -8,18 +8,27 @@ import type { ComposedStageProps } from "./stage-shared";
 import { WordDuelStage } from "./word-duel-stage";
 import { WordTrapStage } from "./word-trap-stage";
 
-export function ComposedStageRouter({ view, isHost, pending, sendAction }: ComposedStageProps & { isHost: boolean }) {
+export function ComposedStageRouter({
+  view,
+  isHost,
+  pending,
+  gameNightCode,
+  createStoryBook,
+  sendAction,
+}: ComposedStageProps & { isHost: boolean; gameNightCode: string | null; createStoryBook: () => void }) {
   switch (view.experienceId) {
     case "movie_mime":
-      return <MovieMimeStage view={view} pending={pending} sendAction={sendAction} />;
+      return <MovieMimeStage view={view} pending={pending} gameNightCode={gameNightCode} sendAction={sendAction} />;
     case "word_trap":
-      return <WordTrapStage view={view} pending={pending} sendAction={sendAction} />;
+      return <WordTrapStage view={view} pending={pending} gameNightCode={gameNightCode} sendAction={sendAction} />;
     case "draw_battle":
-      return <DrawBattleStage view={view} pending={pending} sendAction={sendAction} />;
+      return <DrawBattleStage view={view} pending={pending} gameNightCode={gameNightCode} sendAction={sendAction} />;
     case "sound_check":
-      return <SoundCheckStage view={view} pending={pending} sendAction={sendAction} />;
+      return <SoundCheckStage view={view} pending={pending} gameNightCode={gameNightCode} sendAction={sendAction} />;
     case "story_chain":
-      return <StoryChainStage view={view} pending={pending} sendAction={sendAction} />;
+      return (
+        <StoryChainStage view={view} pending={pending} createStoryBook={createStoryBook} sendAction={sendAction} />
+      );
     case "word_duel":
       return <WordDuelStage view={view} pending={pending} sendAction={sendAction} />;
     case "second_sense":

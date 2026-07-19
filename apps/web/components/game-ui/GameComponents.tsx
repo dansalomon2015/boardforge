@@ -784,7 +784,7 @@ export function TextAnswer({
         ) : (
           <input id="game-text-answer" {...fieldProps} />
         )}
-        <GameButton theme={theme} disabled={disabled || !value.trim()}>
+        <GameButton type="submit" theme={theme} disabled={disabled || !value.trim()}>
           {submitLabel}
         </GameButton>
       </div>

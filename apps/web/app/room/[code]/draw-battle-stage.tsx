@@ -4,16 +4,20 @@ import { useState } from "react";
 import type { ComposedGameView, GameAction } from "@boardforge/shared";
 import { DrawingCanvas, GameSurface, TextAnswer } from "../../../components/game-ui";
 import type { SketchStroke } from "../../../components/game-ui";
+import { GameNightReturn } from "./game-night-return";
 import { themeForRoom } from "./stage-shared";
+import { TurnTimerDial } from "./turn-timer";
 import movieMimeStyles from "./movie-mime.module.css";
 
 export function DrawBattleStage({
   view,
   pending,
+  gameNightCode,
   sendAction,
 }: {
   view: ComposedGameView;
   pending: boolean;
+  gameNightCode: string | null;
   sendAction: (action: GameAction) => void;
 }) {
   const [guess, setGuess] = useState("");
@@ -83,10 +87,14 @@ export function DrawBattleStage({
           <span>The gallery is complete</span>
           <div className={movieMimeStyles.trophy}>✎</div>
           <h1>{winnerNames.join(" & ") || "Perfect tie"}</h1>
-          <p>{winnerNames.length ? "wins tonight’s drawing battle." : "The teams share the final frame."}</p>
-          <a href="/">
-            Back to the collection <b>→</b>
-          </a>
+          <p>
+            {winnerNames.length > 1
+              ? "share tonight’s drawing battle."
+              : winnerNames.length === 1
+                ? "wins tonight’s drawing battle."
+                : "The teams share the final frame."}
+          </p>
+          <GameNightReturn gameNightCode={gameNightCode} />
         </section>
       ) : view.phase.id === "select_artist" ? (
         <section className={movieMimeStyles.castingStage}>
@@ -155,11 +163,7 @@ export function DrawBattleStage({
               <p>Every line is live</p>
               <h1>{isActivePlayer ? "Draw the secret." : `What is ${activePlayer?.name ?? "the artist"} drawing?`}</h1>
             </div>
-            <div className={movieMimeStyles.timer}>
-              <i />
-              <span>75</span>
-              <small>seconds</small>
-            </div>
+            <TurnTimerDial view={view} fallbackSeconds={75} />
           </div>
           <div className={movieMimeStyles.drawingGrid}>
             <div className={movieMimeStyles.liveCanvas}>

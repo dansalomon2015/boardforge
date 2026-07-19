@@ -3,7 +3,7 @@ import { createRandomStoryChainPack, createStoryChainPack, createStoryChainSpec,
 
 describe("StoryChain game", () => {
   it("creates deterministic, bounded packs for every story length", () => {
-    for (const length of ["quick", "full", "epic"] as const) {
+    for (const length of ["mini", "quick", "full", "epic"] as const) {
       const setup = { themeId: "cozy" as const, mood: "mystery" as const, length };
       const first = createRandomStoryChainPack(setup, "same-table");
       expect(first).toEqual(createRandomStoryChainPack(setup, "same-table"));

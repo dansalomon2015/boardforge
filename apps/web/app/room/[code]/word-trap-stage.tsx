@@ -2,16 +2,20 @@
 
 import type { ComposedGameView, GameAction } from "@boardforge/shared";
 import { GameSurface } from "../../../components/game-ui";
+import { GameNightReturn } from "./game-night-return";
 import { themeForRoom } from "./stage-shared";
+import { TurnTimerDial } from "./turn-timer";
 import movieMimeStyles from "./movie-mime.module.css";
 
 export function WordTrapStage({
   view,
   pending,
+  gameNightCode,
   sendAction,
 }: {
   view: ComposedGameView;
   pending: boolean;
+  gameNightCode: string | null;
   sendAction: (action: GameAction) => void;
 }) {
   const theme = themeForRoom(view.theme);
@@ -72,10 +76,14 @@ export function WordTrapStage({
           <span>The trap is closed</span>
           <div className={movieMimeStyles.trophy}>⚡</div>
           <h1>{winnerNames.join(" & ") || "Perfect tie"}</h1>
-          <p>{winnerNames.length ? "wins the battle of words." : "The teams share the final point."}</p>
-          <a href="/">
-            Back to the collection <b>→</b>
-          </a>
+          <p>
+            {winnerNames.length > 1
+              ? "share the battle of words."
+              : winnerNames.length === 1
+                ? "wins the battle of words."
+                : "The teams share the final point."}
+          </p>
+          <GameNightReturn gameNightCode={gameNightCode} />
         </section>
       ) : view.phase.id === "select_clue_giver" ? (
         <section className={movieMimeStyles.castingStage}>
@@ -144,11 +152,7 @@ export function WordTrapStage({
               <p>Choose every word carefully</p>
               <h1>{isActivePlayer ? "Make them guess it." : `${activePlayer?.name ?? "The clue giver"} is live.`}</h1>
             </div>
-            <div className={movieMimeStyles.timer}>
-              <i />
-              <span>60</span>
-              <small>seconds</small>
-            </div>
+            <TurnTimerDial view={view} fallbackSeconds={60} />
           </div>
           {isActivePlayer && prompt?.prompt ? (
             <div className={`${movieMimeStyles.revealedCard} ${movieMimeStyles.trapCard}`}>

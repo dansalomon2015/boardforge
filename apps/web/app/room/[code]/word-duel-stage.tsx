@@ -58,11 +58,14 @@ export function WordDuelStage({
   }
 
   useEffect(() => {
-    if (!board?.lastGuess?.correct || board.lastGuess.kind !== "letter") return;
+    if (!board?.lastGuess?.correct || board.lastGuess.kind !== "letter") {
+      setCelebration(false);
+      return;
+    }
     setCelebration(true);
     const timeout = window.setTimeout(() => setCelebration(false), 950);
     return () => window.clearTimeout(timeout);
-  }, [view.revision, board?.lastGuess?.correct, board?.lastGuess?.kind]);
+  }, [board?.lastGuess?.actorId, board?.lastGuess?.correct, board?.lastGuess?.kind, board?.lastGuess?.value]);
 
   useEffect(() => {
     if (!isMyTurn || pending || solveOpen || !letterAction) return;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyComposedBalancePatch, cinemaCharadesSpec } from "@boardforge/game-spec";
-import { runComposedPlaytest } from "@boardforge/game-engine";
+import { createGameNightState, recordGameNightResult, runComposedPlaytest } from "@boardforge/game-engine";
 import { FakeLlmProvider } from "@boardforge/llm";
 import { MemoryBlueprintStore } from "./persistence";
 
@@ -72,6 +72,10 @@ describe("MemoryBlueprintStore", () => {
     const session = {
       code: "ABC234",
       blueprintId: "cinema-room",
+      gameNightId: null,
+      gameInstanceId: null,
+      gameNightTeamByGameTeam: {},
+      gameNightTeamPresentationByGameTeam: {},
       players: [],
       reconnectTokenHashes: {},
       lobbyTeamByPlayer: {},
@@ -80,6 +84,26 @@ describe("MemoryBlueprintStore", () => {
       checkpoint: { revision: 2 },
       checkpointChecksum: "checksum",
       checkpointRevision: 2,
+      storyBook: {
+        status: "ready" as const,
+        book: {
+          schemaVersion: 1 as const,
+          title: "The Clockwork Picnic",
+          subtitle: "A mystery written together around one table",
+          dedication: "For Avery and Blake, who followed every impossible clue.",
+          backCover: "A ticking picnic basket leads two friends into a warm and wonderfully strange midnight mystery.",
+          chapters: [
+            {
+              title: "The Basket",
+              text: "At noon, the basket began ticking, and every guest leaned closer despite their better judgment.",
+            },
+            {
+              title: "The Last Clue",
+              text: "Together they followed the final clue and discovered why the clock had chosen their picnic.",
+            },
+          ],
+        },
+      },
     };
     await store.saveRoom(session);
     const event = {
@@ -97,10 +121,79 @@ describe("MemoryBlueprintStore", () => {
     await store.appendRoomEvent(session, event);
 
     expect((await store.findRoomEvent("ABC234", "event-key-001"))?.resultingRevision).toBe(2);
-    expect((await store.loadRooms())[0]?.events).toEqual([event]);
+    expect((await store.loadRooms())[0]).toMatchObject({ storyBook: { status: "ready" }, events: [event] });
     await expect(
       store.appendRoomEvent(session, { ...event, id: "00000000-0000-4000-8000-000000000100", sequence: 2 }),
     ).rejects.toThrow("Duplicate");
+  });
+
+  it("persists a game night and its append-only global score ledger", async () => {
+    const store = new MemoryBlueprintStore();
+    await store.saveBlueprint({
+      id: "cinema-night",
+      spec: cinemaCharadesSpec,
+      status: "release_ready",
+      provider: "test",
+    });
+    const hostPlayerId = "00000000-0000-4000-8000-000000000001";
+    const secondPlayerId = "00000000-0000-4000-8000-000000000002";
+    const nightId = "00000000-0000-4000-8000-000000000010";
+    const players = [
+      { id: hostPlayerId, name: "Maya", isHost: true, connected: true },
+      { id: secondPlayerId, name: "Noah", isHost: false, connected: true },
+    ];
+    const initialState = createGameNightState(nightId, [
+      { id: "red", name: "Red Rockets", playerIds: [hostPlayerId], captainPlayerId: hostPlayerId },
+      { id: "blue", name: "Blue Moons", playerIds: [secondPlayerId], captainPlayerId: secondPlayerId },
+    ]);
+    const initialSession = {
+      id: nightId,
+      code: "NIGHT2",
+      hostPlayerId,
+      players,
+      reconnectTokenHashes: {},
+      state: initialState,
+      currentRoomCode: null,
+    };
+    await store.saveGameNight(initialSession);
+
+    const nextState = recordGameNightResult(initialState, {
+      gameInstanceId: "00000000-0000-4000-8000-000000000020",
+      blueprintId: "cinema-night",
+      winner: { kind: "teams", ids: ["red"] },
+      idempotencyKey: "night-result-1",
+    });
+    const completedGame = nextState.completedGames[0]!;
+    const resultingSession = { ...initialSession, state: nextState };
+    await store.appendGameNightResult(resultingSession, completedGame, nextState.scoreEvents, "CHILD2");
+    await store.appendGameNightResult(resultingSession, completedGame, nextState.scoreEvents, "CHILD2");
+
+    const restored = (await store.loadGameNights())[0];
+    expect(restored?.state.scores).toEqual({ red: 3, blue: 0 });
+    expect(restored?.state.completedGames).toEqual([completedGame]);
+    expect(restored?.state.teams[0]?.captainPlayerId).toBe(hostPlayerId);
+  });
+
+  it("rejects an invalid game-night snapshot before persistence", async () => {
+    const store = new MemoryBlueprintStore();
+    const hostPlayerId = "00000000-0000-4000-8000-000000000001";
+    const nightId = "00000000-0000-4000-8000-000000000010";
+    const state = createGameNightState(nightId, [
+      { id: "red", name: "Red", playerIds: [hostPlayerId] },
+      { id: "blue", name: "Blue", playerIds: [] },
+    ]);
+
+    await expect(
+      store.saveGameNight({
+        id: nightId,
+        code: "NIGHT2",
+        hostPlayerId,
+        players: [{ id: hostPlayerId, name: "Maya", isHost: false, connected: true }],
+        reconnectTokenHashes: {},
+        state,
+        currentRoomCode: null,
+      }),
+    ).rejects.toThrow("host must be present");
   });
 
   it("persists and explicitly accepts a verified balance revision", async () => {

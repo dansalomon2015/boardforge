@@ -18,14 +18,16 @@ import {
   type BoardGameSpec,
 } from "@boardforge/game-spec";
 import { runComposedPlaytest } from "@boardforge/game-engine";
-import { createLlmProvider } from "@boardforge/llm";
+import { createLlmProvider, type GameContentProvider } from "@boardforge/llm";
 import { createBlueprintStore, type BlueprintRecord } from "./persistence";
 import { gameSummary } from "./game-catalog";
 import { registerGameRoutes } from "./game-routes";
+import { registerGameNightRoutes } from "./game-night-routes";
 import { registerBalanceRoutes } from "./balance-routes";
 import { allocateRoomCode, persistedRoom, type Room } from "./room-runtime";
 import { roomBodySchema } from "./room-schemas";
 import { registerRealtimeGateway } from "./realtime-gateway";
+import type { CountdownClock } from "./countdown-clock";
 
 export type BoardForgeServerOptions = {
   port?: number;
@@ -35,6 +37,9 @@ export type BoardForgeServerOptions = {
   requireDatabase?: boolean;
   logger?: boolean;
   restoreRooms?: boolean;
+  countdownClock?: CountdownClock;
+  gameContentProvider?: GameContentProvider;
+  storyBookProvider?: Pick<GameContentProvider, "generateStoryBook">;
 };
 
 export async function createBoardForgeServer(options: BoardForgeServerOptions = {}) {
@@ -52,7 +57,11 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
   };
 
   const app = Fastify({ logger: options.logger ?? true });
-  await app.register(cors, { origin: config.webOrigin, credentials: false });
+  await app.register(cors, {
+    origin: config.webOrigin,
+    credentials: false,
+    methods: ["GET", "HEAD", "POST", "PATCH", "OPTIONS"],
+  });
 
   const io = new SocketServer(app.server, {
     cors: { origin: config.webOrigin },
@@ -79,6 +88,7 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
     reviewModel: config.openAiReviewModel,
     onTelemetry: (telemetry) => app.log.info({ llmUsage: telemetry }, "OpenAI workflow usage"),
   });
+  const gameContentProvider = options.gameContentProvider ?? llm;
   const seededBlueprints: BlueprintRecord[] = availableDemoSpecs.map((spec) => {
     const playtest =
       spec.template === "composed"
@@ -110,9 +120,17 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
     databaseReady: blueprintStore.mode === "postgres" && (await blueprintStore.health().catch(() => false)),
   }));
 
-  registerGameRoutes(app, { llm, blueprintStore });
+  registerGameRoutes(app, { llm: gameContentProvider, blueprintStore });
 
   registerBalanceRoutes(app, { llm, blueprintStore });
+
+  const gameNightCatalog = [defaultMovieMimeSpec, defaultWordTrapSpec, defaultDrawBattleSpec, defaultSoundCheckSpec];
+  const gameNights = await registerGameNightRoutes(app, {
+    blueprintStore,
+    rooms,
+    createRoomCode,
+    gameNightCatalog,
+  });
 
   app.post("/api/rooms", async (request, reply) => {
     const parsed = roomBodySchema.safeParse(request.body);
@@ -146,6 +164,10 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
     const room: Room = {
       code,
       blueprintId,
+      gameNightId: null,
+      gameInstanceId: null,
+      gameNightTeamByGameTeam: new Map(),
+      gameNightTeamPresentationByGameTeam: new Map(),
       spec,
       players: new Map(),
       socketByPlayer: new Map(),
@@ -156,6 +178,8 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
       eventSequence: 0,
       operationQueue: Promise.resolve(),
       timingStartedAtByPlayer: new Map(),
+      countdown: null,
+      storyBook: null,
       state: null,
     };
     await blueprintStore.saveRoom(persistedRoom(room));
@@ -178,8 +202,13 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
     app,
     io,
     rooms,
+    gameNights,
+    gameNightCatalogIds: new Set(gameNightCatalog.map((game) => game.id)),
+    createRoomCode,
     blueprintStore,
+    storyBookProvider: options.storyBookProvider ?? gameContentProvider,
     restoreRooms: options.restoreRooms !== false,
+    ...(options.countdownClock ? { countdownClock: options.countdownClock } : {}),
   });
 
   app.addHook("onClose", async () => {

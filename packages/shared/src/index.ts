@@ -26,6 +26,8 @@ export type GameSummary = {
   durationMinutes: number;
   accent: string;
   experienceId?: ComposedExperienceId | undefined;
+  rounds?: number | undefined;
+  turnSeconds?: number | undefined;
 };
 
 export type LobbyView = {
@@ -176,6 +178,21 @@ export type ResolvedGameComponent = {
   data: Record<string, unknown>;
 };
 
+export type StoryBook = {
+  schemaVersion: 1;
+  title: string;
+  subtitle: string;
+  dedication: string;
+  backCover: string;
+  chapters: Array<{ title: string; text: string }>;
+};
+
+export type StoryBookState =
+  | { status: "idle" }
+  | { status: "generating" }
+  | { status: "ready"; book: StoryBook }
+  | { status: "failed"; message: string };
+
 export type ComposedGameView = {
   kind: "composed";
   code: string;
@@ -194,6 +211,12 @@ export type ComposedGameView = {
   teams: Array<{ id: string; name: string; color: string; playerIds: string[] }>;
   captainByTeam: Record<string, string>;
   scores: { global: number; players: Record<string, number>; teams: Record<string, number> };
+  turnTimer?: {
+    phaseVisit: number;
+    deadlineAt: number;
+    serverNow: number;
+    totalSeconds: number;
+  };
   components: ResolvedGameComponent[];
   availableActions: Array<{
     id: string;
@@ -228,6 +251,7 @@ export type ComposedGameView = {
     itemIds?: string[] | undefined;
   }>;
   winner: { kind: "players" | "teams" | "none"; ids: string[] } | null;
+  storyBook?: StoryBookState | undefined;
 };
 
 export type RoomView = LobbyView | HiddenRolesView | QuizVoteView | ComposedGameView;
@@ -272,7 +296,103 @@ export type JoinRoomPayload = {
 export type JoinRoomResult = {
   playerId: string;
   reconnectToken: string;
+  gameNightId?: string | undefined;
+  gameNightCode?: string | undefined;
   view: RoomView;
+};
+
+export type GameNightHistoryEntry = {
+  ordinal: number;
+  gameInstanceId: string;
+  blueprintId: string;
+  winner: { kind: "players" | "teams" | "none"; ids: string[] };
+  awards: Array<{
+    teamId: string;
+    points: number;
+    reason: "win" | "tie";
+  }>;
+};
+
+export type GameNightGameConfiguration = {
+  rounds: number;
+  turnSeconds: number;
+};
+
+export type GameNightGameConfigurationDefinition = {
+  rounds: {
+    label: string;
+    unitSingular: string;
+    unitPlural: string;
+    min: number;
+    max: number;
+    step: number;
+    defaultValue: number;
+  };
+  turnSeconds: {
+    label: string;
+    min: number;
+    max: number;
+    step: number;
+    defaultValue: number;
+  };
+};
+
+export type GameNightView = {
+  id: string;
+  code: string;
+  status: "lobby" | "playing" | "completed";
+  selfPlayerId: string;
+  isHost: boolean;
+  players: PublicPlayer[];
+  teams: Array<{
+    id: string;
+    name: string;
+    color: string;
+    playerIds: string[];
+    captainPlayerId?: string | undefined;
+    score: number;
+  }>;
+  selectedBlueprintId: string | null;
+  selectedGameConfiguration: GameNightGameConfiguration | null;
+  currentRoomCode: string | null;
+  gamesPlayed: number;
+  history: GameNightHistoryEntry[];
+};
+
+export type JoinGameNightResult = {
+  playerId: string;
+  reconnectToken: string;
+  view: GameNightView;
+};
+
+export type GameNightCompatibilityReason = {
+  code:
+    | "NOT_RELEASE_READY"
+    | "ACTIVE_GAME"
+    | "NOT_IN_CATALOG"
+    | "TOO_FEW_PLAYERS"
+    | "TOO_MANY_PLAYERS"
+    | "UNASSIGNED_PLAYERS"
+    | "TEAM_COUNT_MISMATCH"
+    | "TEAM_TOO_SMALL"
+    | "TEAM_TOO_LARGE"
+    | "UNEVEN_TEAMS"
+    | "CAPTAIN_REQUIRED";
+  message: string;
+};
+
+export type GameNightCompatibility = {
+  compatible: boolean;
+  scoring: "ranked" | "unsupported";
+  requiresCaptains: boolean;
+  reasons: GameNightCompatibilityReason[];
+};
+
+export type GameNightCatalogEntry = {
+  id: string;
+  game: GameSummary;
+  compatibility: GameNightCompatibility;
+  configuration: GameNightGameConfigurationDefinition | null;
 };
 
 export type SocketAck<T> = { ok: true; data: T } | { ok: false; error: string };

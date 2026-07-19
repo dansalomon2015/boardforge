@@ -1,17 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 import type { ComposedGameView, GameAction, JoinRoomResult, RoomView, SocketAck } from "@boardforge/shared";
 import { ComposedStageRouter } from "./composed-stages";
 import { originalExperience } from "./experience-registry";
 import roomChromeStyles from "./room-chrome.module.css";
+import { saveGameNightSession } from "../../../lib/game-night-session";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
+  const router = useRouter();
   const code = params.code.toUpperCase();
   const socketRef = useRef<Socket | null>(null);
   const viewRef = useRef<RoomView | null>(null);
@@ -21,7 +23,18 @@ export default function RoomPage() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [gameNightCode, setGameNightCode] = useState<string | null>(null);
   const [roomExperienceId, setRoomExperienceId] = useState<ComposedGameView["experienceId"] | undefined>();
+
+  function saveParentGameNightSession(result: JoinRoomResult, playerName: string) {
+    if (!result.gameNightId) return;
+    if (result.gameNightCode) setGameNightCode(result.gameNightCode);
+    saveGameNightSession(result.gameNightId, {
+      playerId: result.playerId,
+      reconnectToken: result.reconnectToken,
+      name: playerName,
+    });
+  }
 
   useEffect(() => {
     fetch(`${apiUrl}/api/rooms/${code}`)
@@ -51,6 +64,7 @@ export default function RoomPage() {
             setPlayerId(response.data.playerId);
             setView(response.data.view);
             localStorage.setItem(`boardforge:${code}:reconnectToken`, response.data.reconnectToken);
+            saveParentGameNightSession(response.data, savedName);
           } else {
             localStorage.removeItem(`boardforge:${code}:playerId`);
             localStorage.removeItem(`boardforge:${code}:reconnectToken`);
@@ -74,6 +88,15 @@ export default function RoomPage() {
     viewRef.current = view;
   }, [view]);
 
+  const completedGameNightRoom = view?.kind === "composed" && view.status === "completed";
+  useEffect(() => {
+    if (!gameNightCode || !completedGameNightRoom) return;
+    const returnTimer = window.setTimeout(() => {
+      router.replace(`/game-night/${gameNightCode}?returned=1`);
+    }, 5_000);
+    return () => window.clearTimeout(returnTimer);
+  }, [completedGameNightRoom, gameNightCode, router]);
+
   function join(event: FormEvent) {
     event.preventDefault();
     setError("");
@@ -89,6 +112,7 @@ export default function RoomPage() {
       localStorage.setItem(`boardforge:${code}:playerId`, response.data.playerId);
       localStorage.setItem(`boardforge:${code}:reconnectToken`, response.data.reconnectToken);
       localStorage.setItem(`boardforge:${code}:name`, name);
+      saveParentGameNightSession(response.data, name);
     });
   }
 
@@ -160,6 +184,19 @@ export default function RoomPage() {
       );
     };
     submit(0);
+  }
+
+  function createStoryBook() {
+    setPending(true);
+    setError("");
+    socketRef.current?.emit(
+      "story-chain:book:create",
+      { code, playerId },
+      (response: SocketAck<{ storyBook: NonNullable<ComposedGameView["storyBook"]> }>) => {
+        setPending(false);
+        if (!response.ok) setError(response.error);
+      },
+    );
   }
 
   const self = view?.players.find((player) => player.id === playerId);
@@ -277,7 +314,14 @@ export default function RoomPage() {
         </section>
       ) : (
         <section className="game-layout">
-          <GameStage view={view} isHost={Boolean(self?.isHost)} pending={pending} sendAction={sendAction} />
+          <GameStage
+            view={view}
+            isHost={Boolean(self?.isHost)}
+            pending={pending}
+            gameNightCode={gameNightCode}
+            createStoryBook={createStoryBook}
+            sendAction={sendAction}
+          />
           <PlayerRail view={view} />
         </section>
       )}
@@ -421,11 +465,15 @@ function GameStage({
   view,
   isHost,
   pending,
+  gameNightCode,
+  createStoryBook,
   sendAction,
 }: {
   view: Exclude<RoomView, { kind: "lobby" }>;
   isHost: boolean;
   pending: boolean;
+  gameNightCode: string | null;
+  createStoryBook: () => void;
   sendAction: (action: GameAction) => void;
 }) {
   if (view.kind === "hidden_roles") {
@@ -527,7 +575,16 @@ function GameStage({
   }
 
   if (view.kind === "composed") {
-    return <ComposedStageRouter view={view} isHost={isHost} pending={pending} sendAction={sendAction} />;
+    return (
+      <ComposedStageRouter
+        view={view}
+        isHost={isHost}
+        pending={pending}
+        gameNightCode={gameNightCode}
+        createStoryBook={createStoryBook}
+        sendAction={sendAction}
+      />
+    );
   }
 
   const selfScore = view.scores[view.selfPlayerId] ?? 0;

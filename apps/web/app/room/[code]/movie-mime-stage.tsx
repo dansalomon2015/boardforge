@@ -2,16 +2,20 @@
 
 import type { ComposedGameView, GameAction } from "@boardforge/shared";
 import { GameSurface } from "../../../components/game-ui";
+import { GameNightReturn } from "./game-night-return";
 import { themeForRoom } from "./stage-shared";
+import { TurnTimerDial } from "./turn-timer";
 import movieMimeStyles from "./movie-mime.module.css";
 
 export function MovieMimeStage({
   view,
   pending,
+  gameNightCode,
   sendAction,
 }: {
   view: ComposedGameView;
   pending: boolean;
+  gameNightCode: string | null;
   sendAction: (action: GameAction) => void;
 }) {
   const theme = themeForRoom(view.theme);
@@ -71,10 +75,14 @@ export function MovieMimeStage({
           <span>That is a wrap</span>
           <div className={movieMimeStyles.trophy}>✦</div>
           <h1>{winnerNames.join(" & ") || "Perfect tie"}</h1>
-          <p>{winnerNames.length ? "wins tonight’s box office." : "The teams share top billing."}</p>
-          <a href="/">
-            Back to the collection <b>→</b>
-          </a>
+          <p>
+            {winnerNames.length > 1
+              ? "share tonight’s box office."
+              : winnerNames.length === 1
+                ? "wins tonight’s box office."
+                : "The teams share top billing."}
+          </p>
+          <GameNightReturn gameNightCode={gameNightCode} />
         </section>
       ) : view.phase.id === "select_mimer" ? (
         <section className={movieMimeStyles.castingStage}>
@@ -145,11 +153,7 @@ export function MovieMimeStage({
                 {isActivePlayer ? "Make them guess it." : `${activePlayer?.name ?? "The performer"} is on stage.`}
               </h1>
             </div>
-            <div className={movieMimeStyles.timer}>
-              <i />
-              <span>60</span>
-              <small>seconds</small>
-            </div>
+            <TurnTimerDial view={view} fallbackSeconds={60} />
           </div>
 
           {isActivePlayer && prompt?.prompt ? (

@@ -34,7 +34,7 @@ async function createRoom() {
     body: JSON.stringify({
       themeId: "cozy",
       mood: "mystery",
-      length: "quick",
+      length: "mini",
       preferences: "A birthday mystery at an old hotel",
     }),
   });
@@ -50,6 +50,7 @@ async function createRoom() {
   return {
     ...(await roomResponse.json()),
     title: blueprint.title,
+    chapters: blueprint.twistCount,
     simulations: blueprint.playtest.completedSimulations,
   };
 }
@@ -87,7 +88,7 @@ try {
   await Promise.all(started);
 
   let rejectedMissingWord = false;
-  for (let chapter = 1; chapter <= 8; chapter += 1) {
+  for (let chapter = 1; chapter <= room.chapters; chapter += 1) {
     const author = clients.find((client) => client.playerId === clients[0].view.activePlayerId);
     if (!author) throw new Error("The active StoryChain writer is not connected");
     const readers = clients.filter((client) => client !== author);
@@ -128,10 +129,21 @@ try {
   }
 
   if (!clients.every((client) => client.view.status === "completed"))
-    throw new Error("StoryChain did not complete after eight chapters");
+    throw new Error(`StoryChain did not complete after ${room.chapters} chapters`);
   const finalStory = clients[0].view.components.find((component) => component.kind === "story")?.data;
-  if (!Array.isArray(finalStory?.entries) || finalStory.entries.length !== 8)
-    throw new Error("The final manuscript does not contain eight chapters");
+  if (!Array.isArray(finalStory?.entries) || finalStory.entries.length !== room.chapters)
+    throw new Error(`The final manuscript does not contain ${room.chapters} chapters`);
+  const readyBooks = clients.map((client) =>
+    nextState(client, (view) => view.kind === "composed" && view.storyBook?.status === "ready"),
+  );
+  await emitAck(clients[0].socket, "story-chain:book:create", {
+    code: room.code,
+    playerId: clients[0].playerId,
+  });
+  const bookViews = await Promise.all(readyBooks);
+  const books = bookViews.map((view) => view.storyBook?.book);
+  if (books.some((book) => !book) || new Set(books.map((book) => JSON.stringify(book))).size !== 1)
+    throw new Error("The finished StoryChain book was not synchronized across players");
   console.log(
     JSON.stringify({
       room: room.code,
@@ -139,6 +151,8 @@ try {
       title: room.title,
       players: clients.length,
       chapters: finalStory.entries.length,
+      bookTitle: books[0].title,
+      bookChapters: books[0].chapters.length,
       privateTwistsProtected: true,
       missingWordRejected: rejectedMissingWord,
       virtualPlaytests: room.simulations,

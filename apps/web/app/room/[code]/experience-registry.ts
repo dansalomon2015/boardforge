@@ -12,6 +12,8 @@ type ExperienceMetadata = {
 };
 
 const teamCount = (view: LobbyView) => view.teamSetup?.teams.length ?? 2;
+const turnDuration = (view: LobbyView, fallback: number) => view.game.turnSeconds ?? fallback;
+const contentCount = (view: LobbyView, fallback: number) => view.game.rounds ?? fallback;
 
 const experienceRegistry: Record<OriginalExperienceId, ExperienceMetadata> = {
   movie_mime: {
@@ -20,7 +22,11 @@ const experienceRegistry: Record<OriginalExperienceId, ExperienceMetadata> = {
     editionNumber: "01",
     lobbyEyebrow: "Casting in progress",
     waitingPrompt: "The room is not ready yet",
-    facts: (view) => ["🎬 Movie charades", "⏱ 60 seconds", `✦ ${teamCount(view)} teams`],
+    facts: (view) => [
+      `🎬 ${contentCount(view, 20)} movies`,
+      `⏱ ${turnDuration(view, 60)} seconds`,
+      `✦ ${teamCount(view)} teams`,
+    ],
   },
   word_trap: {
     dataAttribute: "word-trap",
@@ -28,7 +34,11 @@ const experienceRegistry: Record<OriginalExperienceId, ExperienceMetadata> = {
     editionNumber: "02",
     lobbyEyebrow: "Teams are entering the trap",
     waitingPrompt: "The room is not ready yet",
-    facts: (view) => ["⚡ Forbidden words", "⏱ 60 seconds", `✦ ${teamCount(view)} teams`],
+    facts: (view) => [
+      `⚡ ${contentCount(view, 20)} words`,
+      `⏱ ${turnDuration(view, 60)} seconds`,
+      `✦ ${teamCount(view)} teams`,
+    ],
   },
   draw_battle: {
     dataAttribute: "draw-battle",
@@ -36,7 +46,11 @@ const experienceRegistry: Record<OriginalExperienceId, ExperienceMetadata> = {
     editionNumber: "03",
     lobbyEyebrow: "The gallery is opening",
     waitingPrompt: "The room is not ready yet",
-    facts: (view) => ["✎ Live drawing", "⏱ 75 seconds", `✦ ${teamCount(view)} teams`],
+    facts: (view) => [
+      `✎ ${contentCount(view, 16)} prompts`,
+      `⏱ ${turnDuration(view, 75)} seconds`,
+      `✦ ${teamCount(view)} teams`,
+    ],
   },
   sound_check: {
     dataAttribute: "sound-check",
@@ -44,7 +58,11 @@ const experienceRegistry: Record<OriginalExperienceId, ExperienceMetadata> = {
     editionNumber: "04",
     lobbyEyebrow: "The studio is warming up",
     waitingPrompt: "The room is not ready yet",
-    facts: (view) => ["◖ Voice-only sounds", "⏱ 60 seconds", `✦ ${teamCount(view)} teams`],
+    facts: (view) => [
+      `◖ ${contentCount(view, 16)} sounds`,
+      `⏱ ${turnDuration(view, 60)} seconds`,
+      `✦ ${teamCount(view)} teams`,
+    ],
   },
   story_chain: {
     dataAttribute: "story-chain",
