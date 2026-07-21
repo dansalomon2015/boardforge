@@ -63,6 +63,7 @@ describe("BoardForge HTTP application", () => {
     const { app } = await createBoardForgeServer({
       databaseUrl: null,
       llmProvider: "fake",
+      webOrigin: "http://localhost:3000,http://localhost:3001",
       logger: false,
       restoreRooms: false,
     });
@@ -88,6 +89,17 @@ describe("BoardForge HTTP application", () => {
     });
     expect(preflight.statusCode).toBe(204);
     expect(preflight.headers["access-control-allow-methods"]).toContain("PATCH");
+
+    const secondaryOrigin = await app.inject({
+      method: "OPTIONS",
+      url: "/api/game-nights/NIGHT2/team",
+      headers: {
+        origin: "http://localhost:3001",
+        "access-control-request-method": "PATCH",
+      },
+    });
+    expect(secondaryOrigin.statusCode).toBe(204);
+    expect(secondaryOrigin.headers["access-control-allow-origin"]).toBe("http://localhost:3001");
   });
 
   it("creates a game night, forms teams, selects captains and launches a child room", async () => {

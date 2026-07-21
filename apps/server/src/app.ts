@@ -42,12 +42,24 @@ export type BoardForgeServerOptions = {
   storyBookProvider?: Pick<GameContentProvider, "generateStoryBook">;
 };
 
+function parseWebOrigins(value: string): string[] {
+  const origins = [
+    ...new Set(
+      value
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+    ),
+  ];
+  return origins.length ? origins : ["http://localhost:3000"];
+}
+
 export async function createBoardForgeServer(options: BoardForgeServerOptions = {}) {
   loadEnv({ path: new URL("../../../.env", import.meta.url), quiet: true });
 
   const config = {
     port: options.port ?? Number(process.env.PORT ?? 4000),
-    webOrigin: options.webOrigin ?? process.env.WEB_ORIGIN ?? "http://localhost:3000",
+    webOrigins: parseWebOrigins(options.webOrigin ?? process.env.WEB_ORIGIN ?? "http://localhost:3000"),
     llmProvider: options.llmProvider ?? process.env.LLM_PROVIDER,
     openAiApiKey: process.env.OPENAI_API_KEY,
     openAiModel: process.env.OPENAI_MODEL,
@@ -58,13 +70,13 @@ export async function createBoardForgeServer(options: BoardForgeServerOptions = 
 
   const app = Fastify({ logger: options.logger ?? true });
   await app.register(cors, {
-    origin: config.webOrigin,
+    origin: config.webOrigins,
     credentials: false,
     methods: ["GET", "HEAD", "POST", "PATCH", "OPTIONS"],
   });
 
   const io = new SocketServer(app.server, {
-    cors: { origin: config.webOrigin },
+    cors: { origin: config.webOrigins },
     maxHttpBufferSize: 64_000,
   });
 
