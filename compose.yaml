@@ -21,7 +21,7 @@ services:
       dockerfile: apps/server/Dockerfile
     environment:
       PORT: 4000
-      WEB_ORIGIN: http://localhost:3000
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       DATABASE_URL: postgresql://boardforge:boardforge@postgres:5432/boardforge
       DATABASE_REQUIRED: "true"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
